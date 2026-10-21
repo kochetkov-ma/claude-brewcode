@@ -43,7 +43,7 @@ M3=$(put "$S/cand" "v$V2" "marketplace v$V2") || exit 1
 echo "M_OLD=$M1"
 echo "M_V1=$M2"
 echo "M_V2=$M3"
-for p in brewcode brewdoc brewtools brewui brewmod-placeholders brewmod-plan-effort; do
+for p in brewcode brewdoc brewtools brewui brewmod-placeholders brewmod-plan-effort brewmod-reminders; do
   printf '%s %s %s\n' "$p" "$(git -C "$S/market.git" show "stage-$V1:$p/.claude-plugin/plugin.json" | grep -m1 '"version"' | tr -d ' ,')" "$(git -C "$S/market.git" show "stage-$V2:$p/.claude-plugin/plugin.json" | grep -m1 '"version"' | tr -d ' ,')"
 done
 echo "OK"

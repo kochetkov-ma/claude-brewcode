@@ -1,0 +1,26 @@
+
+⏺ brewmod-reminders - add_reminder (MCP)(scope: "project", when: "+1m", text: "Run the
+                                        test suite for this project and report the
+                                        results.", slug: "run test suite", confirm:
+                                        true)
+  ⎿  saved 20261021-1450_run-test-suite (project) | due Wed 21 Oct 15:50 Lisbon (14
+     :50 UTC), in <1 min | /Volumes/brewery/.claude/scheduled/20261021-1450_run-tes
+     t-suite.md
+
+⏺ I saved the reminder as a project reminder, due Wed 21 Oct at 15:50 Lisbon (14:50
+  UTC). It says: "Run the test suite for this project and report the results." The file
+  is /Volumes/brewery/.claude/scheduled/20261021-1450_run-test-suite.md.
+
+  It will be offered at the first prompt of a session once it's due. I won't run the
+  tests until you say so.
+
+✻ Brewed for 6s · done 3:49 PM
+reminders · 0 due · 1 upcoming                                                      [-]
+  Run the test suite for this project and report the results.  in <1 min
+/remind  list · done · snooze · or say what to add
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · ? for shortcuts                                ◐ medium · /effort
+

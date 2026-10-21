@@ -52,6 +52,8 @@ Etalon-first: before writing a new mod, find the closest well-built existing mod
 | 2 | `Skill` -> `plugin-authoring` (bundled per CC build); take TF from it: `<skill dir>/types/claude-code.d.ts` | path derived this run, never stored; ignore the skill's "WHERE TO WRITE" (`~/.claude/dev-mods/`): write only in the briefed dir |
 | 3 | `node ${CLAUDE_PLUGIN_ROOT}/skills/agents/scripts/mods-ref-check.mjs <TF> ${CLAUDE_PLUGIN_ROOT}/skills/agents/references`; print its verdict line | stdout line 1 starts `mods-ref-check: CLEAN` (rc 0) or `mods-ref-check: DRIFT` (rc 1). Empty stdout, any other first line, `ERROR` or rc 2 = ERROR, never drift (wrong path: rc 1, empty stdout). Last line `VERSION types X references Y`: X is the build; `MISMATCH` -> also read TF event/noun lists (CLEAN = indexed symbols present, not completeness) |
 
+Official "Mods reference" (`https://code.claude.com/docs/en/plugins/mods/reference`, CLI baseline v2.1.290, VS Code v2.1.299; lists events, `$` methods, limits, settings): a cross-check only, never a gate; TF wins on conflict (`OD` in `mods-api.md`).
+
 Skill denied/absent, TF unreadable, or ERROR -> STOP: return `Step 0: NOT RUN (<reason>)`, no mod work.
 
 Drift (rc 1): work from TF, never stale reference; report every DRIFT row loudly. Maintainer update only when the brief asks and `git rev-parse --show-toplevel` holds `brewcode/.claude-plugin/plugin.json` AND `.claude/scripts/bump-version.sh`: follow `mods-changes.md` "Update Procedure" on its `brewcode/skills/agents/references` (update, entry, `verified_on` in all five files, re-check to rc 0). Else report DRIFT, suggest, change nothing there.
@@ -66,7 +68,7 @@ Each is sourced in `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/mods-lifecycl
 | never pass or alias `$`: spell `$.noun.event(...)` at each call site | validate refuses, no load |
 | `$.env.get/set` take literal name; `$.state` refs `{ plugin, key } as const` literals | validate refuses variable |
 | fail open: engine skips a failing hook and keeps the downstream `next` result, so no blanket try/catch; refusing guards get `.catch` | refusal lost, or mod blocks prompt/tool/turn |
-| zero I/O in `prompt.edit` (no `$.fs/process/http/store`) | per-keystroke lag |
+| zero I/O in `prompt.edit` (no `$.fs/process/http/store`); assume a 50 ms budget (official Limits; TF says 10 s for every hook, types win but do not rely on it) | per-keystroke lag |
 | relative imports extensionless (`./lib/a`); `.ts` suffix breaks tsc (TS5097) | tsc error |
 | `hooks/hooks.json` = `{ "modules": ["./register.ts"] }`: one path, in array | string or 2nd entry refused |
 | `on('<event>')` literal, one unmatched hook per event; event absent in the target build (`prompt.change` < 2.1.300) refuses the WHOLE module, no gating | validate rc 1 / `did not load` |

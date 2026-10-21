@@ -52,7 +52,8 @@ after writing it, != hold to the end. On resume: read that file first, continue 
 listed.
 
 Never: emit a FM key outside the field table in `agent-frontmatter-fields.md` (an unknown key is
-ignored without an error); set `isolation: remote` in FM (invocation-level only); leave
+ignored without an error); put `once` in AG hooks (ignored in any AG, SK-only; skill hooks:
+`${CLAUDE_PLUGIN_ROOT}/skills/skills/references/frontmatter-fields.md`); set `isolation: remote` in FM (invocation-level only); leave
 `background: true` on a definition an in-process teammate may spawn (that spawn errors, 2.1.269+);
 write an "ask/confirm" step for an ordinary SA (it returns the question to its caller); ship a
 generic AG without its `## Return Contract` block.

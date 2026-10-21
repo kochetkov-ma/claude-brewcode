@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# fetch-latest-versions.sh -> {"<plugin>":"X.Y.Z"} for the 4 suite plugins + 2 brewmod-* mods; failed plugin = "unknown".
+# fetch-latest-versions.sh -> {"<plugin>":"X.Y.Z"} for the 4 suite plugins + 3 brewmod-* mods; failed plugin = "unknown".
 # Source: raw plugin.json from GitHub main branch; fallback `gh api` release tag_name.
 
 set -uo pipefail
 
 log() { printf '%s\n' "$*" >&2; }
 
-PLUGINS=(brewcode brewdoc brewtools brewui brewmod-placeholders brewmod-plan-effort)
+PLUGINS=(brewcode brewdoc brewtools brewui brewmod-placeholders brewmod-plan-effort brewmod-reminders)
 REPO="kochetkov-ma/claude-brewcode"
 RAW_BASE="https://raw.githubusercontent.com/${REPO}/main"
 

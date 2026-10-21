@@ -9,7 +9,7 @@ import { Badge, Callout, Card, CardGrid, Spoiler, Steps, UpdateNotice } from '..
 
 <Badge text="sonnet" /> <Badge text="3 modes" /> <Badge text="user-invoked" />
 
-Brings the brewcode suite up to date in one run: brewcode, brewdoc, brewtools, brewui and the mods `brewmod-placeholders` and `brewmod-plan-effort`. The skill updates every installed plugin and mod at the scope it is installed in and never asks whether to update.
+Brings the brewcode suite up to date in one run: brewcode, brewdoc, brewtools, brewui and the mods `brewmod-placeholders`, `brewmod-plan-effort` and `brewmod-reminders`. The skill updates every installed plugin and mod at the scope it is installed in and never asks whether to update.
 
 The run ends with one report: versions before and after, what changed for you, and numbered next steps. The skill cannot reload plugins, so after every `update` or `all` run, `/reload-plugins` is the first next step.
 
@@ -40,12 +40,13 @@ A mode word can sit anywhere in a free-form prompt, for example `/brewtools:plug
 ```
 
 ```text
-## 🟢 brewcode updated: 5 of 6 components
+## 🟢 brewcode updated: 6 of 7 components
 
 | Component | Before | After | |
 |---|---|---|---|
 | **brewmod-placeholders** | 6.9.5 | **6.9.6** | 🟢 updated |
 | **brewmod-plan-effort** | — | **6.9.6** | 🟢 installed |
+| **brewmod-reminders** | — | **6.9.6** | 🟢 installed |
 | **brewcode** | 6.9.5 | **6.9.6** | 🟢 updated |
 | **brewdoc** | 6.9.6 | 6.9.6 | ⚪ already current |
 | **brewtools** | 6.9.5 | **6.9.6** | 🟢 updated |

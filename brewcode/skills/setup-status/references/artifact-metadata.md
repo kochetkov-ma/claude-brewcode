@@ -1,9 +1,9 @@
 ---
 doc_type: llm
 version: "6.10.0"
-content_version: "6.8.0"
+content_version: "6.10.0"
 generated_by: "brewcode"
-last_updated: "2026-10-17"
+last_updated: "2026-10-21"
 ---
 
 # Artifact metadata and versioning
@@ -474,7 +474,7 @@ head (5 lines for `.mjs`/`.sh`, 40 for anything else). A stamp must sit there.
 ## 7. Template versions are retired
 
 `memory-sync`'s `VERSION=1.0.0` and `intent-guard`'s `template v2` are replaced by the
-plugin version, synced across all six version JSON files by `bump-version.sh` (section 8).
+plugin version, synced across all nine version JSON files by `bump-version.sh` (section 8).
 `memory-sync`'s `generate.sh` still assigns `VERSION=$(resolve_plugin_version)`: audit what a
 generator's variable resolves from.
 

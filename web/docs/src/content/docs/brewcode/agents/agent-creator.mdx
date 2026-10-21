@@ -105,7 +105,7 @@ experimental: {cacheTtl: "5m"} # OPT: file definitions only
 | Scope | Fields |
 |-------|--------|
 | Local + plugin | `model`, `effort`, `maxTurns`, `tools`, `disallowedTools`, `skills`, `memory`, `background`, `omitClaudeMd`, `isolation: worktree` |
-| Local only | `permissionMode`, `hooks`, `mcpServers`, `initialPrompt` |
+| Local only | `permissionMode`, `hooks`, `mcpServers`, `initialPrompt` (`once` inside a hook is ignored in any agent; it works only in skills) |
 | File definitions only | `color`, `experimental.cacheTtl` (ignored in `--agents` JSON) |
 | Unconfirmed | Any field the references do not list: do not emit |
 

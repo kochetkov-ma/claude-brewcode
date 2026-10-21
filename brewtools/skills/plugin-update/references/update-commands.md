@@ -23,7 +23,7 @@ claude plugin update brewtools@claude-brewcode --scope user
 claude plugin update brewui@claude-brewcode --scope user
 ```
 
-Mods (`brewmod-placeholders`, `brewmod-plan-effort`) take the same command and come first, placeholders first; a missing mod is installed only through the Phase 3 offer or `all`, on Claude Code 2.1.301+.
+Mods (`brewmod-placeholders`, `brewmod-plan-effort`, `brewmod-reminders`) take the same command and come first, placeholders first; a missing mod is installed only through the Phase 3 offer or `all`, on Claude Code 2.1.301+.
 
 ```
 claude plugin update brewmod-placeholders@claude-brewcode --scope user
@@ -33,7 +33,7 @@ Manual equivalent at `user` scope, one name per call (a second name is silently 
 
 ```bash
 claude plugin marketplace update claude-brewcode
-for p in brewmod-placeholders brewmod-plan-effort brewcode brewdoc brewtools brewui; do claude plugin update "$p@claude-brewcode"; done
+for p in brewmod-placeholders brewmod-plan-effort brewmod-reminders brewcode brewdoc brewtools brewui; do claude plugin update "$p@claude-brewcode"; done
 ```
 
 ## Valid CLI Subcommands

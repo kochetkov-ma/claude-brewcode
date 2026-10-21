@@ -1,6 +1,6 @@
 ---
 title: "Installation"
-description: "Install the brewcode, brewdoc, brewtools and brewui plugins and both brewcode mods, with Claude Code updated first."
+description: "Install the brewcode, brewdoc, brewtools and brewui plugins and the three brewcode mods, with Claude Code updated first."
 order: 2
 ---
 
@@ -42,11 +42,12 @@ These four products run in Claude Code: 27 skills, 10 agents, and 3 registered p
     claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
     ```
 
-    **3. Install the mods and the plugins** -- both mods, then all four products, one name per command:
+    **3. Install the mods and the plugins** -- the three mods, then all four products, one name per command:
 
     ```bash
     claude plugin install brewmod-placeholders@claude-brewcode
     claude plugin install brewmod-plan-effort@claude-brewcode
+    claude plugin install brewmod-reminders@claude-brewcode
     claude plugin install brewcode@claude-brewcode
     claude plugin install brewdoc@claude-brewcode
     claude plugin install brewtools@claude-brewcode
@@ -87,7 +88,7 @@ These four products run in Claude Code: 27 skills, 10 agents, and 3 registered p
   <li class="step step-primary">
     <div>
       <strong>Check the plugin list</strong>
-      <p>Run <code>/reload-plugins</code> in your session (or restart Claude Code if the command is unavailable or you just ran <code>claude update</code>), then run the command below in your terminal. It lists <code>brewmod-placeholders</code>, <code>brewmod-plan-effort</code>, <code>brewcode</code>, <code>brewdoc</code>, <code>brewtools</code> and <code>brewui</code>.</p>
+      <p>Run <code>/reload-plugins</code> in your session (or restart Claude Code if the command is unavailable or you just ran <code>claude update</code>), then run the command below in your terminal. It lists <code>brewmod-placeholders</code>, <code>brewmod-plan-effort</code>, <code>brewmod-reminders</code>, <code>brewcode</code>, <code>brewdoc</code>, <code>brewtools</code> and <code>brewui</code>.</p>
       <pre><code>claude plugin list</code></pre>
     </div>
   </li>
@@ -109,7 +110,7 @@ These four products run in Claude Code: 27 skills, 10 agents, and 3 registered p
 
 ## Mods
 
-[Brewcode mods](/mods/overview/) are separate plugins that extend Claude Code itself through the hooks module API. They are counted apart from the four plugins, and the install above covers both: [`brewmod-placeholders`](/mods/placeholders/) first, then [`brewmod-plan-effort`](/mods/plan-effort/).
+[Brewcode mods](/mods/overview/) are separate plugins that extend Claude Code itself through the hooks module API. They are counted apart from the four plugins, and the install above covers all three: [`brewmod-placeholders`](/mods/placeholders/) first, then [`brewmod-plan-effort`](/mods/plan-effort/) and [`brewmod-reminders`](/mods/reminders/).
 
 <Callout type="warning" title="Update Claude Code first">
   The mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update` and restart Claude Code (`exit`, then `claude`).
@@ -119,8 +120,10 @@ To add the mods to a machine that already has the plugins, run:
 
 ```bash
 claude update
+claude plugin marketplace update claude-brewcode
 claude plugin install brewmod-placeholders@claude-brewcode
 claude plugin install brewmod-plan-effort@claude-brewcode
+claude plugin install brewmod-reminders@claude-brewcode
 ```
 
 Restart Claude Code after `claude update`. When Claude Code was already 2.1.301 or newer, `/reload-plugins` is enough.
@@ -134,6 +137,7 @@ Restart Claude Code after `claude update`. When Claude Code was already 2.1.301 
   claude plugin marketplace update claude-brewcode
   claude plugin update brewmod-placeholders@claude-brewcode
   claude plugin update brewmod-plan-effort@claude-brewcode
+  claude plugin update brewmod-reminders@claude-brewcode
   claude plugin update brewcode@claude-brewcode
   claude plugin update brewdoc@claude-brewcode
   claude plugin update brewtools@claude-brewcode

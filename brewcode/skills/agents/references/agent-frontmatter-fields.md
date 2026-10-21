@@ -40,13 +40,14 @@ Detailed instructions for the AG...
 
 ### OPT Fields
 
-Verified against live [SA docs](https://code.claude.com/docs/en/sub-agents) + changelog through CC 2.1.296. PLG AGs ignore `hooks`, `mcpServers`, `permissionMode`, and `initialPrompt`. `--agents` JSON ignores `color`/`experimental` (read from files only). `Scope` below distinguishes these channels; !=assume every remaining field works in every execution context. Emit only fields from this table: an unknown key is ignored without an error (`claude --debug` names it, 2.1.296). `autoCompactWindow` (2.1.296) is changelog-only, absent from the docs field table -- !=emit.
+Verified against live [SA docs](https://code.claude.com/docs/en/sub-agents) + changelog through CC 2.1.306. PLG AGs ignore `hooks`, `mcpServers`, `permissionMode`, and `initialPrompt`. `--agents` JSON ignores `color`/`experimental` (read from files only). `Scope` below distinguishes these channels; !=assume every remaining field works in every execution context. Emit only fields from this table: an unknown key is ignored without an error (`claude --debug` names it, 2.1.296).
 
 | Field | Values | DEF | Scope | Description |
 |-------|--------|-----|-------|-------------|
 | `model` | `haiku`, `sonnet`, `opus`, `fable`, full model ID (EX: `claude-opus-5-5`), `inherit` | model precedence | both | Omission follows the order in `agent-scope-and-tools.md`; `inherit` requests the session model. On the Anthropic API `opus`/`sonnet`/`haiku` resolve to the 5.5 models (some providers pin an earlier version) and `fable` to `claude-fable-5-1` |
 | `effort` | `low`, `medium`, `high`, `xhigh`, `max` (MDL-dependent) | session level | both | No `auto`, no bare integer. Unset = the session level, whose DEF is `medium` on Opus/Sonnet/Haiku 5.5 -- set `high` only for a role where verification or edge cases dominate. `CLAUDE_CODE_EFFORT_LEVEL` beats it, and so does a per-spawn `Agent` `effort` (2.1.292+) |
 | `maxTurns` | positive integer | unlimited | both | Max turns before abort |
+| `autoCompactWindow` | integer 100000-1000000 | None | both | 2.1.296+: compact this SA earlier; plain integer (a `k` suffix is misread, so the value is invalid and ignored; `claude --debug` logs `invalid autoCompactWindow`). `CLAUDE_CODE_AUTO_COMPACT_WINDOW` overrides it |
 | `tools` | comma-separated / YAML list | All available | both | Allowlist resolved against the execution pool after `disallowedTools` |
 | `disallowedTools` | comma-separated / YAML list | None | both | Removes whole TLs; `Bash(git push *)` removes all Bash, not only push. Use settings deny rules for command-level restrictions |
 | `skills` | comma-separated / list | None | both | Full SK content injected into ctx at startup: first 32 distinct names (2.1.295+), and never a SK with `disable-model-invocation: true` -- it is skipped with only a debug-log WARN (`Skill '<name>' specified in frontmatter was not found`). Preload only -- an unlisted model-invocable SK stays reachable at runtime via the `Skill` TL; list `Skill` in `tools:`, !=the SK name |
@@ -57,7 +58,7 @@ Verified against live [SA docs](https://code.claude.com/docs/en/sub-agents) + ch
 | `isolation` | `worktree` | None | both | !=add by DEF; `remote` is invocation-level, not FM -- see the note below |
 | `permissionMode` | see Permission Modes below | main's mode | local | Ignored for PLG AGs |
 | `mcpServers` | server name or inline definition | All inherited | local | Ignored for PLG AGs |
-| `hooks` | YAML structure, any hook event | None | local | Ignored for PLG AGs; a PROJECT AG's FM hooks need workspace trust (v2.1.218+) -- see Trust under Hook Events |
+| `hooks` | YAML structure, any hook event | None | local | Ignored for PLG AGs; `once: true` is ignored here (honored only in SK frontmatter); an AG's hooks live only while it runs, `Stop` -> `SubagentStop`; ask label `[settings]`; a PROJECT AG's FM hooks need workspace trust (v2.1.218+) -- see Trust under Hook Events |
 | `initialPrompt` | string | None | local | First user turn when THIS definition runs as MAIN (`--agent <name>` / `agent` setting); commands + SKs are processed, prepended to any user prompt. Ignored for PLG AGs and ordinary SA spawn |
 | `experimental.cacheTtl` | `"5m"`, `"1h"` | none | files | 2.1.248+: per-agent prompt-cache TTL. Invalid values and `1h` while a Claude subscription uses usage credits are ignored; pairs with `promptCacheTtl`/`subagentPromptCacheTtl` (2.1.243) |
 

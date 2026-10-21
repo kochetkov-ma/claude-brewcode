@@ -94,6 +94,7 @@ jobs:
           node brewmod-placeholders/tests/check-defaults.mjs || { echo "::error::brewmod-placeholders defaults drifted from defaults-pin.test.ts"; fail=1; }
           node brewmod-placeholders/tests/inject-parity.mjs || { echo "::error::brewmod-placeholders hooks/inject.mjs drifted from the golden vectors or the TS lib"; fail=1; }
           node --test brewmod-plan-effort/tests/mode.test.mjs || { echo "::error::brewmod-plan-effort hooks/mode.mjs tests failed"; fail=1; }
+          node --test brewmod-reminders/tests/remind.test.mjs || { echo "::error::brewmod-reminders hooks/remind.mjs tests failed"; fail=1; }
           exit "$fail"
 
       - name: Skill contracts (validate-skill.sh)

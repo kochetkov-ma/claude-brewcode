@@ -73,6 +73,7 @@ The distributed-product rule is repository policy, stricter than upstream defaul
 - `allowed-tools` preapproves calls; it is not a sandbox. Grants clear on the next user message, skill instructions persist.
 - Scope permissions to the needed calls. Bare `Bash`, `Write` or `Edit` fits only a user-invoked skill with open-ended shell or write paths.
 - `${CLAUDE_SKILL_DIR}` is a load-time substitution, not an environment variable for hooks or agents.
+- A `hooks:` block in `SKILL.md` stays registered for the rest of the session, so declare it only for behavior that must always hold; a one-shot hook takes `once: true` on the hook entry. A hook command is not substituted: write `"$CLAUDE_PLUGIN_ROOT/..."` or `${CLAUDE_PROJECT_DIR}`, never `${CLAUDE_SKILL_DIR}` or the braced plugin-root token.
 
 </Spoiler>
 

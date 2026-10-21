@@ -18,7 +18,7 @@ last_updated: "2026-10-17"
 
 Create/debug CC bash/JS/mjs hooks: event-specific routing, schemas, failure policy.
 
-> Ref ver: 2.1.296 | 33 hook events | 5 hook types (command, http, mcp_tool, prompt, agent).
+> Ref ver: 2.1.296 (changes through 2.1.306 in `hooks-changes.md`; `hooks:` in SKILL.md: `${CLAUDE_PLUGIN_ROOT}/skills/skills/references/frontmatter-fields.md`) | 33 hook events | 5 hook types (command, http, mcp_tool, prompt, agent).
 
 ## Return contract
 
@@ -112,6 +112,6 @@ conventions/rules/docs, !=a replacement.
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-types-config.md` | Choosing a hook type or config location -- type/field catalog (`onFailure`, `if`), settings/hooks.json/frontmatter precedence, trust, reload |
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-env.md` | Referencing an env var, or resolving the project root inside a hook |
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-templates.md` | Writing a new hook -- bash/JS skeletons, fail-safe design, common patterns, Test, Validation Checklist |
-| `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-changes.md` | Updating a hook written for an older CLI -- changes 2.1.270 -> 2.1.296, older floors still in force, probe limits |
+| `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-changes.md` | Updating a hook written for an older CLI -- changes 2.1.270 -> 2.1.306, older floors still in force, probe limits |
 
 <!-- Copyright (c) 2025-2026 Maksim Kochetkov, https://github.com/kochetkov-ma/claude-brewcode. SPDX-License-Identifier: MIT -->

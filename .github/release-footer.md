@@ -16,7 +16,7 @@ How to update and use it well: [UPDATE.md](https://github.com/kochetkov-ma/claud
 claude --version
 claude update      # if it is older; restart Claude Code afterwards
 claude plugin marketplace update claude-brewcode
-claude plugin update <name>@claude-brewcode   # once per installed plugin: brewmod-placeholders, brewmod-plan-effort, brewcode, brewdoc, brewtools, brewui
+claude plugin update <name>@claude-brewcode   # once per installed plugin: brewmod-placeholders, brewmod-plan-effort, brewmod-reminders, brewcode, brewdoc, brewtools, brewui
 ```
 
 Or run `/brewtools:plugin-update`: it updates the installed plugins and mods, offers the missing mods and plugins once and prints what changed for you. Either way, finish with `/reload-plugins` and, in each project, `/brewcode:setup-status upgrade` (it brings the setups generated there current).
@@ -27,10 +27,11 @@ Or run `/brewtools:plugin-update`: it updates the installed plugins and mods, of
 claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
 claude plugin install brewmod-placeholders@claude-brewcode   # prompt shortcuts: ++r, ++m, your own
 claude plugin install brewmod-plan-effort@claude-brewcode    # higher effort while Claude plans
+claude plugin install brewmod-reminders@claude-brewcode      # durable reminders that survive sessions
 claude plugin install brewcode@claude-brewcode
 claude plugin install brewdoc@claude-brewcode
 claude plugin install brewtools@claude-brewcode
 claude plugin install brewui@claude-brewcode
 ```
 
-**Docs:** [Getting started](https://doc-claude.brewcode.app/getting-started/) · [Mods](https://doc-claude.brewcode.app/mods/overview/) · [Prompt placeholders](https://doc-claude.brewcode.app/mods/placeholders/) · [Plan-mode effort](https://doc-claude.brewcode.app/mods/plan-effort/) · [brewcode.app](https://brewcode.app/)
+**Docs:** [Getting started](https://doc-claude.brewcode.app/getting-started/) · [Mods](https://doc-claude.brewcode.app/mods/overview/) · [Prompt placeholders](https://doc-claude.brewcode.app/mods/placeholders/) · [Plan-mode effort](https://doc-claude.brewcode.app/mods/plan-effort/) · [Reminders](https://doc-claude.brewcode.app/mods/reminders/) · [brewcode.app](https://brewcode.app/)

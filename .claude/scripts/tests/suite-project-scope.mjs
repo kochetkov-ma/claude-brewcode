@@ -12,7 +12,7 @@ const REPO = join(SCRIPTS, '..', '..');
 const VER = JSON.parse(readFileSync(join(REPO, 'brewcode/.claude-plugin/plugin.json'), 'utf8')).version;
 const OLD = '0.0.1';
 const ID = 'brewcode@claude-brewcode';
-const OTHERS = ['brewdoc', 'brewtools', 'brewui', 'brewmod-placeholders', 'brewmod-plan-effort'];
+const OTHERS = ['brewdoc', 'brewtools', 'brewui', 'brewmod-placeholders', 'brewmod-plan-effort', 'brewmod-reminders'];
 
 // Stub `claude`: logs {cwd,args}; `update` moves rows of that scope to $STUB_VERSION; $STUB_LIST_FAIL fails `list`, $STUB_FAIL_RC sets the failure rc.
 const STUB = `#!/usr/bin/env node
@@ -279,10 +279,10 @@ function runIn(root, sb, args) {
     return { rc: r.status, lines: r.stdout.split('\n') };
 }
 
-// GIVEN a marketplace.json listing the plugins in reverse order WHEN update-plugin.sh all --dry-run runs THEN versions are read by name and all six rows match.
+// GIVEN a marketplace.json listing the plugins in reverse order WHEN update-plugin.sh all --dry-run runs THEN versions are read by name and all seven rows match.
 {
     const sb = sandbox();
-    const root = scratchRepo(['brewmod-plan-effort', 'brewmod-placeholders', 'brewui', 'brewtools', 'brewdoc', 'brewcode']);
+    const root = scratchRepo(['brewmod-reminders', 'brewmod-plan-effort', 'brewmod-placeholders', 'brewui', 'brewtools', 'brewdoc', 'brewcode']);
     const r = runIn(root, sb, ['all', '--dry-run']);
     assert.deepEqual({ rc: r.rc, table: r.lines.filter(l => l.startsWith('| brew')) },
         { rc: 0, table: ['brewcode', ...OTHERS].map(n => `| ${n} | ${VER} | ${VER} | OK |`) },
@@ -292,19 +292,19 @@ function runIn(root, sb, args) {
 // GIVEN a marketplace.json without brewmod-placeholders WHEN update-plugin.sh runs for it or for all THEN rc 1 and the error names that entry.
 for (const args of [['brewmod-placeholders'], ['all']]) {
     const sb = sandbox();
-    const root = scratchRepo(['brewcode', 'brewdoc', 'brewtools', 'brewui', 'brewmod-plan-effort']);
+    const root = scratchRepo(['brewcode', 'brewdoc', 'brewtools', 'brewui', 'brewmod-plan-effort', 'brewmod-reminders']);
     const r = runIn(root, sb, args);
     assert.deepEqual({ rc: r.rc, errors: r.lines.filter(l => l.startsWith('ERROR')) },
         { rc: 1, errors: [`ERROR: marketplace.json has no plugin entry named 'brewmod-placeholders' (or it has no version): ${join(root, '.claude-plugin/marketplace.json')}`] },
         `THEN a missing entry fails loudly by name (${args[0]})`);
 }
 
-// GIVEN an unknown plugin name WHEN update-plugin.sh runs THEN rc 1 and the usage lists the six names.
+// GIVEN an unknown plugin name WHEN update-plugin.sh runs THEN rc 1 and the usage lists the seven names.
 {
     const sb = sandbox();
     const r = run(sb, 'update-plugin.sh', ['brewmod-nope']);
     assert.deepEqual({ rc: r.rc, errors: r.lines.filter(l => l.startsWith('ERROR')) },
-        { rc: 1, errors: ["ERROR: Unknown argument 'brewmod-nope'. Use: brewcode | brewdoc | brewtools | brewui | brewmod-placeholders | brewmod-plan-effort | all | --dry-run | --help"] },
+        { rc: 1, errors: ["ERROR: Unknown argument 'brewmod-nope'. Use: brewcode | brewdoc | brewtools | brewui | brewmod-placeholders | brewmod-plan-effort | brewmod-reminders | all | --dry-run | --help"] },
         'THEN the unknown name is rejected with the full list');
 }
 console.log('suite-project-scope: PASS');

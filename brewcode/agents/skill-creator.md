@@ -102,7 +102,10 @@ File names below are the references under Read on demand.
    planned subdirs, scope root per the Location priority table in `design-patterns.md`.
 4. **Configure frontmatter.** `context`/`agent`/`model` from `execution-model.md`; the field
    catalog in `frontmatter-fields.md`; invocation type, description style and budget, criticality
-   tiers in `activation-and-troubleshooting.md`.
+   tiers in `activation-and-troubleshooting.md`. Declare `hooks:` only for behavior that must hold
+   every time (a hook outlives the skill: it stays registered for the REST OF THE SESSION; one-shot
+   -> `once: true` on the hook entry, never top-level). In a hook command CSD is unavailable; BPR is substituted in exec form (`args`) and exported as env for shell form (double-quote it, never single-quote); or use `${CLAUDE_PROJECT_DIR}`. Plugin-wide behavior -> plugin `hooks.json`. Details + probe:
+   `frontmatter-fields.md` Hooks.
 5. **Write SKILL.md.** FM -> `## Prompt contract` -> overview (1-2 sentences) -> instructions in
    imperative form -> resource refs. Keep the body under 500 lines; move excess to `references/`.
    Bash fences follow the safe spellings named under Scope and never.

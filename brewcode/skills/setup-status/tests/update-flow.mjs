@@ -15,9 +15,9 @@ const MD = readFileSync(join(STATUS_DIR, 'references/update-flow.md'), 'utf8');
 const DATA = loadData();
 const ID = name => `${name}@claude-brewcode`;
 const row = (name, version, scope = 'user', projectPath = null) => ({ id: name.includes('@') ? name : ID(name), version, scope, projectPath });
-const ALL = v => ({ 'brewmod-placeholders': v, 'brewmod-plan-effort': v, brewcode: v, brewdoc: v, brewtools: v, brewui: v });
+const ALL = v => ({ 'brewmod-placeholders': v, 'brewmod-plan-effort': v, 'brewmod-reminders': v, brewcode: v, brewdoc: v, brewtools: v, brewui: v });
 const MOVED = 'the codewords `++m`, `++a`, `++r`, `++rr` and `+++` now come from **brewmod-placeholders**, not from brewtools.';
-const VALUES = { placeholders: '`++r` and other prompt blocks', planEffort: 'effort `xhigh` in plan mode',
+const VALUES = { placeholders: '`++r` and other prompt blocks', planEffort: 'effort `xhigh` in plan mode', reminders: 'durable reminders that survive sessions',
   brewdoc: 'doc-staleness tracking, installation guides, Markdown to PDF, publishing', brewui: 'placeholder for future UI tools, no skills yet' };
 
 const NOTES = `# Release Notes
@@ -172,6 +172,7 @@ const WHAT_CHANGED = `### What changed for you (6.7.1 → 6.9.6)
 const REFRESH = '🔵 **`/brewdoc:my-claude refresh`**: your installation guide `.claude/brewdoc/my-claude/20261001_my-claude-internal.md` is older than brewdoc **6.9.6**.';
 const FULL = ['brewmod-placeholders', 'brewcode', 'brewdoc', 'brewtools', 'brewui'].map(n => row(n, '6.9.0'));
 const OFFLINE = ALL('unknown');
+const REMINDERS_OFFER = '🔵 **brewmod-reminders** is not installed (durable reminders that survive sessions): `claude plugin install brewmod-reminders@claude-brewcode`';
 const PLAN_EFFORT_OFFER = '🔵 **brewmod-plan-effort** is not installed (effort `xhigh` in plan mode): `claude plugin install brewmod-plan-effort@claude-brewcode`';
 const AUTO = '🔵 Auto-update is off for claude-brewcode: `/plugin` -> Marketplaces -> claude-brewcode -> **Enable auto-update**.';
 
@@ -302,14 +303,14 @@ test('GIVEN before/after snapshots across scopes and marketplaces WHEN diffing T
   const r = (name, scope, projectPath, b, a, status) => ({ name, id: ID(name), scope, projectPath, before: b, after: a, latest: '6.9.6', status });
   assert.deepEqual({ update: diff(before, after, ALL('6.9.6'), DATA), check: diff(before, null, ALL('6.9.6'), DATA) }, {
     update: [
-      r('brewmod-placeholders', 'user', null, null, '6.9.6', 'installed'), r('brewmod-plan-effort', null, null, null, null, 'not-installed'),
+      r('brewmod-placeholders', 'user', null, null, '6.9.6', 'installed'), r('brewmod-plan-effort', null, null, null, null, 'not-installed'), r('brewmod-reminders', null, null, null, null, 'not-installed'),
       r('brewcode', 'user', null, '6.7.1', '6.9.6', 'updated'), r('brewcode', 'project', '/p', '6.7.1', '6.9.6', 'updated'),
       r('brewdoc', 'user', null, '6.9.6', '6.9.6', 'current'), r('brewtools', 'user', null, '6.7.1', '6.9.6', 'updated'),
       r('brewui', 'user', null, '6.7.1', '6.7.1', 'behind'),
       { name: 'other@mkt', id: 'other@mkt', scope: 'user', projectPath: null, before: '1.0.0', after: '1.1.0', latest: null, status: 'updated' },
     ],
     check: [
-      r('brewmod-placeholders', null, null, null, null, 'not-installed'), r('brewmod-plan-effort', null, null, null, null, 'not-installed'),
+      r('brewmod-placeholders', null, null, null, null, 'not-installed'), r('brewmod-plan-effort', null, null, null, null, 'not-installed'), r('brewmod-reminders', null, null, null, null, 'not-installed'),
       r('brewcode', 'user', null, '6.7.1', null, 'behind'), r('brewcode', 'project', '/p', '6.7.1', null, 'behind'),
       r('brewdoc', 'user', null, '6.9.6', null, 'current'), r('brewtools', 'user', null, '6.7.1', null, 'behind'),
       r('brewui', 'user', null, '6.7.1', null, 'behind'),
@@ -330,18 +331,19 @@ test('GIVEN brewtools without placeholders WHEN offering on CC 2.1.301, 2.1.300 
   }, {
     ok: { ccOk: true, cc: '2.1.301', ccMin: '2.1.301', plugins, mods: [
       { name: 'brewmod-placeholders', value: VALUES.placeholders, migration: moved },
-      { name: 'brewmod-plan-effort', value: VALUES.planEffort, migration: null }] },
+      { name: 'brewmod-plan-effort', value: VALUES.planEffort, migration: null },
+      { name: 'brewmod-reminders', value: VALUES.reminders, migration: null }] },
     low: { ccOk: false, cc: '2.1.300', ccMin: '2.1.301', mods: [], plugins },
     garbage: { ccOk: false, cc: null, ccMin: '2.1.301', mods: [], plugins },
-    notCrossed: [false, null],
-    hasPlaceholders: [{ name: 'brewmod-plan-effort', value: VALUES.planEffort, migration: null }],
+    notCrossed: [false, null, null],
+    hasPlaceholders: [{ name: 'brewmod-plan-effort', value: VALUES.planEffort, migration: null }, { name: 'brewmod-reminders', value: VALUES.reminders, migration: null }],
   }, 'mods need Claude Code 2.1.301+; the codewords migration fires while brewtools is installed and placeholders is not');
 });
 
 test('GIVEN a fixture marketplace WHEN `latest` runs THEN versions come from the clone, absent ones unknown; no marketplace -> rc 1', t => {
   const base = tmp(t, 'update-flow-latest-');
   const loc = join(base, 'market');
-  for (const n of ['brewmod-placeholders', 'brewmod-plan-effort', 'brewcode', 'brewdoc', 'brewtools']) put(join(loc, n, '.claude-plugin/plugin.json'), { name: n, version: '6.9.6' });
+  for (const n of ['brewmod-placeholders', 'brewmod-plan-effort', 'brewmod-reminders', 'brewcode', 'brewdoc', 'brewtools']) put(join(loc, n, '.claude-plugin/plugin.json'), { name: n, version: '6.9.6' });
   put(join(loc, 'RELEASE-NOTES.md'), NOTES);
   put(join(base, 'cfg/plugins/known_marketplaces.json'), { 'claude-brewcode': { installLocation: loc, autoUpdate: false }, other: { installLocation: base } });
   mkdirSync(join(base, 'empty'));
@@ -468,7 +470,8 @@ test('GIVEN saved inputs WHEN `plan` runs per mode THEN the update set, offers a
       mode: 'update', range: { from: '6.7.1', to: '6.9.6' }, update, scopes,
       offers: { ccOk: true, cc: '2.1.301', ccMin: '2.1.301', plugins: [], mods: [
         { name: 'brewmod-placeholders', value: VALUES.placeholders, migration: { id: 'codewords-to-placeholders', crossed: true, message: MOVED, docsUrl: 'https://doc-claude.brewcode.app/mods/placeholders/' } },
-        { name: 'brewmod-plan-effort', value: VALUES.planEffort, migration: null }] },
+        { name: 'brewmod-plan-effort', value: VALUES.planEffort, migration: null },
+      { name: 'brewmod-reminders', value: VALUES.reminders, migration: null }] },
       notes: { source: notesPath, requirement: '**Update Claude Code first:** the mods need Claude Code 2.1.301 or newer.', migration: [{ version: '6.8.0', text: 'mig1' }],
         versions: [{ version: '6.9.6', bullets: ['n1 newest', 'n2'], count: 2, fallback: false }, { version: '6.8.0', bullets: ['e1'], count: 1, fallback: false }],
         hidden: 0, missing: false, link: DATA.notesUrl },
@@ -496,6 +499,7 @@ test('GIVEN update, failure, no-op, check, offline and unreadable-list runs WHEN
   const titles = runs.map(r => r.stdout.split('\n').find(l => l.startsWith('## ')));
   const templates = MD.slice(MD.indexOf('Titles (N, M, K')).match(/```text\n([\s\S]*?)\n```/)[1].split('\n');
   const offerLines = ['🔵 **brewmod-plan-effort** is not installed (effort `xhigh` in plan mode): `claude plugin install brewmod-plan-effort@claude-brewcode`',
+    REMINDERS_OFFER,
     '🔵 **brewui** is not installed (placeholder for future UI tools, no skills yet): `claude plugin install brewui@claude-brewcode`'];
   assert.deepEqual({
     rcs: runs.map(r => r.rc), titles,
@@ -512,6 +516,7 @@ test('GIVEN update, failure, no-op, check, offline and unreadable-list runs WHEN
 |---|---|---|---|
 | **brewmod-placeholders** | — | **6.9.6** | 🟢 installed |
 | **brewmod-plan-effort** | — | — | ⚪ not installed |
+| **brewmod-reminders** | — | — | ⚪ not installed |
 | **brewcode** | 6.7.1 | **6.9.6** | 🟢 updated |
 | **brewdoc** | 6.9.6 | 6.9.6 | ⚪ already current |
 | **brewtools** | 6.7.1 | **6.9.6** | 🟢 updated |
@@ -535,6 +540,7 @@ ${AUTO}
 |---|---|---|---|
 | **brewmod-placeholders** | — | 6.9.6 | ⚪ not installed |
 | **brewmod-plan-effort** | — | 6.9.6 | ⚪ not installed |
+| **brewmod-reminders** | — | 6.9.6 | ⚪ not installed |
 | **brewcode** | 6.7.1 | **6.9.6** | 🔵 update available |
 | **brewdoc** | 6.9.6 | 6.9.6 | ⚪ already current |
 | **brewtools** | 6.7.1 | **6.9.6** | 🔵 update available |
@@ -566,8 +572,8 @@ test('GIVEN no known latest version WHEN diffing THEN installed rows are unknown
     update: status(diff(before, [row('brewcode', '6.9.6')], OFFLINE, DATA)),
     partial: status(diff([row('brewui', '6.7.1'), row('brewcode', '6.7.1')], null, { ...ALL('6.9.6'), brewui: 'unknown' }, DATA)).filter(([n]) => ['brewcode', 'brewui'].includes(n)),
   }, {
-    check: [['brewmod-placeholders', 'not-installed'], ['brewmod-plan-effort', 'not-installed'], ['brewcode', 'unknown'], ['brewdoc', 'unknown'], ['brewtools', 'not-installed'], ['brewui', 'not-installed']],
-    update: [['brewmod-placeholders', 'not-installed'], ['brewmod-plan-effort', 'not-installed'], ['brewcode', 'unknown'], ['brewdoc', 'behind'], ['brewtools', 'not-installed'], ['brewui', 'not-installed']],
+    check: [['brewmod-placeholders', 'not-installed'], ['brewmod-plan-effort', 'not-installed'], ['brewmod-reminders', 'not-installed'], ['brewcode', 'unknown'], ['brewdoc', 'unknown'], ['brewtools', 'not-installed'], ['brewui', 'not-installed']],
+    update: [['brewmod-placeholders', 'not-installed'], ['brewmod-plan-effort', 'not-installed'], ['brewmod-reminders', 'not-installed'], ['brewcode', 'unknown'], ['brewdoc', 'behind'], ['brewtools', 'not-installed'], ['brewui', 'not-installed']],
     partial: [['brewcode', 'behind'], ['brewui', 'unknown']],
   }, 'a null latest is never current, never counted as updated; a vanished install is still a failure');
 });
@@ -575,7 +581,7 @@ test('GIVEN no known latest version WHEN diffing THEN installed rows are unknown
 test('GIVEN an offline fetch (every latest unknown) WHEN `report` renders THEN no run claims "current", the rows say "latest unknown" and rc is 1', t => {
   const offlineUpdate = scenario(t, { before: FULL, after: FULL, versions: OFFLINE });
   const offlineCheck = scenario(t, { before: FULL, versions: OFFLINE });
-  const rows = last => ['brewmod-placeholders', 'brewmod-plan-effort', 'brewcode', 'brewdoc', 'brewtools', 'brewui'].map(n => (n === 'brewmod-plan-effort'
+  const rows = last => ['brewmod-placeholders', 'brewmod-plan-effort', 'brewmod-reminders', 'brewcode', 'brewdoc', 'brewtools', 'brewui'].map(n => (n.startsWith('brewmod-') && n !== 'brewmod-placeholders'
     ? `| **${n}** | — | — | ⚪ not installed |` : `| **${n}** | 6.9.0 | ${last} | ⚪ latest unknown |`));
   assert.deepEqual({ update: offlineUpdate, check: offlineCheck }, {
     update: { rc: 1, stderr: '', stdout: `## ⚪ brewcode: latest versions unknown (offline?)
@@ -585,6 +591,8 @@ test('GIVEN an offline fetch (every latest unknown) WHEN `report` renders THEN n
 ${rows('6.9.0').join('\n')}
 
 ${PLAN_EFFORT_OFFER}
+
+${REMINDERS_OFFER}
 
 ### Next steps
 
@@ -598,6 +606,8 @@ ${PLAN_EFFORT_OFFER}
 ${rows('—').join('\n')}
 
 ${PLAN_EFFORT_OFFER}
+
+${REMINDERS_OFFER}
 ` },
   }, 'an unreachable latest must never read as an empty or current result (superreview F1)');
 });
@@ -611,6 +621,7 @@ test('GIVEN an after.json that exists but cannot be read WHEN `report` renders T
 |---|---|---|---|
 | **brewmod-placeholders** | — | — | ⚪ not installed |
 | **brewmod-plan-effort** | — | — | ⚪ not installed |
+| **brewmod-reminders** | — | — | ⚪ not installed |
 | **brewcode** | 6.7.1 | — | 🔴 not verified, latest 6.9.6 |
 | **brewdoc** | 6.9.6 | — | ⚪ already current |
 | **brewtools** | 6.7.1 | — | 🔴 not verified, latest 6.9.6 |
@@ -621,6 +632,8 @@ test('GIVEN an after.json that exists but cannot be read WHEN `report` renders T
 🔵 **brewmod-placeholders** is not installed (\`++r\` and other prompt blocks): \`claude plugin install brewmod-placeholders@claude-brewcode\`
 
 ${PLAN_EFFORT_OFFER}
+
+${REMINDERS_OFFER}
 
 🔵 **brewui** is not installed (placeholder for future UI tools, no skills yet): \`claude plugin install brewui@claude-brewcode\`
 
@@ -644,17 +657,18 @@ ${AUTO}
 
 test('GIVEN project rows whose directory is gone WHEN `report` renders THEN they show "orphan install", never failed or updatable, in update and check runs', t => {
   const gone = '/nonexistent/update-flow-orphan';
-  const suite = (brewcode, orphan) => [row('brewmod-placeholders', '6.9.6'), row('brewmod-plan-effort', '6.9.6'), row('brewcode', brewcode), row('brewcode', orphan, 'project', gone),
+  const suite = (brewcode, orphan) => [row('brewmod-placeholders', '6.9.6'), row('brewmod-plan-effort', '6.9.6'), row('brewmod-reminders', '6.9.6'), row('brewcode', brewcode), row('brewcode', orphan, 'project', gone),
     row('brewdoc', '6.9.6'), row('brewtools', '6.9.6'), row('brewui', '6.9.6')];
   const update = scenario(t, { before: suite('6.7.1', '6.7.1'), after: suite('6.9.6', '6.7.1') });
   const check = scenario(t, { before: suite('6.7.1', '6.7.1') });
-  assert.deepEqual({ update, check: { rc: check.rc, text: check.stdout.split('\n').slice(0, 11).join('\n') } }, {
-    update: { rc: 0, stderr: '', stdout: `## 🟢 brewcode updated: 1 of 7 components
+  assert.deepEqual({ update, check: { rc: check.rc, text: check.stdout.split('\n').slice(0, 12).join('\n') } }, {
+    update: { rc: 0, stderr: '', stdout: `## 🟢 brewcode updated: 1 of 8 components
 
 | Component | Before | After | |
 |---|---|---|---|
 | **brewmod-placeholders** | 6.9.6 | 6.9.6 | ⚪ already current |
 | **brewmod-plan-effort** | 6.9.6 | 6.9.6 | ⚪ already current |
+| **brewmod-reminders** | 6.9.6 | 6.9.6 | ⚪ already current |
 | **brewcode** | 6.7.1 | **6.9.6** | 🟢 updated |
 | **brewcode** (project: \`${gone}\`) | 6.7.1 | 6.7.1 | ⚪ orphan install |
 | **brewdoc** | 6.9.6 | 6.9.6 | ⚪ already current |
@@ -671,12 +685,13 @@ ${WHAT_CHANGED}
 
 ${AUTO}
 ` },
-    check: { rc: 0, text: `## 🔵 brewcode check: 1 of 7 components can be updated
+    check: { rc: 0, text: `## 🔵 brewcode check: 1 of 8 components can be updated
 
 | Component | Installed | Latest | |
 |---|---|---|---|
 | **brewmod-placeholders** | 6.9.6 | 6.9.6 | ⚪ already current |
 | **brewmod-plan-effort** | 6.9.6 | 6.9.6 | ⚪ already current |
+| **brewmod-reminders** | 6.9.6 | 6.9.6 | ⚪ already current |
 | **brewcode** | 6.7.1 | **6.9.6** | 🔵 update available |
 | **brewcode** (project: \`${gone}\`) | 6.7.1 | 6.9.6 | ⚪ orphan install |
 | **brewdoc** | 6.9.6 | 6.9.6 | ⚪ already current |

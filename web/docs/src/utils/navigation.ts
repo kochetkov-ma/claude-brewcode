@@ -34,6 +34,7 @@ export const navigation: NavSection[] = [
       { title: 'All mods', slug: 'mods/overview' },
       { title: 'Prompt placeholders', slug: 'mods/placeholders' },
       { title: 'Plan-mode effort', slug: 'mods/plan-effort' },
+      { title: 'Reminders', slug: 'mods/reminders' },
       { title: 'Codewords', slug: 'brewtools/prompt-injection' },
     ],
   },

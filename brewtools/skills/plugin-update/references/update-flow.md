@@ -72,7 +72,8 @@ The single source the script parses: the only `json` fence in this file. `value`
   "caps": { "perVersion": 3, "total": 10 },
   "mods": [
     { "name": "brewmod-placeholders", "value": "`++r` and other prompt blocks" },
-    { "name": "brewmod-plan-effort", "value": "effort `xhigh` in plan mode" }
+    { "name": "brewmod-plan-effort", "value": "effort `xhigh` in plan mode" },
+    { "name": "brewmod-reminders", "value": "durable reminders that survive sessions" }
   ],
   "plugins": [
     { "name": "brewcode", "value": "skill, agent and rule authoring, code search, conventions, review and team setups" },

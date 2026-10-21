@@ -1,6 +1,21 @@
 # Hook Changes Reference
 
-Version index through Claude Code 2.1.296: each row is something a hook author still acts on, all stated by the official reference or changelog. The current contract sits in the reference named in the row; a floor already printed beside its fact there (event `Ver` column, `(vX+)` tags) is not repeated here.
+Version index through Claude Code 2.1.306: each row is something a hook author still acts on, all stated by the official reference or changelog. The current contract sits in the reference named in the row; a floor already printed beside its fact there (event `Ver` column, `(vX+)` tags) is not repeated here.
+
+## Changes 2.1.297 -> 2.1.306
+
+Source: [CHANGELOG](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md), read at 2.1.306.
+
+| Version | Change | What to do differently |
+|---------|--------|-------------------------|
+| 2.1.299 | `UserPromptSubmit` runs BEFORE a skill/slash command expands; a block also stops its embedded shell commands. A skill's own frontmatter `UserPromptSubmit` first runs on the prompt AFTER the invoking one | do not expect the skill's own hook on the invoking prompt; read the raw `/cmd args` line |
+| 2.1.299 | an action a plugin hook can block is refused (not let through) when the hook cannot be handed it or cannot answer; plan mode no longer runs a write that a `PreToolUse` hook allowed | a crashing/unreachable blocking hook now blocks; test that path |
+| 2.1.300 | `updatedInput` (PreToolUse, PermissionRequest) is validated like Claude's own input: unknown keys dropped, tool-rejected input denies the call | return only keys the tool accepts |
+| 2.1.300 | agent hooks honor their `model` (aliases like `haiku` resolve; unavailable model -> caller's) | pin `model` on agent hooks |
+| 2.1.301 | the `ask` permission prompt names the source: `[skill]`, `[plugin:<name>]`, `[settings]` (settings + agent FM) | no change; expect the label |
+| 2.1.302 | prompt and agent hooks: at most 12 of one event run at once, the rest queue (each `timeout` counts from its own start) | keep LLM hooks per event few |
+| 2.1.304 | skill hooks: one source (repo, own folder, plugin) registers <=1,024 hooks and <=16,384 matcher chars per session; a skill's `once` hook no longer removes another skill's identical hook | keep skill hooks small; `once` is per-skill |
+| 2.1.304 | policy allowing hooks from plugins only: a main-conversation skill whose hooks are kept out no longer gets its `allowed-tools` | do not rely on `allowed-tools` of a hook-carrying skill under such a policy |
 
 ## Changes 2.1.270 -> 2.1.296
 

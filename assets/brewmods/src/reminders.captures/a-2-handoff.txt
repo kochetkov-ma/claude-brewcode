@@ -1,0 +1,26 @@
+
+› Prompt from the brewmod-reminders plugin
+❯ Reminder helper. My request: <request>in 1 min: run the test suite</request>
+  Now: Wed 21 Oct 15:49 Lisbon (14:49 UTC), time zone Europe/Lisbon, UTC
+  2026-10-21T14:49:03Z. Times I give without a zone are in Europe/Lisbon.
+  Scope: project.
+  Use the mcp__brewmod-reminders__* tools. To add: add_reminder without confirm first
+  (preview, writes nothing), show me its time line, ONE AskUserQuestion confirming the
+  time (plus the scope when not given), then add_reminder with confirm:true. To look or
+  change: list_reminders, update_reminder.
+
+⏺ brewmod-reminders - add_reminder (MCP)(scope: "project", when: "+1m", text: "Run the
+                                        test suite for this project and report the
+                                        results.", slug: "run test suite")
+  ⎿  Preview, nothing written: Wed 21 Oct 15:50 Lisbon (14:50 UTC), in <1 min | pro
+     ject | 20261021-1450_run-test-suite
+     Run the test suite for this project and report the results.
+     … +4 lines (ctrl+o to expand)
+
+✳ Orchestrating… (2s · ↓ 135 tokens)
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · esc to interrupt
+

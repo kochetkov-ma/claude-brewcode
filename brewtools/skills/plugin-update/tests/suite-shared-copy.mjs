@@ -16,7 +16,7 @@ const dir = join(base, 'run');
 mkdirSync(dir);
 mkdirSync(join(base, 'profile'));
 const ID = name => `${name}@claude-brewcode`;
-const NAMES = ['brewmod-placeholders', 'brewmod-plan-effort', 'brewcode', 'brewdoc', 'brewtools', 'brewui'];
+const NAMES = ['brewmod-placeholders', 'brewmod-plan-effort', 'brewmod-reminders', 'brewcode', 'brewdoc', 'brewtools', 'brewui'];
 writeFileSync(join(dir, 'before.json'), JSON.stringify([
     { id: ID('brewtools'), version: '6.7.1', scope: 'user', enabled: true },
     { id: ID('brewmod-placeholders'), version: '6.9.6', scope: 'user', enabled: true },
@@ -41,7 +41,7 @@ assert.deepEqual({ rc: r.status, stderr: r.stderr, plan: JSON.parse(r.stdout) },
         scopes: [{ scope: 'user', projectPath: null }],
         offers: {
             ccOk: true, cc: '2.1.301', ccMin: '2.1.301',
-            mods: [{ name: 'brewmod-plan-effort', value: 'effort `xhigh` in plan mode', migration: null }],
+            mods: [{ name: 'brewmod-plan-effort', value: 'effort `xhigh` in plan mode', migration: null }, { name: 'brewmod-reminders', value: 'durable reminders that survive sessions', migration: null }],
             plugins: [
                 { name: 'brewcode', value: 'skill, agent and rule authoring, code search, conventions, review and team setups' },
                 { name: 'brewdoc', value: 'doc-staleness tracking, installation guides, Markdown to PDF, publishing' },

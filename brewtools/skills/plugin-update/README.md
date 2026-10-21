@@ -1,6 +1,6 @@
 # Plugin Update
 
-Updates every installed brewcode plugin (brewcode, brewdoc, brewtools, brewui) and mod (`brewmod-placeholders`, `brewmod-plan-effort`) in one run, each at the scope it is installed in. It never asks whether to update. The one question offers the mods and plugins you do not have yet. The run ends with one report: versions before and after, what changed for you, and numbered next steps.
+Updates every installed brewcode plugin (brewcode, brewdoc, brewtools, brewui) and mod (`brewmod-placeholders`, `brewmod-plan-effort`, `brewmod-reminders`) in one run, each at the scope it is installed in. It never asks whether to update. The one question offers the mods and plugins you do not have yet. The run ends with one report: versions before and after, what changed for you, and numbered next steps.
 
 ## Install
 
@@ -23,12 +23,13 @@ A mode word can sit anywhere in a free-form prompt. The prompt never narrows wha
 ## The report
 
 ```text
-## 🟢 brewcode updated: 5 of 6 components
+## 🟢 brewcode updated: 6 of 7 components
 
 | Component | Before | After | |
 |---|---|---|---|
 | **brewmod-placeholders** | 6.9.5 | **6.9.6** | 🟢 updated |
 | **brewmod-plan-effort** | — | **6.9.6** | 🟢 installed |
+| **brewmod-reminders** | — | **6.9.6** | 🟢 installed |
 | **brewcode** | 6.9.5 | **6.9.6** | 🟢 updated |
 | **brewdoc** | 6.9.6 | 6.9.6 | ⚪ already current |
 | **brewtools** | 6.9.5 | **6.9.6** | 🟢 updated |
@@ -77,7 +78,7 @@ Manual equivalent:
 
 ```bash
 claude plugin marketplace update claude-brewcode
-for p in brewmod-placeholders brewmod-plan-effort brewcode brewdoc brewtools brewui; do claude plugin update "$p@claude-brewcode"; done
+for p in brewmod-placeholders brewmod-plan-effort brewmod-reminders brewcode brewdoc brewtools brewui; do claude plugin update "$p@claude-brewcode"; done
 ```
 
 - **One name per call.** `claude plugin update` updates only the first name and silently ignores the rest, so a list of names or the brace form `{a,b}@claude-brewcode` updates a single plugin.

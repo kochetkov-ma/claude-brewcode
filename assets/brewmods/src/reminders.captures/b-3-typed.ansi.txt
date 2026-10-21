@@ -1,0 +1,26 @@
+[38;5;174m ▐[48;5;16m▛███▛█[39m[49m   [1mClaude[0m [1mCode[0m [38;5;246mv2.1.306[39m
+[38;5;174m▝▜[48;5;16m█████[49m█▀[39m  [38;5;246mSonnet[39m [38;5;246m5.5[39m [38;5;246mwith[39m [38;5;246mmedium[39m [38;5;246meffort[39m [38;5;246m·[39m [38;5;246mClaude[39m [38;5;246mMax[39m
+[38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;246m/Volumes/brewery[39m
+
+
+[38;5;246m[48;5;237m❯ [38;5;231mhi[39m
+
+[38;5;231m[49m⏺[39m Hi! You have one reminder due now: [1mRun the test suite for this project and report the
+[0m  [1mresults[0m (due Wed 21 Oct 15:50 Lisbon time).
+
+  What would you like to do with it?
+  - [1mRun now[0m: I'll run the tests and report back
+  - [1mSnooze[0m: tell me until when
+  - [1mMark done[0m: close it without running
+  - [1mCancel[0m: drop it
+
+[38;5;246m✻[39m [38;5;246mBrewed for 3s · done 3:50 PM[39m
+[1m[38;5;220mreminders · 1 due · 0 upcoming[0m                                                      [38;5;246m[-][39m
+[38;5;220m  Run the test suite for this project and report the results.  now[39m
+[38;5;246m/remind  list · done · snooze · or say what to add[39m
+
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m❯ run it
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m  [38;5;246m⏸[39m [38;5;246mmanual[39m [38;5;246mmode[39m [38;5;246mon[39m
+

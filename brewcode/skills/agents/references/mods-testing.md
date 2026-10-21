@@ -1,26 +1,26 @@
 # Mods Testing Reference
 
-> verified_on: 2.1.300
+> verified_on: 2.1.306
 
 The `claude-code/testing` kit, test patterns, CI wiring, live headless runs, tmux TTY checks. Legend: `mods-api.md`.
 
 ## Kit
 
-`import { test, expect, describe, mock, tier } from 'claude-code/testing'` (T:15559-16661). `claude plugin test [dir]` runs every `*.test.ts` and `*.test.tsx` under `dir`, each file in child process, in environment like module's (no fs, network or process); rc 1 on failing test.
+`import { test, expect, describe, mock, tier } from 'claude-code/testing'` (T:15806-16912). `claude plugin test [dir]` runs every `*.test.ts` and `*.test.tsx` under `dir`, each file in child process, in environment like module's (no fs, network or process); rc 1 on failing test.
 
 | Item | Fact | src |
 |------|------|-----|
-| test | `test(name, body)` or `test(name, { options, plugins, timeoutMs }, body)`; body `($, on) => ...`; 5000 ms default; fails on throw, reject or timeout | T:16609-16645 |
-| `$` | engine's own: `$.classic.<Event>`, `$.turn.step`, `$.command.run`, `$.fs`... as engine calls them (event input whole), plus `$.ui.mount/press/input/select`. NO `$.plugin`, NO `$.fs/process/store/env/clock` (TypeError at run time, tsc TS2339). Test fs-reading code by stubbing the event beneath (`on('fs.read', ...)`) and raising the event that reaches it (`$.command.run`), or keep parsing a pure function of strings | T:15690-15780, 15696-15698; X |
-| `on` | registers hooks BENEATH every plugin = stubs ("bottoms") for what engine would answer; register before first call on `$` | T:16620; X |
+| test | `test(name, body)` or `test(name, { options, plugins, timeoutMs }, body)`; body `($, on) => ...`; 5000 ms default; fails on throw, reject or timeout | T:16855-16893 |
+| `$` | engine's own: `$.classic.<Event>`, `$.turn.step`, `$.command.run`, `$.fs`... as engine calls them (event input whole), plus `$.ui.mount/press/input/select`. NO `$.plugin`, NO `$.fs/process/store/env/clock` (TypeError at run time, tsc TS2339). Test fs-reading code by stubbing the event beneath (`on('fs.read', ...)`) and raising the event that reaches it (`$.command.run`), or keep parsing a pure function of strings | T:15943-16017; X |
+| `on` | registers hooks BENEATH every plugin = stubs ("bottoms") for what engine would answer; register before first call on `$` | T:16865; X |
 | no stub | bottom throws, names event: `no implementation for fs.exists` / `nothing beneath the plugins answers command.run: a test answers it with on('command.run', ...)` | X |
 | mod throws AFTER `await next(e)` | valid-shaped bottom: the raise resolves to the downstream result, mod hook skipped, like the engine (`await $.classic.UserPromptSubmit(...)` -> `{ additionalContext: ['BT'] }`, bottom ran once): assert it. Missing or MALFORMED bottom (`[null, 'x']`, `5`) -> `HooksError: no implementation for <event>` (the bottom failed, not the mod) | W; T2.R rev2 |
-| options | `{ options: { planEffort: 'max' } }` = values stored in settings: defaults filled, value outside picker's `options` unset | T:16627-16645; X |
-| `tier` | `tier('user')` (also `prepend`, `append`, `builtin`) once at file top; default `user` | T:16552, 16661 |
-| `describe`, `expect` | `describe(name, body)` runs at file load; `expect(value, 'message')`; matchers `toBe`, `toEqual` (ignores undefined-valued keys), `toStrictEqual` (exact), `toMatchObject`, `toHaveProperty`, `toMatch`, `toThrow`, `.not`, `.resolves/.rejects`, `expect.any/objectContaining/stringMatching` | T:15646, 15856-15873, 15940-16072; X |
-| `mock` | exactly `clock`, `store`, `env`, `session`. NO `mock.fs`, NO `mock.process` | T:16178; X (`Object.keys(mock)`) |
-| `mock.clock(on, {now})` | `.now() .advance(ms) .set(ms) .settle() .sleep(ms)`; timers wait for test to advance | T:16141, 16184-16240 |
-| `mock.store(on, entries)`, `mock.env(on, vars)`, `mock.session(on)` | `$.store`, `$.env.get` from memory (unlisted variable unset); `.appended()` = rows stored by `$.session.append` | T:16149-16168, 16241 |
+| options | `{ options: { planEffort: 'max' } }` = values stored in settings: defaults filled, value outside picker's `options` unset | T:16873-16893; X |
+| `tier` | `tier('user')` (also `prepend`, `append`, `builtin`) once at file top; default `user` | T:16798, 16907 |
+| `describe`, `expect` | `describe(name, body)` runs at file load; `expect(value, 'message')`; matchers `toBe`, `toEqual` (ignores undefined-valued keys), `toStrictEqual` (exact), `toMatchObject`, `toHaveProperty`, `toMatch`, `toThrow`, `.not`, `.resolves/.rejects`, `expect.any/objectContaining/stringMatching` | T:15893, 16087-16119, 16186-16325; X |
+| `mock` | exactly `clock`, `store`, `env`, `session`. NO `mock.fs`, NO `mock.process` | T:16424; X (`Object.keys(mock)`) |
+| `mock.clock(on, {now})` | `.now() .advance(ms) .set(ms) .settle() .sleep(ms)`; timers wait for test to advance | T:16387, 16430-16479 |
+| `mock.store(on, entries)`, `mock.env(on, vars)`, `mock.session(on)` | `$.store`, `$.env.get` from memory (unlisted variable unset); `.appended()` = rows stored by `$.session.append` | T:16395-16414, 16487-16507 |
 | time per test | ~10 ms; a failure prints skipped hooks and why under `the engine reported:` | X |
 
 ## Stub Bottoms
@@ -29,28 +29,28 @@ A stub is normal hook: `on('<event>', ($, e, next) => result)`. Mod's `$.fs.read
 
 | Mod calls | Stub | Note | src |
 |-----------|------|------|-----|
-| `$.fs.read(p)` | `on('fs.read', () => ({ value: 'text' }))` | `e` = `{ path, as }`; `path` is ABSOLUTE (relative paths resolve against cwd = plugin folder): match with `endsWith`, never `=== 'x.md'` | T:7187-7220; X |
+| `$.fs.read(p)` | `on('fs.read', () => ({ value: 'text' }))` | `e` = `{ path, as }`; `path` is ABSOLUTE (relative paths resolve against cwd = plugin folder): match with `endsWith`, never `=== 'x.md'` | T:7242-7275; X |
 | `$.fs.exists(p)` / `$.fs.list(p)` | `({ value: true })` / `({ value: [{ name, kind: 'file', size, mtimeMs, isLink: false }] })` | | X |
-| `$.fs.stat(p, {resolve:true})` | `(_$, e) => ({ value: { kind:'file', size:0, mtimeMs:0, isLink:false, realPath } })` | `e` = `{ path, resolve }` | T:5109; X |
+| `$.fs.stat(p, {resolve:true})` | `(_$, e) => ({ value: { kind:'file', size:0, mtimeMs:0, isLink:false, realPath } })` | `e` = `{ path, resolve }` | T:5156; X |
 | `$.process.run(argv)` | `(_$, e) => ({ value: { exitCode:0, stdout:'', stderr:'', isStdoutTruncated:false, isStderrTruncated:false } })` | capture `e.argv` to assert call | X |
 | `$.fs.write(p, t)` | `on('fs.write', () => ({ value: undefined }))` | unstubbed: module's hook skipped (`no implementation for fs.write`), test sees `HooksError` | X |
 | rejection (missing file, failed command) | `on('fs.read', () => ({ deny: 'ENOENT' }))` | caller's promise REJECTS with `$.fs.read: ENOENT`: module `try/catch` sees it | X |
 | stub that throws | stub skipped, bottom unanswered, module's hook skipped, test FAILS (`HooksError`) | never model failures with throws | X |
-| `$.store.*`, `$.env.get`, `$.clock.*` | `mock.store/env/clock` | | T:16178 |
+| `$.store.*`, `$.env.get`, `$.clock.*` | `mock.store/env/clock` | | T:16424 |
 
-Plan-vs-live (loud): plan said stubs cannot reject. On 2.1.300 a stub CAN (`{ deny }`, `ValueOrDeny` T:15357); a THROWING stub cannot. Keep `exists`/`list`-before-`read` in the module (real `read` rejects for a missing file); test rejection with `{ deny }`.
+Plan-vs-live (loud): plan said stubs cannot reject. On 2.1.300 a stub CAN (`{ deny }`, `ValueOrDeny` T:15603); a THROWING stub cannot. Keep `exists`/`list`-before-`read` in the module (real `read` rejects for a missing file); test rejection with `{ deny }`.
 
 ## Raising Events
 
 | Need | Call | src |
 |------|------|-----|
-| classic hook | `await $.classic.UserPromptSubmit({ prompt, permission_mode: 'plan' })`; needs bottom `on('classic.UserPromptSubmit', () => ({}))`; envelope (`session_id`, `transcript_path`, `cwd`) is stamped; `PreToolUse` goes through `$.tool.call` | T:15710-15725; X |
-| `turn.step` (streaming) | bottom: `on('turn.step', async function* (_$, e) { seen = e.effort; return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: null, usage: null } })`; call: `for await (const _ of $.turn.step({ turnId, index: 0, model, effort: 'high', messageCount: 1 })) {}`; final result: `const s = $.turn.step(...); let r = await s.next(); while (r.done !== true) r = await s.next()` then `r.value` (`await s.result` after `for await` is undefined) | T:14146-14185; X |
-| subagent step | add `agentId: 'a1'` to input | T:14112 |
-| `command.run` | typed call needs whole input: `{ command, args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } }` | T:1825-1851; X |
-| `prompt.attachment` | `$.prompt.attachment({ type: 'plan_mode_exit', text, origin: { kind: 'engine' } } as never)` (union needs `detail` for declared types) | T:8314; X |
-| `prompt.edit/change/autocomplete` | not typed on test `$`; run at run time: `await ($.prompt as any).edit({ origin: { kind: 'composer' }, text, cursor, start, end, inputText })` | T:4841-4850; X |
-| `tool.call` | `await $.tool.call({ tool: 'Bash', command })`; a `{ deny }` ends call with errored result | T:15610-15620 |
+| classic hook | `await $.classic.UserPromptSubmit({ prompt, permission_mode: 'plan' })`; needs bottom `on('classic.UserPromptSubmit', () => ({}))`; envelope (`session_id`, `transcript_path`, `cwd`) is stamped; `PreToolUse` goes through `$.tool.call` | T:15966-15973; X |
+| `turn.step` (streaming) | bottom: `on('turn.step', async function* (_$, e) { seen = e.effort; return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: null, usage: null } })`; call: `for await (const _ of $.turn.step({ turnId, index: 0, model, effort: 'high', messageCount: 1 })) {}`; final result: `const s = $.turn.step(...); let r = await s.next(); while (r.done !== true) r = await s.next()` then `r.value` (`await s.result` after `for await` is undefined) | T:14390-14429; X |
+| subagent step | add `agentId: 'a1'` to input | T:14356 |
+| `command.run` | typed call needs whole input: `{ command, args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } }` | T:1828-1854; X |
+| `prompt.attachment` | `$.prompt.attachment({ type: 'plan_mode_exit', text, origin: { kind: 'engine' } } as never)` (union needs `detail` for declared types) | T:8370; X |
+| `prompt.edit/change/autocomplete` | not typed on test `$`; run at run time: `await ($.prompt as any).edit({ origin: { kind: 'composer' }, text, cursor, start, end, inputText })` | T:4888-4897; X |
+| `tool.call` | `await $.tool.call({ tool: 'Bash', command })`; a `{ deny }` ends call with errored result | T:15861-15868 |
 
 ## `ui.mount`
 
@@ -58,13 +58,13 @@ Plan-vs-live (loud): plan said stubs cannot reject. On 2.1.300 a stub CAN (`{ de
 
 | Fact | src |
 |------|-----|
-| AbovePrompt props for mount: `{ hasSurvey, isWorking, maxRows, bodyColumns, scroll: { bodyRows, offset, total }, view: {} }` (all read-only) | T:10653-10700; X |
+| AbovePrompt props for mount: `{ hasSurvey, isWorking, maxRows, bodyColumns, scroll: { bodyRows, offset, total }, view: {} }` (all read-only) | T:10794-10841; X |
 | tree surface refuses fails mount with reason, e.g. `drew nothing on the terminal surface: ... refused: Box hover is scoped to a keyed Box drawn display "none"`: this catches keyed hidden hover Box | X |
 | `$.state` persists across mounts inside one test: press back or reset before next surface | X |
 | hover and paint untestable (kit never paints): assert `props.hover` on found element and prove reveal in TTY check | T:29-47 header; PLAN T2.7 |
 | `press` resolves after handler, chain and unawaited work settle: assert right after the `await` | R:81 |
 | `find` returns `{ text, ... }`: `expect((await ui.find({ key: 'toggle' }))?.text).toBe('More')` | X |
-| `drawn()` roots carry `part: { plugin }` on 2.1.300, none on 2.1.296: strip it (`const { part, ...rest } = node`, recursive over `children`) before comparing trees whenever CI pins an older build | T:12795; W |
+| `drawn()` roots carry `part: { plugin }` on 2.1.300, none on 2.1.296: strip it (`const { part, ...rest } = node`, recursive over `children`) before comparing trees whenever CI pins an older build | T:13017; W |
 | stub the box a render hook reads: `on('prompt.read', () => ({ value: { text, cursor } }))` | X |
 
 Per surface: `mount` -> `find({ key: 'toggle' })?.text` is `'More'` -> `press` -> `'Less'` -> `press` -> `unmount`.
@@ -84,7 +84,7 @@ Own-handler cost only (scan, decorate, merge, view diff). Parallel agents stall 
 | validate | loop `claude plugin validate --strict` over `.` and every `./brewmod-*`; unpiped rc | V; PLAN S.5 |
 | unit tests | loop `claude plugin test ./brewmod-*/`; no `tests/run.sh` for mods (`check-shards.sh:18` would demand shard); the parity goldens are a frozen spec run by `plugin test` itself (generators retired, no `--check` gates) | PLAN S.5; research 04 §D3 |
 | plain-Node tests | bundled command hooks are `.mjs`, `plugin test` skips them: `node brewmod-placeholders/tests/check-defaults.mjs`, `node brewmod-placeholders/tests/inject-parity.mjs` (golden vectors, layer fixtures, state file, fail open, differential vs the TS lib) and `node --test brewmod-plan-effort/tests/mode.test.mjs` run in the same CI step; each failure prints `::error::` | C41; C43; `validate.yml` |
-| CC pin | `CLAUDE_CODE_VERSION: 2.1.296` (npm stable 2.1.292): has `plugin test` and `modules` (D13, S.4); a hook name newer than the pin turns validate and test red (W); tests that compare engine-stamped fields (`part`) normalise them (L13) | D13; S.4; W |
+| CC pin | `CLAUDE_CODE_VERSION: 2.1.301` in `.github/workflows/validate.yml` (read 2026-10-21; was 2.1.296, npm stable 2.1.292): has `plugin test` and `modules` (D13, S.4); reference verified on 2.1.306, so CI runs a build older than the types; a hook name newer than the pin turns validate and test red (W); tests that compare engine-stamped fields (`part`) normalise them (L13) | D13; S.4; W |
 | failed load | a mod that fails to load exits 0 in `claude -p` (grep stderr/debug for `hooks module did not load`) but non-zero in `validate --strict` and `plugin test` | X; probed on 2.1.296 |
 | type check, drift | `npx -y -p typescript@7.0.2 tsc -p <tsconfig outside the mod>` (`mods-lifecycle.md`); `node brewcode/skills/agents/scripts/mods-ref-check.mjs <types> brewcode/skills/agents/references` rc 0: not in CI, run by hand per build | X; D16 |
 
@@ -109,6 +109,7 @@ claude -p "$PROMPT" --plugin-dir "$MOD_DIR" --permission-mode plan \
 | project root | launch from `sub/deep` to see `$.session.root()` = launch dir (`mods-patterns.md` #9) | S; X |
 | `$.config` paths | `-p` has no plugin rows and `$.config.set` of an own key throws: test the headless answer there, the set path in tmux (`/x <value>`, then `/x` shows it; settings.json `pluginConfigs["<plugin>@inline"]` holds it; remove the key after the probe) | PE Q1, Q2 |
 | probe that prints | `$.ui.log('TAG ...', { to: 'debug' })`, then grep debug file | X |
+| refusal wording | a mod tool refusal must carry an instruction (`do not run it, tell the user`), or a haiku-driven run ignores it: `mods-patterns.md` #11 | LR |
 
 ## Team-Org Live Check
 
@@ -132,6 +133,8 @@ CLAUDE_CONFIG_DIR=<team profile dir> claude -p "<prompt with the token>" --plugi
 | UI side | tmux, no prompt submitted: band, typeahead, `/placeholders list` | F1 §2 |
 | isolate from other installs | `--settings '{"enabledPlugins":{"<plugin>@<market>":false}}'` per installed plugin that would also load, inject or write (F1 debug showed the installed `brewmod-*` loading beside the probe); isolates the mod under test from the profile | F1; AB |
 | side effects | note transcripts left in profile dirs; remove `plugins/data/<mod>-inline` dirs a command hook created; no `~/.claude/dev-mods/` writes | F1 §6 |
+
+Team 2.1.306 (brewmod-reminders, `~/.claude-work`, 2026-10-21): TUI band, `command.run` hand-off, mod tools and bundled hook context all observed (`r10-*`, `t1.debug`); `r10-p-*` `-p` runs show seat (`seated outermost`) vs control (`not seated ... (max)`) only (reply `OK`).
 
 Marketplace install: a mixed `hooks.json` from a git-source marketplace passed on Team + Max (T6P); a local-path marketplace loads in place, so it does not test the cache copy.
 

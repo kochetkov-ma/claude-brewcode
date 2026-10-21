@@ -21,6 +21,7 @@ Written for you and for an LLM. Paste into Claude Code: `Read https://raw.github
 claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
 claude plugin install brewmod-placeholders@claude-brewcode
 claude plugin install brewmod-plan-effort@claude-brewcode
+claude plugin install brewmod-reminders@claude-brewcode
 claude plugin install brewcode@claude-brewcode
 claude plugin install brewdoc@claude-brewcode
 claude plugin install brewtools@claude-brewcode
@@ -34,8 +35,8 @@ claude plugin install brewui@claude-brewcode
 
 1. Run `claude --version`. Below 2.1.301: run `claude update`, then stop and tell the user to restart Claude Code and paste the prompt again.
 2. brewtools in `claude plugin list`: `/brewtools:plugin-update` does steps 3-4 in one run. It updates every installed plugin and mod in every scope, asks once about the missing mods and plugins, and prints the versions before and after, what changed for the user and the next steps. Run it, or tell the user to type it and wait for the report; show the report, then go to step 5. Without brewtools, do steps 3-4.
-3. Without brewtools: run `claude plugin marketplace update claude-brewcode`, then `claude plugin update <name>@claude-brewcode` once per installed plugin, one name per call (a second name is silently ignored), `brewmod-placeholders` first. Names: `brewmod-placeholders`, `brewmod-plan-effort`, `brewcode`, `brewdoc`, `brewtools`, `brewui`.
-4. Without brewtools, a mod missing from `claude plugin list`: say in one line what it adds (`brewmod-placeholders`: `++r` and other prompt blocks; `brewmod-plan-effort`: effort `xhigh` in plan mode), offer to install it, install on yes with `claude plugin install <name>@claude-brewcode`. Offer a missing plugin the same way.
+3. Without brewtools: run `claude plugin marketplace update claude-brewcode`, then `claude plugin update <name>@claude-brewcode` once per installed plugin, one name per call (a second name is silently ignored), `brewmod-placeholders` first. Names: `brewmod-placeholders`, `brewmod-plan-effort`, `brewmod-reminders`, `brewcode`, `brewdoc`, `brewtools`, `brewui`.
+4. Without brewtools, a mod missing from `claude plugin list`: say in one line what it adds (`brewmod-placeholders`: `++r` and other prompt blocks; `brewmod-plan-effort`: effort `xhigh` in plan mode; `brewmod-reminders`: reminders that live in a file and show up in a later session), offer to install it, install on yes with `claude plugin install <name>@claude-brewcode`. Offer a missing plugin the same way.
 5. Run `/reload-plugins`.
 6. With brewcode installed, run `/brewcode:setup-status upgrade` in this project if it has `.claude/` setups (or tell the user to type it), and tell the user to repeat it in every other project. A plugin update does not touch the files a setup already generated in a project: the command brings every stale setup it may run current, one subagent per setup, and lists the commands left for the user (convention-setup, and hand-modified, custom or parked setups). Claude Code asks before each write into `.claude/` in `default` and `acceptEdits` mode (approve each) and denies it in `dontAsk` mode.
 
@@ -49,6 +50,7 @@ Project- or local-scope installs update from their own project directory; `/brew
    - `++r` in a prompt: a whole review block; the caret on it shows its text before Enter.
    - `++m`: manager mode, the main session delegates and keeps a task graph.
    - `/placeholders`: lists the tokens; `/placeholders show ++r` prints one; `/placeholders add ++name: ...` writes your own.
+   - `/remind in 1 min: run the test suite` (brewmod-reminders): Claude previews the time, asks once, saves a reminder file; a later session shows it above the prompt and offers it at your first prompt.
 
 ## First steps in a project
 
@@ -63,9 +65,9 @@ Diagram and details: https://doc-claude.brewcode.app/recommended-flow/
 ## Links
 
 - Docs: https://doc-claude.brewcode.app/getting-started/ | install: https://doc-claude.brewcode.app/installation/
-- Mods: https://doc-claude.brewcode.app/mods/overview/ | placeholders: https://doc-claude.brewcode.app/mods/placeholders/
+- Mods: https://doc-claude.brewcode.app/mods/overview/ | placeholders: https://doc-claude.brewcode.app/mods/placeholders/ | reminders: https://doc-claude.brewcode.app/mods/reminders/
 - Update commands: https://doc-claude.brewcode.app/brewtools/skills/plugin-update/ | https://doc-claude.brewcode.app/brewcode/skills/setup-status/
-- Console GIF of `++r` and `/placeholders`: https://brewcode.app/mods/placeholders.gif
+- Console GIF of `++r` and `/placeholders`: https://brewcode.app/mods/placeholders.gif | of `/remind`: https://brewcode.app/mods/reminders.gif
 - Approaches (every hook, agent and injection): https://github.com/kochetkov-ma/claude-brewcode/blob/main/APPROACHES.md
 - Release notes: https://github.com/kochetkov-ma/claude-brewcode/blob/main/RELEASE-NOTES.md
 - Index for LLMs: https://doc-claude.brewcode.app/llms.txt

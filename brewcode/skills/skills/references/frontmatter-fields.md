@@ -1,7 +1,7 @@
 # Frontmatter Field Reference
 
 Complete supported SKILL.md frontmatter set, 20 fields (live [skills docs](https://code.claude.com/docs/en/skills),
-checked through CC 2.1.296). Anything else -> the supported
+checked through CC 2.1.306). Anything else -> the supported
 `metadata:` map, which CC accepts but ignores. An invented key (`cli:` outside the
 house convention below, `updated:`) is not a feature — CC ignores it silently and claude.ai upload /
 Skills API / `package_skill.py` hard-fail on it (allowed set
@@ -83,6 +83,19 @@ Same format as settings hooks. CC registers a SK's hooks when invoked and keeps 
 OF THE SESSION, including turns after the SK's own. `once: true` removes the hook after its first
 SUCCESSFUL run (a failed, exit-2 or timed-out run leaves it registered) — honored only in SK
 frontmatter; ignored in settings.json and in agent frontmatter. Path: `hooks.<Event>[].hooks[].once`.
+
+| Rule | Detail | Source |
+|---|---|---|
+| Lifetime | Outlives the skill: stays registered for the rest of the session, also on turns after the skill's own. Declare only must-always behavior; a one-shot needs `once: true` | docs verified 2.1.306 (hooks#hooks-in-skills-and-agents) |
+| Events | Same format as settings hooks, any hook event; a skill's own `UserPromptSubmit` first runs on the prompt AFTER the invoking one (2.1.299) | docs verified; changelog 2.1.299 |
+| Trust | Project-skill frontmatter hooks follow the settings-file workspace-trust rule; registered on invoke, also in `-p` in an untrusted folder. Plugin-skill trust: not stated | docs verified |
+| Ask label | A hook returning `ask` shows `[skill]` (settings and agent FM: `[settings]`, plugin: `[plugin:<name>]`); label added 2.1.301 | docs verified |
+| Caps | One source (repo, own folder, plugin): <=1,024 hooks and <=16,384 matcher chars per session (2.1.304) | changelog |
+| Paths | CSD is NOT available in a hook command (docs list it only for skill markdown + `allowed-tools`; empty env too; probe 2.1.306). Skill hooks behave like plugin `hooks.json`: exec form (`args` set) substitutes the braced `${CLAUDE_PLUGIN_ROOT}`/`${CLAUDE_PROJECT_DIR}`/`${CLAUDE_PLUGIN_DATA}` into `command` and each arg; shell form gets them as exported env (`"${CLAUDE_PLUGIN_ROOT}/x.sh"` or `"$CLAUDE_PLUGIN_ROOT/x.sh"`, double-quoted; single quotes stay literal, as in plugin `hooks.json`). Prefer exec form for any path token. Relative `./scripts/x.sh` runs from the session cwd, not the skill dir | docs hooks#exec-form-and-shell-form (names skill hooks); CSD probe 2.1.306 |
+| Policy | Hooks-from-plugins-only policy (2.1.304) drops the skill's `allowed-tools` | changelog 2.1.304 |
+| Same-handler | Identical handler in two skills stays separate; a skill's `once` hook no longer removes another skill's identical hook (2.1.304) | changelog |
+
+> Probe 2.1.306 (throwaway plugin skill `hooks.PreToolUse[Bash]`, `claude -p --permission-mode bypassPermissions`): CSD literal stayed, env empty; `${CLAUDE_PLUGIN_ROOT}` single-quoted stayed literal (shell-quote effect, same as plugin `hooks.json`), `"$CLAUDE_PLUGIN_ROOT"` held the plugin dir. Exec-form substitution + skill-hook scope: docs. Re-probe on CC upgrade.
 
 `PostToolUse` runs AFTER the tool, so it cannot prevent the call — but
 `decision: "block"` still adds a `reason` next to the tool result, and `updatedToolOutput` replaces

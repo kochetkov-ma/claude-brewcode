@@ -1,5 +1,5 @@
 #!/bin/bash
-# update-plugin.sh [brewcode|brewdoc|brewtools|brewui|brewmod-placeholders|brewmod-plan-effort|all] [--dry-run|--help]: marketplace -> user-scope install/update -> project/local-scope updates (from each projectPath) -> prune old cache (orphans marked .orphaned_at, deleted after a 14-day grace unless a live session pins them).
+# update-plugin.sh [brewcode|brewdoc|brewtools|brewui|brewmod-placeholders|brewmod-plan-effort|brewmod-reminders|all] [--dry-run|--help]: marketplace -> user-scope install/update -> project/local-scope updates (from each projectPath) -> prune old cache (orphans marked .orphaned_at, deleted after a 14-day grace unless a live session pins them).
 # Profile = $CLAUDE_CONFIG_DIR: `env -u CLAUDE_CONFIG_DIR bash update-plugin.sh` (~/.claude) | `CLAUDE_CONFIG_DIR=~/.claude-a bash update-plugin.sh`
 
 set -euo pipefail
@@ -22,7 +22,7 @@ log() { echo "$*" | tee -a "$LOG"; }
 err() { log ""; log "ERROR: $*"; exit 1; }
 
 # --- Argument parsing ---
-PLUGINS="brewcode brewdoc brewtools brewui brewmod-placeholders brewmod-plan-effort"
+PLUGINS="brewcode brewdoc brewtools brewui brewmod-placeholders brewmod-plan-effort brewmod-reminders"
 PLUGIN_ALT="${PLUGINS// /|}"
 TARGET="all"
 DRY_RUN=false
@@ -33,7 +33,7 @@ for arg in "$@"; do
         --help|-h)
             echo "Usage: [CLAUDE_CONFIG_DIR=<profile dir>] $(basename "$0") [$PLUGIN_ALT|all] [--dry-run]"
             echo ""
-            echo "  <plugin>   Update only that plugin; all (default) updates the six, skipping any not installed at user scope"
+            echo "  <plugin>   Update only that plugin; all (default) updates the seven, skipping any not installed at user scope"
             echo "  --dry-run  Print the profile, resolved cache paths and planned commands; change nothing"
             echo "  Profile    \$CLAUDE_CONFIG_DIR; unset = ~/.claude (from another profile: env -u CLAUDE_CONFIG_DIR bash $(basename "$0"))"
             exit 0
