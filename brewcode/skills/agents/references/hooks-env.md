@@ -8,7 +8,7 @@ Verified against Claude Code 2.1.306: [official hook environment](https://code.c
 | Variable | Description | Available |
 |----------|-------------|-----------|
 | `$CLAUDE_PROJECT_DIR` | project root; exported UNCONDITIONALLY into every hook child process (exec + shell form), and into stdio MCP / plugin LSP subprocesses. Empty in an interactive or Bash-tool shell -- that is expected, NOT evidence it is unset for hooks | all hooks |
-| `$CLAUDE_PLUGIN_ROOT` | plugin install dir; also exported into a plugin SK's frontmatter-hook process (probe 2.1.306: shell-form `"$CLAUDE_PLUGIN_ROOT"` expands, the braced token is NOT text-spliced there; docs silent) | plugin hooks, plugin-SK hooks |
+| `$CLAUDE_PLUGIN_ROOT` | plugin install dir; also exported into a plugin SK's frontmatter-hook process. Exec form (`args`) substitutes the braced token; shell form expands the env var (double-quote it; single quotes stay literal) | plugin hooks, plugin-SK hooks |
 | `${CLAUDE_SKILL_DIR}` | NOT available to hooks: not substituted in a hook command, empty in env (docs + probe 2.1.306) | none |
 | `$CLAUDE_PLUGIN_DATA` | persistent per-plugin data dir, survives updates (v2.1.78+); `~/.claude/plugins/data/<plugin-id>/` | plugin hooks |
 | `$CLAUDE_CODE_REMOTE` | `"true"` in remote env | all hooks |

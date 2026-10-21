@@ -844,11 +844,11 @@ class Run {
     this.record(`${n}.pu.report-title`, /^## 🟢 brewcode updated: \d+ of \d+ components$/.test(title), title || 'no report title', file('pu'))
     const t = mdTable(pu, 'Component')
     const cell = (name) => t?.rows.find((r) => plain(r[0]).split(' ')[0] === name)
-    const want = { brewcode: [this.o.old.slice(1), '6.10.1', '🟢 updated'], brewdoc: [this.o.old.slice(1), '6.10.1', '🟢 updated'], brewtools: ['6.10.0', '6.10.1', '🟢 updated'], 'brewmod-placeholders': ['—', '6.10.1', '🟢 installed'], 'brewmod-plan-effort': ['—', '6.10.1', '🟢 installed'], brewui: ['—', '—', '⚪ not installed'] }
+    const want = { brewcode: [this.o.old.slice(1), '6.10.1', '🟢 updated'], brewdoc: [this.o.old.slice(1), '6.10.1', '🟢 updated'], brewtools: ['6.10.0', '6.10.1', '🟢 updated'], 'brewmod-placeholders': ['—', '6.10.1', '🟢 installed'], 'brewmod-plan-effort': ['—', '6.10.1', '🟢 installed'], 'brewmod-reminders': ['—', '6.10.1', '🟢 installed'], brewui: ['—', '—', '⚪ not installed'] }
     const bad = Object.entries(want).filter(([k, w]) => { const r = cell(k); return !r || plain(r[1]) !== w[0] || plain(r[2]) !== w[1] || r[3] !== w[2] }).map(([k]) => `${k}=${JSON.stringify(cell(k) ?? null)}`)
     this.record(`${n}.pu.report-table`, t !== null && bad.length === 0, bad.join('; ') || 'before -> after rows as expected', file('pu'))
     const v = L.after.versions
-    const vBad = ['brewcode', 'brewdoc', 'brewtools', 'brewmod-placeholders', 'brewmod-plan-effort'].filter((p) => v[p] !== '6.10.1')
+    const vBad = PLUGINS.filter((p) => p !== 'brewui').filter((p) => v[p] !== '6.10.1')
     this.record(`${n}.pu.installed`, vBad.length === 0, `claude plugin list: ${JSON.stringify(v)}`)
     this.record(`${n}.pu.next-steps`, /### Next steps[\s\S]*1\. 🔵 \*\*`\/reload-plugins`\*\*[\s\S]*2\. 🔵 \*\*`\/brewcode:setup-status upgrade`\*\*/.test(pu), 'Next steps: 1 /reload-plugins, 2 /brewcode:setup-status upgrade', file('pu'))
     const failedCmds = (puRes.match(/^❌ .*$/gm) ?? [])

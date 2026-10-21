@@ -18,7 +18,7 @@ last_updated: "2026-10-17"
 
 Create/debug CC bash/JS/mjs hooks: event-specific routing, schemas, failure policy.
 
-> Ref ver: 2.1.296 (skill-hook facts 2.1.306: `hooks:` in SKILL.md, see `frontmatter-fields.md` of the skills plugin) | 33 hook events | 5 hook types (command, http, mcp_tool, prompt, agent).
+> Ref ver: 2.1.296 (changes through 2.1.306 in `hooks-changes.md`; `hooks:` in SKILL.md: `${CLAUDE_PLUGIN_ROOT}/skills/skills/references/frontmatter-fields.md`) | 33 hook events | 5 hook types (command, http, mcp_tool, prompt, agent).
 
 ## Return contract
 

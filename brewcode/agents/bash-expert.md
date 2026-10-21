@@ -74,10 +74,11 @@ echo "| brew | ✅ |"
 
 ## 4. Paths
 
-`CLAUDE_PLUGIN_ROOT` (plugin skill/agent text, hook/MCP commands) and `CLAUDE_SKILL_DIR` (a skill's
-own files) are text substitutions CC applies at load, in the dollar-brace form only, !=ordinary
-shell environment variables: an unbraced or `:-fallback` spelling is not substituted, the Bash tool
-has neither set, and project-local agents get no substitution. An ordinary script must receive the
+Substitution (dollar-brace form only): `CLAUDE_PLUGIN_ROOT` in plugin skill/agent bodies, fences and
+`allowed-tools`; `CLAUDE_SKILL_DIR` in a skill's own files. Neither is a Bash-tool env var (unbraced or
+`:-fallback` spelling is not substituted; project-local agents get no substitution). Hook and MCP
+processes additionally get `CLAUDE_PLUGIN_ROOT` as an env var: exec-form args are substituted, shell
+form expands the env. An ordinary script must receive the
 plugin root as an argument or derive it from `SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"`: from
 `skills/X/scripts/` it is three `dirname` up.
 

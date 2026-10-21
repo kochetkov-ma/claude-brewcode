@@ -142,7 +142,7 @@ Re-check a state: `gh api repos/anthropics/claude-code/issues/<N> --jq '[.state,
   assumed plugin source.
 - 2.1.295+: a skill's `allowed-tools` and `effort` are no longer dropped in `-p` runs — headless
   evals that drive a skill through `claude -p` are meaningful only from this version.
-- 2.1.299-2.1.304: skill-frontmatter hooks, see `frontmatter-fields.md` Hooks field detail (first-prompt `UserPromptSubmit`, `[skill]` ask label, per-source caps, `once` isolation, hooks-from-plugins-only policy drops the skill's `allowed-tools`).
+- 2.1.299-2.1.304: skill-frontmatter hooks, see `frontmatter-fields.md` Hooks field detail (first-prompt `UserPromptSubmit`, `[skill]` ask label, per-source caps, `once` isolation, hooks-from-plugins-only policy drops the skill's `allowed-tools`: Policy row).
 
 ## Validation checklist (Step 6, alongside `validate-skill.sh`)
 

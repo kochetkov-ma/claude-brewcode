@@ -131,7 +131,7 @@ FORK body. Multi-line -> a fenced block opened with ` ```! `.
 
 Complete set; nothing else is substituted. Each is TEXT spliced into the whole SKILL.md at load
 (prose, inline code, every fence), never a variable the Bash tool can read: all are unset there.
-Hooks and agents have no CSD (a SK-frontmatter hook command gets no substitution of CSD or of the braced PLUGIN_ROOT token; probe 2.1.306). In hook commands rely on the exported env `"$CLAUDE_PLUGIN_ROOT"` (shell form; verified by probe, docs silent for skill hooks) or `${CLAUDE_PROJECT_DIR}`; in agent bodies use `${CLAUDE_PLUGIN_ROOT}`.
+Hooks and agents have no CSD; hook-command path rules (exec form substitutes, shell form reads env): `frontmatter-fields.md` Hooks Paths row. In agent bodies use `${CLAUDE_PLUGIN_ROOT}`.
 
 | Variable | Description | Since |
 |---|---|---|
@@ -151,7 +151,7 @@ Spelling decides what reaches the shell (observed on CC 2.1.296):
 |---|---|---|
 | `$1` in a fence (awk field, shell positional) | `$N` is replaced once >= N+1 arg words are passed (`$0` = first word): `awk '{print $1}'` -> `awk '{print beta}'`. Fewer -> stays literal; an unfilled `$name` -> empty | awk `$(1)`, shell `${1}`: never replaced. `$NF`, `$@`, `$#` are untouched. Prose: `\$1.00` (one backslash; never blocks a `${CLAUDE_*}` var) |
 | `"$ARGUMENTS"` in a fence | The raw prompt becomes shell source: its quotes, backticks, `$(...)` and `;` break out and run | The quoted heredoc below, then `"$ARGS"` |
-| `$CLAUDE_PLUGIN_ROOT`, `${CLAUDE_PLUGIN_ROOT:-x}` (any `CLAUDE_*` token) | NOT substituted and unset in Bash -> empty path, or the fallback always wins | Exact braces: `${CLAUDE_PLUGIN_ROOT}` is substituted in plugin SK bodies, fences and `allowed-tools`. Project/personal SK: plugin tokens stay literal -> CSD, `${CLAUDE_PROJECT_DIR}` |
+| `$CLAUDE_PLUGIN_ROOT`, `${CLAUDE_PLUGIN_ROOT:-x}` (any `CLAUDE_*` token) in a SKILL.md Bash fence | NOT substituted and unset in Bash -> empty path, or the fallback always wins | Exact braces: `${CLAUDE_PLUGIN_ROOT}` is substituted in plugin SK bodies, fences and `allowed-tools`. Project/personal SK: plugin tokens stay literal -> CSD, `${CLAUDE_PROJECT_DIR}` |
 | A braced token named in prose | Rewritten to the path; a backslash does not stop it | Name it without the dollar-brace: `CLAUDE_SKILL_DIR` |
 
 ```bash

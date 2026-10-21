@@ -104,9 +104,7 @@ File names below are the references under Read on demand.
    catalog in `frontmatter-fields.md`; invocation type, description style and budget, criticality
    tiers in `activation-and-troubleshooting.md`. Declare `hooks:` only for behavior that must hold
    every time (a hook outlives the skill: it stays registered for the REST OF THE SESSION; one-shot
-   -> `once: true` on the hook entry, never top-level). In a hook command use no `${CLAUDE_SKILL_DIR}`
-   and no braced PLUGIN_ROOT token (neither is spliced); use shell-form `"$CLAUDE_PLUGIN_ROOT/..."`
-   or `${CLAUDE_PROJECT_DIR}`. Plugin-wide behavior -> plugin `hooks.json`. Details + probe:
+   -> `once: true` on the hook entry, never top-level). In a hook command CSD is unavailable; BPR is substituted in exec form (`args`) and exported as env for shell form (double-quote it, never single-quote); or use `${CLAUDE_PROJECT_DIR}`. Plugin-wide behavior -> plugin `hooks.json`. Details + probe:
    `frontmatter-fields.md` Hooks.
 5. **Write SKILL.md.** FM -> `## Prompt contract` -> overview (1-2 sentences) -> instructions in
    imperative form -> resource refs. Keep the body under 500 lines; move excess to `references/`.
