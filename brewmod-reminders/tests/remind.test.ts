@@ -80,29 +80,42 @@ const gclaim = (session: string, at: number): string => JSON.stringify({ session
 type Run = ($: any) => Promise<{ text?: string; isError?: boolean }>
 const NOW_LINE = 'Now: Wed 21 Oct 15:00 Lisbon (14:00 UTC)'
 const WHERE = `project ${P_DIR} | global ${G_DIR}`
-const L_HOT = '- 20261021-0803_hotfix | Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago | Post-hotfix prod check'
-const L_G = '- 20261022-0800_g (global) | Thu 22 Oct 09:00 Lisbon (08:00 UTC), in 18 h | Global thing'
-const L_RUN = '- 20261022-1000_run | Thu 22 Oct 11:00 Lisbon (10:00 UTC), in 20 h | Run task | running in session other since Wed 21 Oct 14:00 Lisbon (13:00 UTC), 1 h ago'
-const L_LATER = '- 20261023-0800_later | Fri 23 Oct 09:00 Lisbon (08:00 UTC), in 42 h | Rotate keys'
-const L_OLD = '- 20261020-0900_old | Tue 20 Oct 10:00 Lisbon (09:00 UTC), 29 h ago | Old task | done 2026-10-20T10:00:00Z | ok'
-const NONE_ACTIVE = `No active reminders (none due); /remind show all lists the upcoming ones. ${WHERE}`
+const SOMEDAY = `${P_DIR}/someday_semble.md`
+const L_HOT = '- 1 ▶ 20261021-0803_hotfix | Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago | Post-hotfix prod check'
+const L_G = '- ▶ 20261022-0800_g (global) | Thu 22 Oct 09:00 Lisbon (08:00 UTC), in 18 h | Global thing'
+const L_RUN = '- ▶ 20261022-1000_run | Thu 22 Oct 11:00 Lisbon (10:00 UTC), in 20 h | Run task | running in session other since Wed 21 Oct 14:00 Lisbon (13:00 UTC), 1 h ago'
+const L_LATER = '- ▶ 20261023-0800_later | Fri 23 Oct 09:00 Lisbon (08:00 UTC), in 42 h | Rotate keys'
+const L_SD = '- ✎ someday_semble | no date (someday) | Try semble'
+const L_OLD = '- ✓ ▶ 20261020-0900_old | done Tue 20 Oct 11:00 Lisbon (10:00 UTC), 28 h ago | Old task | ok'
+const L_SHOWN = '- ✓ ✎ 20261020-1000_note | shown Tue 20 Oct 12:00 Lisbon (11:00 UTC), 27 h ago | Read me'
+const L_CANC = '- ✗ ▶ 20261019-1000_gone | cancelled Mon 19 Oct 11:00 Lisbon (10:00 UTC), 2 d ago | Gone'
+const FIRED = ['Fired (1):', L_HOT, '1 someday · /remind all']
+const ALL = ['Fired (1):', L_HOT, 'Waiting (3):', L_G, L_RUN, L_LATER, 'Someday (1):', L_SD]
+const HIST = ['History (last 20) (3):', L_SHOWN, L_OLD, L_CANC]
+const NONE_FIRED = `No fired reminders; /remind all lists the waiting ones. ${WHERE}`
 const shows: { name: string; run: Run; text: string }[] = [
-  { name: '/remind', run: ($) => remind($, ''), text: [NOW_LINE, 'Active (1):', L_HOT, WHERE].join('\n') },
-  { name: '/remind show active', run: ($) => remind($, 'show active'), text: [NOW_LINE, 'Active (1):', L_HOT, WHERE].join('\n') },
-  { name: '/remind show (state omitted)', run: ($) => remind($, 'show'), text: [NOW_LINE, 'Active (1):', L_HOT, WHERE].join('\n') },
-  { name: '/remind show all', run: ($) => remind($, 'show all'), text: [NOW_LINE, 'Open (4):', L_HOT, L_G, L_RUN, L_LATER, WHERE].join('\n') },
-  { name: '/remind list (alias of show all)', run: ($) => remind($, 'list'), text: [NOW_LINE, 'Open (4):', L_HOT, L_G, L_RUN, L_LATER, WHERE].join('\n') },
-  { name: '/remind show all global week', run: ($) => remind($, 'show all global week'), text: [NOW_LINE, 'Open (1):', L_G, WHERE].join('\n') },
-  { name: '/remind show all project tomorrow', run: ($) => remind($, 'show all project tomorrow'), text: [NOW_LINE, 'Open (1):', L_RUN, WHERE].join('\n') },
-  { name: '/remind show all +1d', run: ($) => remind($, 'show all +1d'), text: [NOW_LINE, 'Open (2):', L_G, L_RUN, WHERE].join('\n') },
-  { name: '/remind show all until 2026-10-22', run: ($) => remind($, 'show all until 2026-10-22'), text: [NOW_LINE, 'Open (2):', L_G, L_RUN, WHERE].join('\n') },
-  { name: '/remind show active global', run: ($) => remind($, 'show active global'), text: NONE_ACTIVE },
-  { name: '/remind show done', run: ($) => remind($, 'show done'), text: [NOW_LINE, 'Done (last 10) (1):', L_OLD, WHERE].join('\n') },
-  { name: 'list_reminders {scope project, from week}', run: ($) => tool($, 'list_reminders', { scope: 'project', from: 'week' }), text: [NOW_LINE, 'Open (2):', L_RUN, L_LATER, WHERE].join('\n') },
-  { name: 'list_reminders {state active}', run: ($) => tool($, 'list_reminders', { state: 'active' }), text: [NOW_LINE, 'Active (1):', L_HOT, WHERE].join('\n') },
-  { name: 'list_reminders {state done}', run: ($) => tool($, 'list_reminders', { state: 'done' }), text: [NOW_LINE, 'Done (last 10) (1):', L_OLD, WHERE].join('\n') },
-  { name: 'list_reminders {from, to as dates}', run: ($) => tool($, 'list_reminders', { from: '2026-10-23', to: '2026-10-23' }), text: [NOW_LINE, 'Open (1):', L_LATER, WHERE].join('\n') },
-  { name: 'list_reminders {state bogus}', run: ($) => tool($, 'list_reminders', { state: 'bogus' }), text: 'state is active, all or done' },
+  { name: '/remind', run: ($) => remind($, ''), text: [NOW_LINE, ...FIRED, WHERE].join('\n') },
+  { name: '/remind show active', run: ($) => remind($, 'show active'), text: [NOW_LINE, ...FIRED, WHERE].join('\n') },
+  { name: '/remind show (state omitted)', run: ($) => remind($, 'show'), text: [NOW_LINE, ...FIRED, WHERE].join('\n') },
+  { name: '/remind all', run: ($) => remind($, 'all'), text: [NOW_LINE, ...ALL, WHERE].join('\n') },
+  { name: '/remind show all', run: ($) => remind($, 'show all'), text: [NOW_LINE, ...ALL, WHERE].join('\n') },
+  { name: '/remind list (alias of all)', run: ($) => remind($, 'list'), text: [NOW_LINE, ...ALL, WHERE].join('\n') },
+  { name: '/remind all global week', run: ($) => remind($, 'all global week'), text: [NOW_LINE, 'Waiting (1):', L_G, WHERE].join('\n') },
+  { name: '/remind show all project tomorrow', run: ($) => remind($, 'show all project tomorrow'), text: [NOW_LINE, 'Waiting (1):', L_RUN, WHERE].join('\n') },
+  { name: '/remind all +1d', run: ($) => remind($, 'all +1d'), text: [NOW_LINE, 'Waiting (2):', L_G, L_RUN, WHERE].join('\n') },
+  { name: '/remind show all until 2026-10-22', run: ($) => remind($, 'show all until 2026-10-22'), text: [NOW_LINE, 'Waiting (2):', L_G, L_RUN, WHERE].join('\n') },
+  { name: '/remind show active global', run: ($) => remind($, 'show active global'), text: NONE_FIRED },
+  { name: '/remind someday', run: ($) => remind($, 'someday'), text: [NOW_LINE, 'Someday (1):', L_SD, WHERE].join('\n') },
+  { name: '/remind history', run: ($) => remind($, 'history'), text: [NOW_LINE, ...HIST, WHERE].join('\n') },
+  { name: '/remind show done (alias of history)', run: ($) => remind($, 'show done'), text: [NOW_LINE, ...HIST, WHERE].join('\n') },
+  { name: '/remind history global', run: ($) => remind($, 'history global'), text: `No closed reminders yet. ${WHERE}` },
+  { name: 'list_reminders {scope project, from week}', run: ($) => tool($, 'list_reminders', { scope: 'project', from: 'week' }), text: [NOW_LINE, 'Waiting (2):', L_RUN, L_LATER, WHERE].join('\n') },
+  { name: 'list_reminders {state active}', run: ($) => tool($, 'list_reminders', { state: 'active' }), text: [NOW_LINE, ...FIRED, WHERE].join('\n') },
+  { name: 'list_reminders {state someday}', run: ($) => tool($, 'list_reminders', { state: 'someday' }), text: [NOW_LINE, 'Someday (1):', L_SD, WHERE].join('\n') },
+  { name: 'list_reminders {state done}', run: ($) => tool($, 'list_reminders', { state: 'done' }), text: [NOW_LINE, ...HIST, WHERE].join('\n') },
+  { name: 'list_reminders {default state}', run: ($) => tool($, 'list_reminders', {}), text: [NOW_LINE, ...ALL, WHERE].join('\n') },
+  { name: 'list_reminders {from, to as dates}', run: ($) => tool($, 'list_reminders', { from: '2026-10-23', to: '2026-10-23' }), text: [NOW_LINE, 'Waiting (1):', L_LATER, WHERE].join('\n') },
+  { name: 'list_reminders {state bogus}', run: ($) => tool($, 'list_reminders', { state: 'bogus' }), text: 'state is active, all, someday or done' },
   {
     name: 'list_reminders {from garbage}',
     run: ($) => tool($, 'list_reminders', { from: 'soon' }),
@@ -110,7 +123,7 @@ const shows: { name: string; run: Run; text: string }[] = [
   },
 ]
 for (const { name, run, text } of shows) {
-  test(`GIVEN project, global, running and finished items WHEN ${name} runs THEN the text is exact and no turn is handed off`, async ($, on) => {
+  test(`GIVEN fired, waiting, running, someday and closed items WHEN ${name} runs THEN the text is exact and no turn is handed off`, async ($, on) => {
     const clock = mock.clock(on, { now: NOW })
     const tree: Tree = {
       [HOTFIX]: item('2026-10-21T08:03:00Z', 'Post-hotfix prod check'),
@@ -118,7 +131,10 @@ for (const { name, run, text } of shows) {
       [GLOBAL]: item('2026-10-22T08:00:00Z', 'Global thing'),
       [`${P_DIR}/20261022-1000_run.md`]: item('2026-10-22T10:00:00Z', 'Run task'),
       [`${P_DIR}/.claims/20261022-1000_run.json`]: gclaim('other', NOW - 3600000),
+      [SOMEDAY]: item('none', 'Try semble', 'pending', 'kind: note\n'),
       [OLD]: item('2026-10-20T09:00:00Z', 'Old task', 'done', 'done: 2026-10-20T10:00:00Z\nresult: ok\n'),
+      [`${P_DIR}/20261020-1000_note.md`]: item('2026-10-20T10:00:00Z', 'Read me', 'done', 'kind: note\ndone: 2026-10-20T11:00:00Z\n'),
+      [`${P_DIR}/20261019-1000_gone.md`]: item('2026-10-19T10:00:00Z', 'Gone', 'cancelled', 'cancelled: 2026-10-19T10:00:00Z\n'),
     }
     const ops = wire(on, tree)
     await start($)
@@ -131,49 +147,62 @@ for (const { name, run, text } of shows) {
 }
 
 const WHEN_RULE =
-  'If the request names no time, ask the user ONE AskUserQuestion "When should it fire?" with 2-4 options you derive from this reminder\'s own context (e.g. post-deploy prod check: tonight 23:00 / tomorrow 09:00 / in 1 week; renew a domain: in 2 weeks / in 1 month; check nightly-run logs: tonight / tomorrow morning), each label showing its concrete local time, the best fit marked "(Recommended)"; free text stays available through Other; no fixed list. A scope question may share that AskUserQuestion as a second question. An answer like "in 1 week" becomes a date-only when (YYYY-MM-DD, fires 00:00 local that day).'
-const ADD = { scope: 'project', when: 'tomorrow 9:00', text: 'Check prod.', slug: 'Check prod' }
-const PREVIEW = [
-  'Preview, nothing written: Thu 22 Oct 09:00 Lisbon (08:00 UTC), in 18 h | project | 20261022-0800_check-prod',
-  'Check prod.',
-  'Show the user this time line, get their confirmation with ONE AskUserQuestion (add "Where to save?" with Project (Recommended) / Global when they gave no scope), then call add_reminder again with confirm:true and the final scope, time and text.',
-].join('\n')
+  'If the request names no time, ask ONE AskUserQuestion "When should it fire?" with 2-3 options you derive from this reminder\'s own context (e.g. post-deploy prod check: tonight 23:00 / tomorrow 09:00 / in 1 week; renew a domain: in 2 weeks / in 1 month; check nightly-run logs: tonight / tomorrow morning), each label showing its concrete local time, the best fit marked "(Recommended)", plus a last option "No date (someday)" (answer -> when:"someday": it never fires and shows only when the user asks); free text stays available through Other; no fixed list. A kind (action or note) or scope (project or global) that is still unclear joins that same AskUserQuestion as extra questions; ask nothing else. An answer like "in 1 week" becomes a date-only when (YYYY-MM-DD, fires 00:00 local that day).'
+const KIND_RULE =
+  'kind is required: action (Claude does the work when the user runs it, e.g. "check the prod logs") or note (only tells the user, closes once shown, e.g. "reply to Ana"). Infer it from the request; ask only when it is unclear, as an extra question in the same single AskUserQuestion as the time.'
+const ADD = { scope: 'project', kind: 'action', when: 'tomorrow 9:00', text: 'Check prod.', slug: 'Check prod' }
 type AddRow = { name: string; input: object; text: string; writes: [string, string][]; tree?: Tree; tz?: string }
 const LONG = 'x'.repeat(45)
 const longName = (n: number): string => `20261022-0800_${n === 1 ? 'x'.repeat(40) : `${'x'.repeat(40 - `-${n}`.length)}-${n}`}`
-const SAVED = (id: string): string => `saved ${id} (project) | due Thu 22 Oct 09:00 Lisbon (08:00 UTC), in 18 h | ${P_DIR}/${id}.md`
-const BODY = 'due: 2026-10-22T08:00:00Z\nstatus: pending\ncreated: 2026-10-21T14:00:00Z\n\nCheck prod.\n'
+const SAVED = (id: string, due = 'due Thu 22 Oct 09:00 Lisbon (08:00 UTC), in 18 h', kind = '▶ action', scope = 'project'): string =>
+  `saved ${id} (${scope}) | ${kind} | ${due} | ${P_DIR}/${id}.md\nchange it by saying so · /remind cancel ${id}`
+const BODY = 'due: 2026-10-22T08:00:00Z\nstatus: pending\nkind: action\ncreated: 2026-10-21T14:00:00Z\n\nCheck prod.\n'
 const rows: AddRow[] = [
-  { name: 'no confirm', input: ADD, text: PREVIEW, writes: [] },
-  { name: 'confirm', input: { ...ADD, confirm: true }, text: SAVED('20261022-0800_check-prod'), writes: [[`${P_DIR}/20261022-0800_check-prod.md`, BODY]] },
-  { name: 'no when', input: { ...ADD, when: undefined, confirm: true }, text: `when is required: nothing is saved without a trigger time. ${WHEN_RULE}`, writes: [] },
-  { name: 'a blank when', input: { ...ADD, when: '  ', confirm: true }, text: `when is required: nothing is saved without a trigger time. ${WHEN_RULE}`, writes: [] },
+  { name: 'time, kind and scope given', input: ADD, text: SAVED('20261022-0800_check-prod'), writes: [[`${P_DIR}/20261022-0800_check-prod.md`, BODY]] },
+  { name: 'a stray confirm flag', input: { ...ADD, confirm: false }, text: SAVED('20261022-0800_check-prod'), writes: [[`${P_DIR}/20261022-0800_check-prod.md`, BODY]] },
   {
-    name: 'a date-only when (00:00 local) and confirm',
-    input: { ...ADD, when: '2026-10-28', confirm: true },
-    text: `saved 20261028-0000_check-prod (project) | due Wed 28 Oct 00:00 Lisbon (00:00 UTC), in 6 d | ${P_DIR}/20261028-0000_check-prod.md`,
-    writes: [[`${P_DIR}/20261028-0000_check-prod.md`, 'due: 2026-10-28T00:00:00Z\nstatus: pending\ncreated: 2026-10-21T14:00:00Z\n\nCheck prod.\n']],
+    name: 'kind note',
+    input: { ...ADD, kind: 'note' },
+    text: SAVED('20261022-0800_check-prod', undefined, '✎ note'),
+    writes: [[`${P_DIR}/20261022-0800_check-prod.md`, BODY.replace('kind: action', 'kind: note')]],
   },
   {
-    name: 'a +1w when and confirm',
-    input: { ...ADD, when: '+1w', confirm: true },
-    text: `saved 20261028-1400_check-prod (project) | due Wed 28 Oct 14:00 Lisbon (14:00 UTC), in 7 d | ${P_DIR}/20261028-1400_check-prod.md`,
-    writes: [[`${P_DIR}/20261028-1400_check-prod.md`, 'due: 2026-10-28T14:00:00Z\nstatus: pending\ncreated: 2026-10-21T14:00:00Z\n\nCheck prod.\n']],
+    name: 'when someday',
+    input: { ...ADD, when: 'Someday' },
+    text: SAVED('someday_check-prod', 'someday (no date)'),
+    writes: [[`${P_DIR}/someday_check-prod.md`, 'due: none\nstatus: pending\nkind: action\ncreated: 2026-10-21T14:00:00Z\n\nCheck prod.\n']],
   },
-  { name: 'past time', input: { ...ADD, when: '2026-10-21 09:00', confirm: true }, text: '2026-10-21T08:00:00Z is in the past', writes: [] },
+  { name: 'no when', input: { ...ADD, when: undefined }, text: `when is required: nothing is saved without a trigger time. ${WHEN_RULE}`, writes: [] },
+  { name: 'a blank when', input: { ...ADD, when: '  ' }, text: `when is required: nothing is saved without a trigger time. ${WHEN_RULE}`, writes: [] },
+  { name: 'no kind', input: { ...ADD, kind: undefined }, text: KIND_RULE, writes: [] },
+  { name: 'a bogus kind', input: { ...ADD, kind: 'task' }, text: KIND_RULE, writes: [] },
+  { name: 'no when and no kind', input: { ...ADD, when: undefined, kind: undefined }, text: `when is required: nothing is saved without a trigger time. ${WHEN_RULE} ${KIND_RULE}`, writes: [] },
+  {
+    name: 'a date-only when (00:00 local)',
+    input: { ...ADD, when: '2026-10-28' },
+    text: SAVED('20261028-0000_check-prod', 'due Wed 28 Oct 00:00 Lisbon (00:00 UTC), in 6 d'),
+    writes: [[`${P_DIR}/20261028-0000_check-prod.md`, BODY.replace('2026-10-22T08:00:00Z', '2026-10-28T00:00:00Z')]],
+  },
+  {
+    name: 'a +1w when',
+    input: { ...ADD, when: '+1w' },
+    text: SAVED('20261028-1400_check-prod', 'due Wed 28 Oct 14:00 Lisbon (14:00 UTC), in 7 d'),
+    writes: [[`${P_DIR}/20261028-1400_check-prod.md`, BODY.replace('2026-10-22T08:00:00Z', '2026-10-28T14:00:00Z')]],
+  },
+  { name: 'past time', input: { ...ADD, when: '2026-10-21 09:00' }, text: '2026-10-21T08:00:00Z is in the past', writes: [] },
   { name: 'no scope', input: { ...ADD, scope: undefined }, text: 'scope is required: project or global', writes: [] },
-  { name: 'a posix-style TZ env (:Europe/Lisbon)', input: { ...ADD, confirm: true }, tz: ':Europe/Lisbon', text: SAVED('20261022-0800_check-prod'), writes: [[`${P_DIR}/20261022-0800_check-prod.md`, BODY]] },
-  { name: 'an invalid model tz', input: { ...ADD, tz: 'Lisbon', confirm: true }, text: 'unknown time zone "Lisbon"', writes: [] },
+  { name: 'a posix-style TZ env (:Europe/Lisbon)', input: ADD, tz: ':Europe/Lisbon', text: SAVED('20261022-0800_check-prod'), writes: [[`${P_DIR}/20261022-0800_check-prod.md`, BODY]] },
+  { name: 'an invalid model tz', input: { ...ADD, tz: 'Lisbon' }, text: 'unknown time zone "Lisbon"', writes: [] },
   {
     name: 'a 40-char slug whose name exists',
-    input: { ...ADD, slug: LONG, confirm: true },
+    input: { ...ADD, slug: LONG },
     tree: { [`${P_DIR}/${longName(1)}.md`]: 'taken' },
     text: SAVED(longName(2)),
     writes: [[`${P_DIR}/${longName(2)}.md`, BODY]],
   },
   {
     name: 'a 40-char slug with every name taken',
-    input: { ...ADD, slug: LONG, confirm: true },
+    input: { ...ADD, slug: LONG },
     tree: Object.fromEntries(Array.from({ length: 99 }, (_, k) => [`${P_DIR}/${longName(k + 1)}.md`, 'taken'])),
     text: `no free file name for "${'x'.repeat(40)}" at that time; use another slug`,
     writes: [],
@@ -198,7 +227,12 @@ const HOT = item('2026-10-21T08:03:00Z', 'Hotfix')
 const HOT_G = `${G_DIR}/20261021-0803_hotfix.md`
 const HOT_TWO = `${G_DIR}/20261021-0803_hotfix-two.md`
 const ID = '20261021-0803_hotfix'
-const acts: { name: string; tree: Tree; run: Run; text: string; isError?: true; writes: [string, string][] }[] = [
+const CANCELLED = 'due: 2026-10-21T08:03:00Z\nstatus: cancelled\ncancelled: 2026-10-21T14:00:00Z\n\nHotfix\n'
+const CLOSED = item('2026-10-21T08:03:00Z', 'Hotfix', 'done', 'done: 2026-10-21T10:00:00Z\nresult: ok\n')
+const CSV = `${P_DIR}/20261021-0900_csv.md`
+const NOTE_LINE = 'Reminder helper. My request: <request>run 20261021-0900_csv</request>'
+const STAMP = 'Now: Wed 21 Oct 15:00 Lisbon (14:00 UTC), time zone Europe/Lisbon, UTC 2026-10-21T14:00:00Z. Times I give without a zone are in Europe/Lisbon.'
+const acts: { name: string; tree: Tree; run: Run; text: string; isError?: true; writes: [string, string][]; submits?: string[] }[] = [
   {
     name: 'a live claim of another session and start',
     tree: { [HOTFIX]: HOT, [CLAIM]: gclaim('other', NOW - 3600000) },
@@ -227,19 +261,36 @@ const acts: { name: string; tree: Tree; run: Run; text: string; isError?: true; 
       [CLAIM, ''],
     ],
   },
+  { name: '/remind cancel', tree: { [HOTFIX]: HOT }, run: ($) => remind($, 'cancel hotfix'), text: `cancelled: Hotfix (${ID})`, writes: [[HOTFIX, CANCELLED]] },
+  { name: '/remind cancel 1 (fired number)', tree: { [HOTFIX]: HOT }, run: ($) => remind($, 'cancel 1'), text: `cancelled: Hotfix (${ID})`, writes: [[HOTFIX, CANCELLED]] },
   {
-    name: '/remind cancel',
+    name: '/remind done 1 (fired number)',
     tree: { [HOTFIX]: HOT },
-    run: ($) => remind($, 'cancel hotfix'),
-    text: `cancelled: Hotfix (${ID})`,
-    writes: [[HOTFIX, 'due: 2026-10-21T08:03:00Z\nstatus: cancelled\ncancelled: 2026-10-21T14:00:00Z\n\nHotfix\n']],
+    run: ($) => remind($, 'done 1'),
+    text: `done: Hotfix (${ID})`,
+    writes: [[HOTFIX, 'due: 2026-10-21T08:03:00Z\nstatus: done\ndone: 2026-10-21T14:00:00Z\n\nHotfix\n']],
   },
+  { name: '/remind done 5 (no such number)', tree: { [HOTFIX]: HOT }, run: ($) => remind($, 'done 5'), text: 'no fired reminder 5; /remind shows the numbered list', writes: [] },
   {
     name: '/remind snooze with tomorrow 9:00 (Lisbon WEST)',
     tree: { [HOTFIX]: HOT },
     run: ($) => remind($, 'snooze hotfix tomorrow 9:00'),
     text: `snoozed: Hotfix (${ID}) until 2026-10-22T08:00:00Z`,
     writes: [[HOTFIX, 'due: 2026-10-22T08:00:00Z\nstatus: pending\n\nHotfix\n']],
+  },
+  {
+    name: '/remind snooze 1 +1h',
+    tree: { [HOTFIX]: HOT },
+    run: ($) => remind($, 'snooze 1 +1h'),
+    text: `snoozed: Hotfix (${ID}) until 2026-10-21T15:00:00Z`,
+    writes: [[HOTFIX, 'due: 2026-10-21T15:00:00Z\nstatus: pending\n\nHotfix\n']],
+  },
+  {
+    name: '/remind snooze on a someday item gives it a date',
+    tree: { [SOMEDAY]: item('none', 'Try semble') },
+    run: ($) => remind($, 'snooze semble tomorrow 9:00'),
+    text: 'snoozed: Try semble (someday_semble) until 2026-10-22T08:00:00Z',
+    writes: [[SOMEDAY, 'due: 2026-10-22T08:00:00Z\nstatus: pending\n\nTry semble\n']],
   },
   {
     name: 'an item without a status header and done',
@@ -253,7 +304,7 @@ const acts: { name: string; tree: Tree; run: Run; text: string; isError?: true; 
     tree: { [HOTFIX]: HOT, [HOT_TWO]: HOT },
     run: ($) => remind($, 'cancel hotfix'),
     text: `cancelled: Hotfix (${ID})`,
-    writes: [[HOTFIX, 'due: 2026-10-21T08:03:00Z\nstatus: cancelled\ncancelled: 2026-10-21T14:00:00Z\n\nHotfix\n']],
+    writes: [[HOTFIX, CANCELLED]],
   },
   {
     name: '/remind cancel with the same id in both folders',
@@ -267,10 +318,105 @@ const acts: { name: string; tree: Tree; run: Run; text: string; isError?: true; 
     tree: { [HOTFIX]: HOT, [HOT_G]: HOT },
     run: ($) => remind($, 'cancel global hotfix'),
     text: `cancelled: Hotfix (${ID} (global))`,
-    writes: [[HOT_G, 'due: 2026-10-21T08:03:00Z\nstatus: cancelled\ncancelled: 2026-10-21T14:00:00Z\n\nHotfix\n']],
+    writes: [[HOT_G, CANCELLED]],
+  },
+  {
+    name: '/remind reopen with a new time',
+    tree: { [HOTFIX]: CLOSED },
+    run: ($) => remind($, 'reopen hotfix +1d'),
+    text: `reopened: Hotfix (${ID}) due 2026-10-22T14:00:00Z`,
+    writes: [[HOTFIX, 'due: 2026-10-22T14:00:00Z\nstatus: pending\n\nHotfix\n']],
+  },
+  {
+    name: 'update_reminder reopen without a time',
+    tree: { [HOTFIX]: CLOSED },
+    run: ($) => tool($, 'update_reminder', { id: 'hotfix', action: 'reopen' }),
+    text: `reopened: Hotfix (${ID}) due 2026-10-21T08:03:00Z`,
+    writes: [[HOTFIX, 'due: 2026-10-21T08:03:00Z\nstatus: pending\n\nHotfix\n']],
+  },
+  { name: 'reopen of an open item', tree: { [HOTFIX]: HOT }, run: ($) => tool($, 'update_reminder', { id: 'hotfix', action: 'reopen' }), text: `${ID} is not closed`, isError: true, writes: [] },
+  { name: '/remind reopen 1 (a number)', tree: { [HOTFIX]: HOT }, run: ($) => remind($, 'reopen 1'), text: 'reopen takes a name: /remind history lists the closed ones', writes: [] },
+  {
+    name: 'update_reminder edit of text, kind and time',
+    tree: { [HOTFIX]: HOT },
+    run: ($) => tool($, 'update_reminder', { id: 'hotfix', action: 'edit', text: ' Hotfix and DB pool ', kind: 'note', when: '2026-10-28' }),
+    text: `Reminder updated ▶ action → ✎ note · project · ${ID}\n- Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix\n+ Wed 28 Oct 00:00 Lisbon (00:00 UTC), in 6 d  Hotfix and DB pool`,
+    writes: [[HOTFIX, 'due: 2026-10-28T00:00:00Z\nstatus: pending\nkind: note\n\nHotfix and DB pool\n']],
+  },
+  {
+    name: 'update_reminder edit to someday',
+    tree: { [HOTFIX]: HOT },
+    run: ($) => tool($, 'update_reminder', { id: 'hotfix', action: 'edit', when: 'someday' }),
+    text: `Reminder updated ▶ action · project · ${ID}\n- Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix\n+ no date (someday)  Hotfix`,
+    writes: [[HOTFIX, 'due: none\nstatus: pending\n\nHotfix\n']],
+  },
+  {
+    name: 'update_reminder edit moves project to global',
+    tree: { [HOTFIX]: HOT },
+    run: ($) => tool($, 'update_reminder', { id: 'hotfix', action: 'edit', scope: 'global' }),
+    text: `Reminder updated ▶ action · project → global · ${ID}\n- Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix\n+ Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix`,
+    writes: [
+      [HOT_G, HOT],
+      [HOTFIX, CANCELLED],
+    ],
+  },
+  { name: 'update_reminder edit with nothing to change', tree: { [HOTFIX]: HOT }, run: ($) => tool($, 'update_reminder', { id: 'hotfix', action: 'edit' }), text: 'nothing to change: pass text, kind, when or scope', isError: true, writes: [] },
+  { name: 'update_reminder edit with a bogus kind', tree: { [HOTFIX]: HOT }, run: ($) => tool($, 'update_reminder', { id: 'hotfix', action: 'edit', kind: 'task' }), text: 'kind is action or note', isError: true, writes: [] },
+  { name: 'update_reminder edit of a closed item', tree: { [HOTFIX]: CLOSED }, run: ($) => tool($, 'update_reminder', { id: 'hotfix', action: 'edit', kind: 'note' }), text: `${ID} is already done`, isError: true, writes: [] },
+  {
+    name: '/remind run 1 on an action',
+    tree: { [HOTFIX]: HOT },
+    run: ($) => remind($, 'run 1'),
+    text: 'Running Hotfix (action): handing it to Claude',
+    writes: [],
+    submits: [
+      [
+        `Reminder helper. My request: <request>run ${ID}</request>`,
+        `Run reminder ${ID} (Hotfix, action): Hotfix`,
+        `This is an action: call update_reminder {id:"${ID}", action:"start"}, carry out its text above, then update_reminder {id:"${ID}", action:"done", result:<one line>}.`,
+      ].join('\n'),
+    ],
+  },
+  {
+    name: '/remind run by slug on a note with extra words',
+    tree: { [CSV]: item('2026-10-21T09:00:00Z', 'Finish CSV', 'pending', 'kind: note\n') },
+    run: ($) => remind($, 'run csv only the endpoint'),
+    text: 'Running Finish CSV (note): handing it to Claude',
+    writes: [],
+    submits: [
+      [
+        NOTE_LINE,
+        'Run reminder 20261021-0900_csv (Finish CSV, note): Finish CSV',
+        'This is a note: show me its full text above, say it was just a reminder (nothing to execute), then call update_reminder {id:"20261021-0900_csv", action:"done"}.',
+        'My extra words: only the endpoint',
+      ].join('\n'),
+    ],
+  },
+  {
+    name: '/remind run on an item another session runs',
+    tree: { [HOTFIX]: HOT, [CLAIM]: gclaim('other', NOW - 3600000) },
+    run: ($) => remind($, 'run hotfix'),
+    text: `${ID} is already running in another session since Wed 21 Oct 14:00 Lisbon (13:00 UTC), 1 h ago`,
+    writes: [],
+  },
+  { name: '/remind run on a closed item', tree: { [HOTFIX]: CLOSED }, run: ($) => remind($, 'run hotfix'), text: `${ID} is already done; /remind reopen ${ID} brings it back`, writes: [] },
+  {
+    name: '/remind edit 1 <change>',
+    tree: { [HOTFIX]: HOT },
+    run: ($) => remind($, 'edit 1 make it a note'),
+    text: `Handing this edit to Claude: ${ID}`,
+    writes: [],
+    submits: [
+      [
+        `Reminder helper. My request: <request>edit ${ID}: make it a note</request>`,
+        STAMP,
+        `Edit reminder ${ID} (Hotfix, action, project): make it a note`,
+        `Call ${TOOL}update_reminder {id:"${ID}", action:"edit"} with only what changes: text, kind (action|note), when (a time, or "someday" for no date), scope (the folder to move it to; from_scope:"project" is where it is now). Show me the old and new lines it returns.`,
+      ].join('\n'),
+    ],
   },
 ]
-for (const { name, tree, run, text, isError, writes } of acts) {
+for (const { name, tree, run, text, isError, writes, submits = [] } of acts) {
   test(`GIVEN ${name} WHEN it runs THEN the answer, the error flag, the writes and the hand-offs are exact`, async ($, on) => {
     const clock = mock.clock(on, { now: NOW })
     const ops = wire(on, tree)
@@ -280,7 +426,7 @@ for (const { name, tree, run, text, isError, writes } of acts) {
     const out = await run($)
     await clock.advance(1000)
 
-    expect({ text: out.text, isError: out.isError, writes: ops.writes.slice(before), submits: ops.submits }, name).toEqual({ text, isError, writes, submits: [] })
+    expect({ text: out.text, isError: out.isError, writes: ops.writes.slice(before), submits: ops.submits }, name).toEqual({ text, isError, writes, submits })
   })
 }
 
@@ -350,7 +496,7 @@ test('GIVEN a free-text /remind WHEN it runs THEN the ack returns at once and th
         'Reminder helper. My request: <request>check prod tomorrow 9:00</request>',
         'Now: Wed 21 Oct 15:00 Lisbon (14:00 UTC), time zone Europe/Lisbon, UTC 2026-10-21T14:00:00Z. Times I give without a zone are in Europe/Lisbon.',
         'Scope: global.',
-        `Use the ${TOOL}* tools. To add: add_reminder without confirm first (preview, writes nothing), show me its time line, ONE AskUserQuestion confirming the time (plus the scope when not given), then add_reminder with confirm:true. Every reminder needs a trigger time. ${WHEN_RULE} My pick of a time is the confirmation: then call add_reminder with confirm:true directly. To look or change: list_reminders (state active|all|done, from/to), update_reminder.`,
+        `Use the ${TOOL}* tools. To add: add_reminder saves at once (no preview, no confirm) when time, kind and scope are clear; then show me its confirmation line. Every reminder needs a trigger time and a kind (action or note; infer it from my words). ${WHEN_RULE} To look: list_reminders (state active|all|someday|done, from/to); to change: update_reminder (start|done|snooze|cancel|edit|reopen).`,
       ].join('\n'),
     ],
   })

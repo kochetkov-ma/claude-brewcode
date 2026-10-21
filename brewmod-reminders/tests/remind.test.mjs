@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { run } from '../hooks/remind.mjs'
-import { buildItem, classify, closedLabel, editText, expiredIds, formatWhen, itemName, matchId, parseItem, parseWhen, parseWhenNatural, patchBody, patchHeader, rangeOf, reopenPatch, sections, windowOf } from '../hooks/lib/items.mjs'
+import { bodyOf, buildItem, classify, closedLabel, editText, expiredIds, formatWhen, itemName, matchId, parseItem, parseWhen, parseWhenNatural, patchBody, patchHeader, rangeOf, reopenPatch, sections, windowOf } from '../hooks/lib/items.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SCRIPT = join(HERE, '..', 'hooks', 'remind.mjs')
@@ -310,4 +310,13 @@ const edits = [
 ]
 test('GIVEN closed, someday, CRLF and fenced files WHEN reopen/edit helpers run THEN the new file texts are exact', () => {
   assert.deepEqual(edits.map((r) => r[2]), edits.map((r) => r[3]), 'edit rows')
+})
+
+const bodies = [
+  ['plain header', 'due: A\nstatus: pending\n\nline1\nline2\n', 'line1\nline2'],
+  ['fenced CRLF with BOM', '\uFEFF---\r\ndue: A\r\n---\r\nBody\r\n', 'Body'],
+  ['no header lines', '\nonly body\n', 'only body'],
+]
+test('GIVEN plain, fenced and header-less files WHEN bodyOf runs THEN the trimmed body is exact', () => {
+  assert.deepEqual(bodies.map(([, t]) => bodyOf(t)), bodies.map((r) => r[2]), 'body rows')
 })

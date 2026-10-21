@@ -27,6 +27,7 @@ export const slugify: (s: string) => string
 export const itemName: (dueMs: number | null, slug: string) => string
 export const isSomedayName: (name: string) => boolean
 export const buildItem: (a: { dueMs: number | null; text: string; now: number; kind?: Kind }) => string
+export const bodyOf: (text: string) => string
 export const patchBody: (text: string, body: string) => string
 export const editText: (text: string, change: { text?: string; kind?: Kind; dueMs?: number | null }) => string
 export const datePatch: (ms: number) => Record<string, string>

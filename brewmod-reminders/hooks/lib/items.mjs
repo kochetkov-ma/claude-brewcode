@@ -120,6 +120,13 @@ export function buildItem({ dueMs, text, now, kind }) {
   return `due: ${dueMs === null || dueMs === undefined ? 'none' : isoZ(dueMs)}\nstatus: pending\n${k}created: ${isoZ(now)}\n\n${String(text).trim()}\n`
 }
 
+// The body text (after the header and its fence), trimmed.
+export function bodyOf(text) {
+  const lines = String(text ?? '').replace(/^\uFEFF/, '').split(/\r?\n/)
+  const r = headerRange(lines)
+  return lines.slice(r.end + (r.fenced && lines[r.end]?.trim() === '---' ? 1 : 0)).join('\n').trim()
+}
+
 // Replaces the body (everything after the header, fence included), header bytes and BOM untouched.
 export function patchBody(text, body) {
   const bom = text.startsWith(BOM) ? BOM : ''
