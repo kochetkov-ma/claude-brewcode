@@ -4,8 +4,8 @@
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 import {
-  CLAIMS_DIR, HANDOFF_MARK, bodyOf, buildItem, claimJson, claimLive, claimName, classify, closedLabel, datePatch, editText, formatWhen, isItemName, isoZ, itemKey, itemName, matchId,
-  parseClaim, parseConfig, parseItem, parseWhenNatural, patchHeader, rangeOf, relative, reopenPatch, sections, sessionStateJson, sessionStateName, slugify, systemTz, validSid, windowOf,
+  CLAIMS_DIR, HANDOFF_MARK, RUN_MARK, bodyOf, buildItem, claimJson, claimLive, claimName, classify, closedAt, closedLabel, datePatch, editText, formatWhen, isItemName, isoZ, itemKey, itemName, matchId,
+  parseClaim, parseConfig, parseItem, parseWhenNatural, patchHeader, rangeOf, relative, reopenPatch, sections, sessionStateJson, sessionStateName, slugOf, slugify, systemTz, tagOf, validSid, windowOf,
   type Claim, type Item, type State,
 } from './lib/items.mjs'
 import type { ReminderView } from '../types'
@@ -32,10 +32,11 @@ type Io = {
   write: (p: string, t: string) => Promise<void>
 }
 type Dirs = { project: string; global: string | null; config: string }
+type Env = { cfg: string | undefined; home: string | undefined; override: string | undefined }
 type Out = { text: string; isError?: true }
 
 // override = REMIND_GLOBAL_DIR: the global folder itself (live tests; unset in normal use).
-const dirsOf = (root: string | undefined, cfg: string | undefined, home: string | undefined, override?: string): Dirs => ({
+const dirsOf = (root: string | undefined, { cfg, home, override }: Env): Dirs => ({
   project: `${root ?? '.'}/.claude/scheduled`,
   global: override !== undefined && override !== '' ? override : cfg !== undefined && cfg !== '' ? `${cfg}/reminders` : home !== undefined && home !== '' ? `${home}/.claude/reminders` : null,
   config: `${root ?? '.'}/.claude/reminders.json`,
@@ -79,7 +80,12 @@ const loadAll = async (io: Io, dirs: Dirs, now: number): Promise<Entry[]> => [
 ]
 
 const byDue = (a: Entry, b: Entry): number => (a.due ?? 0) - (b.due ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
-const tag = (i: Entry): string => `${i.id}${i.global ? ' (global)' : ''}`
+const isNum = (s: string): boolean => /^\d+$/.test(s)
+const nameOf = (i: Item): string => (i.title === '' ? i.id : i.title)
+// A live claim of another session, else null.
+const foreignClaim = (e: Entry, sid: string, now: number): Claim | null => (e.claim !== null && claimLive(e.claim, now) && e.claim.session !== sid ? e.claim : null)
+const claimFile = (e: Entry): string => `${e.dir}/${CLAIMS_DIR}/${claimName(e.id)}`
+const whenLine = (i: Item, tz: string, now: number, bad: string = i.dueRaw): string => (i.due !== null ? formatWhen(i.due, tz, now) : i.someday ? 'no date (someday)' : bad)
 const MARK = { action: '▶', note: '✎' } as const
 const mark = (i: Item): string => MARK[i.kind]
 // N in /remind run 1 and **1 = position in this list, the same order as the band.
@@ -90,7 +96,7 @@ function viewOf(items: Entry[], now: number): ReminderView {
   const due = firedList(items)
   return {
     due: due.length,
-    rows: due.map((i) => `${mark(i)} ${i.title === '' ? i.id : i.title}  ${relative(i.due ?? now, now)}${i.global ? ' (global)' : ''}`).slice(0, BAND_ROWS),
+    rows: due.map((i) => `${mark(i)} ${nameOf(i)}  ${relative(i.due ?? now, now)}${i.global ? ' (global)' : ''}`).slice(0, BAND_ROWS),
     fired: due.map((i) => ({ id: i.id, global: i.global })),
   }
 }
@@ -111,26 +117,21 @@ function parseShow(words: string[], now: number, tz: string): Query | null {
   return win === null ? null : query(state ?? 'active', { scope: scope as Query['scope'], ...win })
 }
 
-const closedMs = (i: Item): number | null => {
-  const ms = Date.parse(i.status === 'cancelled' ? i.cancelled : i.done)
-  return Number.isNaN(ms) ? null : ms
-}
-
 function listText(all: Entry[], now: number, tz: string, dirs: Dirs, q: Query): string {
   const windowed = q.from > -Infinity || q.to < Infinity
   const inScope = (i: Entry): boolean => q.scope === undefined || i.global === (q.scope === 'global')
   const items = all.filter((i) => {
-    const t = q.state === 'history' ? closedMs(i) : i.due
+    const t = q.state === 'history' ? closedAt(i) : i.due
     const firedAlways = i.state === 'due' && (q.state === 'all' || q.state === 'active')
     return inScope(i) && (!windowed || firedAlways || (t !== null && t >= q.from && t < q.to))
   })
   const num = new Map(firedList(all).map((i, k) => [i.path, k + 1]))
-  const whenOf = (i: Entry): string => (i.due !== null ? formatWhen(i.due, tz, now) : i.someday ? 'no date (someday)' : `bad due "${i.dueRaw}" (UTC with Z needed)`)
+  const whenOf = (i: Entry): string => whenLine(i, tz, now, `bad due "${i.dueRaw}" (UTC with Z needed)`)
   const running = (i: Entry): string => (i.state === 'running' ? ` | running in session ${i.claim?.session ?? '?'} since ${i.claim === null ? '?' : formatWhen(i.claim.at, tz, now)}` : '')
-  const row = (i: Entry): string => `- ${num.has(i.path) && i.state === 'due' ? `${num.get(i.path)} ` : ''}${mark(i)} ${tag(i)} | ${whenOf(i)} | ${i.title}${running(i)}`
+  const row = (i: Entry): string => `- ${num.has(i.path) ? `${num.get(i.path)} ` : ''}${mark(i)} ${tagOf(i)} | ${whenOf(i)} | ${i.title}${running(i)}`
   const histRow = (i: Entry): string => {
-    const ms = closedMs(i)
-    return `- ${i.status === 'cancelled' ? '✗' : '✓'} ${mark(i)} ${tag(i)} | ${closedLabel(i)} ${ms === null ? '?' : formatWhen(ms, tz, now)} | ${i.title}${i.result === '' ? '' : ` | ${i.result}`}`
+    const ms = closedAt(i)
+    return `- ${i.status === 'cancelled' ? '✗' : '✓'} ${mark(i)} ${tagOf(i)} | ${closedLabel(i)} ${ms === null ? '?' : formatWhen(ms, tz, now)} | ${i.title}${i.result === '' ? '' : ` | ${i.result}`}`
   }
   const part = (label: string, rows: Entry[], f: (i: Entry) => string = row): string[] => (rows.length === 0 ? [] : [`${label} (${rows.length}):`, ...rows.map(f)])
   const s = sections(items.map((item) => ({ item, state: item.state })))
@@ -163,7 +164,7 @@ function pick(items: Entry[], id: string, scope: string | undefined): Entry | st
   const hits = scopes.map((g) => ({ g, m: matchId(items.filter((i) => i.global === g).map((i) => i.id), id) }))
   const found = hits.flatMap((h) => ('id' in h.m ? [{ g: h.g, id: h.m.id }] : []))
   const q = id.trim().toLowerCase().replace(/\.md$/, '')
-  const exact = found.filter((f) => f.id.toLowerCase() === q || f.id.replace(/^[^_]*_/, '').toLowerCase() === q)
+  const exact = found.filter((f) => f.id.toLowerCase() === q || slugOf(f.id) === q)
   const hit = found.length > 1 && exact.length === 1 ? exact : found
   if (hit.length > 1) return `"${id}" exists in project and global: pass scope`
   const [one] = hit
@@ -174,12 +175,12 @@ function pick(items: Entry[], id: string, scope: string | undefined): Entry | st
 
 // A number = position in the fired list (same as the band); anything else = pick by id.
 function resolve(items: Entry[], token: string, scope: string | undefined): Entry | string {
-  if (!/^\d+$/.test(token)) return pick(items, token, scope)
+  if (!isNum(token)) return pick(items, token, scope)
   return firedList(items)[Number(token) - 1] ?? `no fired reminder ${token}; /remind shows the numbered list`
 }
 
 async function claimTo(io: Io, e: Entry, sid: string, now: number): Promise<Out | null> {
-  const file = `${e.dir}/${CLAIMS_DIR}/${claimName(e.id)}`
+  const file = claimFile(e)
   if (!(await io.exists(`${e.dir}/${CLAIMS_DIR}/.gitignore`).catch(() => false))) await io.write(`${e.dir}/${CLAIMS_DIR}/.gitignore`, '*\n')
   await io.write(file, claimJson(sid, now))
   const back = parseClaim(await io.read(file).catch(() => ''))
@@ -190,7 +191,6 @@ type Act = { id: string; action: string; until?: string; result?: string; scope?
 type Ctx = { sid: string; now: number; tz: string; by: 'model' | 'user'; git: string }
 const ACTIONS = ['start', 'done', 'snooze', 'cancel', 'edit', 'reopen']
 const SOMEDAY_RE = /^(none|someday)$/i
-const whenLine = (i: Item, tz: string, now: number): string => (i.due !== null ? formatWhen(i.due, tz, now) : i.someday ? 'no date (someday)' : i.dueRaw)
 
 // edit: text/kind/when/scope in one write; a scope move writes the new file, then cancels the old one. Returns old and new.
 async function edit(io: Io, dirs: Dirs, e: Entry, req: Act, c: Ctx): Promise<Out> {
@@ -218,7 +218,7 @@ async function edit(io: Io, dirs: Dirs, e: Entry, req: Act, c: Ctx): Promise<Out
     if (await io.exists(dest)) return fail(`${e.name} already exists in ${moveTo}; edit it there`)
     await io.write(dest, next)
     await io.write(e.path, patchHeader(old, { status: 'cancelled', cancelled: isoZ(now) }))
-    if (e.claim !== null) await io.write(`${e.dir}/${CLAIMS_DIR}/${claimName(e.id)}`, '')
+    if (e.claim !== null) await io.write(claimFile(e), '')
   }
   const after = parseItem(e.name, next)
   const change = (a: string, b: string): string => (a === b ? a : `${a} → ${b}`)
@@ -231,18 +231,17 @@ async function act(io: Io, dirs: Dirs, a: { req: Act } & Ctx): Promise<Out> {
   const { req, sid, now, tz } = a
   if (!ACTIONS.includes(req.action)) return fail(`unknown action "${req.action}": start, done, snooze, cancel, edit or reopen`)
   if ([req.scope, req.fromScope].some((s) => s !== undefined && s !== 'project' && s !== 'global')) return fail('scope is project or global')
-  const found = pick(await loadAll(io, dirs, now), req.id, req.action === 'edit' ? req.fromScope : (req.fromScope ?? req.scope))
-  if (typeof found === 'string') return fail(found)
-  const e = found
+  const e = pick(await loadAll(io, dirs, now), req.id, req.action === 'edit' ? req.fromScope : (req.fromScope ?? req.scope))
+  if (typeof e === 'string') return fail(e)
   const closed = e.state === 'done' || e.state === 'cancelled'
   if (req.action === 'reopen' ? !closed : closed) return fail(req.action === 'reopen' ? `${e.id} is not closed` : `${e.id} is already ${e.state}`)
   if (e.state === 'ignored') return fail(`${e.id} has no status header; add \`status: pending\` and \`due:\` first`)
-  const foreign = claimLive(e.claim, now) && e.claim !== null && e.claim.session !== sid
-  if (foreign && a.by === 'model') return fail(`${e.id} is running in session ${e.claim?.session} since ${e.claim === null ? '?' : formatWhen(e.claim.at, tz, now)}; do not run it or change it, tell the user`)
+  const foreign = foreignClaim(e, sid, now)
+  if (foreign !== null && a.by === 'model') return fail(`${e.id} is running in session ${foreign.session} since ${formatWhen(foreign.at, tz, now)}; do not run it or change it, tell the user`)
   if (req.action === 'start') {
     if (e.state === 'unparseable') return fail(`${e.id} has an unreadable due line; fix the header first`)
     const lost = await claimTo(io, e, sid, now)
-    return lost ?? { text: `started ${tag(e)}; carry out the text below, then update_reminder {id, action:"done", result}.\n${await io.read(e.path)}` }
+    return lost ?? { text: `started ${tagOf(e)}; carry out the text below, then update_reminder {id, action:"done", result}.\n${await io.read(e.path)}` }
   }
   if (req.action === 'edit') return edit(io, dirs, e, req, a)
   const text = await io.read(e.path)
@@ -261,11 +260,11 @@ async function act(io: Io, dirs: Dirs, a: { req: Act } & Ctx): Promise<Out> {
     }
   }
   await io.write(e.path, patchHeader(text, patch))
-  if (e.claim !== null) await io.write(`${e.dir}/${CLAIMS_DIR}/${claimName(e.id)}`, '')
-  const label = e.title === '' ? e.id : e.title
+  if (e.claim !== null) await io.write(claimFile(e), '')
+  const label = nameOf(e)
   const dueTxt = (patch.due ?? e.dueRaw) === 'none' ? 'someday (no date)' : `due ${patch.due ?? e.dueRaw}`
   const said =
-    req.action === 'snooze' ? `snoozed: ${label} (${tag(e)}) until ${patch.due}` : req.action === 'reopen' ? `reopened: ${label} (${tag(e)}) ${dueTxt}` : `${req.action === 'done' ? 'done' : 'cancelled'}: ${label} (${tag(e)})`
+    req.action === 'snooze' ? `snoozed: ${label} (${tagOf(e)}) until ${patch.due}` : req.action === 'reopen' ? `reopened: ${label} (${tagOf(e)}) ${dueTxt}` : `${req.action === 'done' ? 'done' : 'cancelled'}: ${label} (${tagOf(e)})`
   return { text: `${said}${gitNote(a.git, e)}` }
 }
 
@@ -280,8 +279,7 @@ async function add(io: Io, dirs: Dirs, a: Add, now: number, localTz: string, git
   if (text === '') return fail('text is required')
   const raw = (a.when ?? '').trim()
   const kind = a.kind === 'action' || a.kind === 'note' ? a.kind : null
-  const problems = [...(raw === '' ? [`when is required: nothing is saved without a trigger time. ${calendar(now, localTz)} ${WHEN_RULE}`] : []), ...(kind === null ? [KIND_RULE] : [])]
-  if (problems.length > 0 || kind === null) return fail(problems.join(' '))
+  if (raw === '' || kind === null) return fail([...(raw === '' ? [`when is required: nothing is saved without a trigger time. ${calendar(now, localTz)} ${WHEN_RULE}`] : []), ...(kind === null ? [KIND_RULE] : [])].join(' '))
   const tz = a.tz !== undefined && a.tz !== '' ? a.tz : localTz
   if (!validTz(tz)) return fail(`unknown time zone "${tz}"`)
   const w = SOMEDAY_RE.test(raw) ? null : parseWhenNatural(raw, now, tz)
@@ -342,7 +340,7 @@ const handoff = (request: string, scope: string | null, now: number, tz: string)
 // The text a run sends to Claude (/remind run, **N): action -> start, do, done; note -> show, say it was just a reminder, done.
 const runPrompt = (e: Entry, body: string, extra: string): string =>
   [
-    `Run reminder ${e.id} (${e.title}, ${e.kind}): ${body}`,
+    `${RUN_MARK}${e.id} (${e.title}, ${e.kind}): ${body}`,
     e.kind === 'note'
       ? `This is a note: show me its full text above, say it was just a reminder (nothing to execute), then call update_reminder {id:"${e.id}", action:"done"}.`
       : `This is an action: call update_reminder {id:"${e.id}", action:"start"}, carry out its text above, then update_reminder {id:"${e.id}", action:"done", result:<one line>}.`,
@@ -423,7 +421,7 @@ export const register: Register = (on, options) => {
   let shownKey = ''
   let seenDue: Set<string> | null = null
   let io: Io // set at session.start; `$` is never passed on, so the hooks share these closures
-  let env: { cfg: string | undefined; home: string | undefined; override: string | undefined } // static env; the project root is read per call (/cd, worktree)
+  let env: Env // static env; the project root is read per call (/cd, worktree)
   let interactive = false
   let stateSid = ''
 
@@ -432,8 +430,10 @@ export const register: Register = (on, options) => {
     const sid = await $.session.id()
     // remind.mjs reads this file to tell a typed prompt from a headless one when the hook payload lacks `source`.
     interactive = e.isInteractive
-    if (validSid(sid)) stateSid = sid
-    if (validSid(sid)) await $.fs.write(`${$.plugin.root}/.state/${sessionStateName(sid)}`, sessionStateJson(e.isInteractive, now)).catch(() => undefined)
+    if (validSid(sid)) {
+      stateSid = sid
+      await $.fs.write(`${$.plugin.root}/.state/${sessionStateName(sid)}`, sessionStateJson(e.isInteractive, now)).catch(() => undefined)
+    }
     await $.command
       .register({ name: 'remind', description: 'Show fired reminders, run, snooze, close or edit them, or say in any words what to remind you of', argumentHint: '[all | history | run|done|cancel|snooze|reopen|edit <N|id> | help | any words]' })
       .catch(() => undefined)
@@ -448,7 +448,7 @@ export const register: Register = (on, options) => {
     if (e.isInteractive) {
       refresh = async () => {
         const t = await $.clock.now()
-        const dirs = dirsOf(await $.session.root().catch(() => undefined), env.cfg, env.home, env.override)
+        const dirs = dirsOf(await $.session.root().catch(() => undefined), env)
         const items = await loadAll(io, dirs, t)
         const view = viewOf(items, t)
         const key = JSON.stringify(view)
@@ -495,16 +495,16 @@ export const register: Register = (on, options) => {
     const want = e.token.startsWith(prefix) ? e.token.slice(prefix.length) : null
     if (want === null || !/^[\w-]*$/.test(want) || !(e.start === 0 || /\s/.test(e.text.charAt(e.start - 1)))) return r
     const now = await $.clock.now()
-    const dirs = dirsOf(await $.session.root().catch(() => undefined), env.cfg, env.home, env.override)
+    const dirs = dirsOf(await $.session.root().catch(() => undefined), env)
     const all = await loadAll(io, dirs, now)
-    const hit = (i: Entry, n?: number): boolean => (/^\d+$/.test(want) ? n !== undefined && String(n).startsWith(want) : want === '' || `${i.id} ${i.title}`.toLowerCase().includes(want.toLowerCase()))
+    const hit = (i: Entry, n?: number): boolean => (isNum(want) ? n !== undefined && String(n).startsWith(want) : want === '' || `${i.id} ${i.title}`.toLowerCase().includes(want.toLowerCase()))
     const fired = firedList(all).flatMap((i, k) => (hit(i, k + 1) ? [{ i, n: k + 1 }] : []))
-    const someday = /^\d+$/.test(want) ? [] : sections(all.map((item) => ({ item, state: item.state }))).someday.map((x) => x.item).filter((i) => hit(i))
+    const someday = isNum(want) ? [] : sections(all.map((item) => ({ item, state: item.state }))).someday.map((x) => x.item).filter((i) => hit(i))
     somedayIds = new Set(all.filter((i) => i.state === 'someday').map((i) => i.id))
     const rows = [
-      ...fired.map(({ i, n }) => ({ text: `${prefix}${n}`, label: `${prefix}${n}  ${mark(i)} ${i.title === '' ? i.id : i.title}`, description: relative(i.due ?? now, now) })),
+      ...fired.map(({ i, n }) => ({ text: `${prefix}${n}`, label: `${prefix}${n}  ${mark(i)} ${nameOf(i)}`, description: relative(i.due ?? now, now) })),
       ...(fired.length > 0 && someday.length > 0 ? [{ text: e.token, label: '── someday ──' }] : []),
-      ...someday.map((i) => ({ text: `${prefix}${i.id}`, label: `${mark(i)} ${i.title === '' ? i.id : i.title}`, description: 'someday' })),
+      ...someday.map((i) => ({ text: `${prefix}${i.id}`, label: `${mark(i)} ${nameOf(i)}`, description: 'someday' })),
     ]
     return rows.length === 0 ? r : { suggestions: [...r.suggestions, ...rows] }
   })
@@ -517,7 +517,7 @@ export const register: Register = (on, options) => {
     const deco: { start: number; end: number; bold: boolean; color: 'warning' }[] = []
     for (const m of r.text.matchAll(re)) {
       const name = m[3] ?? ''
-      if (!(/^\d+$/.test(name) ? Number(name) >= 1 && Number(name) <= fired.length : somedayIds.has(name) || fired.some((f) => f.id === name))) continue
+      if (!(isNum(name) ? Number(name) >= 1 && Number(name) <= fired.length : somedayIds.has(name) || fired.some((f) => f.id === name))) continue
       const start = (m.index ?? 0) + (m[1] ?? '').length
       deco.push({ start, end: start + (m[2] ?? '').length, bold: true, color: 'warning' })
     }
@@ -536,22 +536,23 @@ export const register: Register = (on, options) => {
     const now = await $.clock.now()
     const sid = await $.session.id()
     const tz = tzOf(await $.env.get('TZ'))
-    const dirs = dirsOf(await $.session.root().catch(() => undefined), env.cfg, env.home, env.override)
+    const dirs = dirsOf(await $.session.root().catch(() => undefined), env)
     const all = await loadAll(io, dirs, now)
     const band = (await read($, viewAtom)).fired
     const blocks: string[] = []
     let rest = e.text
     for (const m of tokens) {
       const name = m[2] ?? ''
-      const ref = /^\d+$/.test(name) ? (band.length > 0 ? band[Number(name) - 1] : undefined) : undefined
-      const hit = /^\d+$/.test(name)
+      const ref = isNum(name) ? band[Number(name) - 1] : undefined
+      const hit = isNum(name)
         ? ref === undefined
           ? firedList(all)[Number(name) - 1]
           : all.find((i) => i.id === ref.id && i.global === ref.global)
         : all.find((i) => i.id === name)
       if (hit === undefined || hit.state === 'done' || hit.state === 'cancelled' || hit.state === 'unparseable' || hit.state === 'ignored') continue
-      if (claimLive(hit.claim, now) && hit.claim !== null && hit.claim.session !== sid) {
-        $.ui.toast(`${hit.id} is already running in another session since ${formatWhen(hit.claim.at, tz, now)}`, { timeoutMs: 8000 })
+      const foreign = foreignClaim(hit, sid, now)
+      if (foreign !== null) {
+        $.ui.toast(`${hit.id} is already running in another session since ${formatWhen(foreign.at, tz, now)}`, { timeoutMs: 8000 })
         continue
       }
       blocks.push(runPrompt(hit, bodyOf(await io.read(hit.path)), ''))
@@ -594,7 +595,7 @@ export const register: Register = (on, options) => {
   on('command.run', { command: 'remind' }, async ($, e) => {
     const now = await $.clock.now()
     const tz = tzOf(await $.env.get('TZ'))
-    const dirs = dirsOf(await $.session.root().catch(() => undefined), env.cfg, env.home, env.override)
+    const dirs = dirsOf(await $.session.root().catch(() => undefined), env)
     const words = e.args.trim().split(/\s+/).filter((w) => w !== '')
     const [head = '', ...rest] = words
     const verb = head.toLowerCase()
@@ -620,7 +621,7 @@ export const register: Register = (on, options) => {
       const scoped = (word === 'project' || word === 'global') && rest.length >= 2 + need
       const [id = '', ...tail] = scoped ? rest.slice(1) : rest
       const scope = scoped ? word : undefined
-      if (verb === 'reopen' && /^\d+$/.test(id)) return { text: 'reopen takes a name: /remind history lists the closed ones' }
+      if (verb === 'reopen' && isNum(id)) return { text: 'reopen takes a name: /remind history lists the closed ones' }
       // free text that merely starts with a verb ("cancel the ...") goes to the model unless the id resolves
       const all = await loadAll(io, dirs, now)
       const found = (verb === 'done' || verb === 'cancel') && tail.length > 0 ? null : resolve(all, id, scope)
@@ -635,13 +636,12 @@ export const register: Register = (on, options) => {
           if (!hasTools) return { text: NEEDS_TOOLS }
           if (found.state === 'done' || found.state === 'cancelled') return { text: `${found.id} is already ${found.state}; /remind reopen ${found.id} brings it back` }
           if (verb === 'run' && (found.state === 'unparseable' || found.state === 'ignored')) return { text: `${found.id} has an unreadable header; fix the file first` }
-          if (verb === 'run' && claimLive(found.claim, now) && found.claim !== null && found.claim.session !== sid) {
-            return { text: `${found.id} is already running in another session since ${formatWhen(found.claim.at, tz, now)}` }
-          }
+          const foreign = verb === 'run' ? foreignClaim(found, sid, now) : null
+          if (foreign !== null) return { text: `${found.id} is already running in another session since ${formatWhen(foreign.at, tz, now)}` }
           outbound =
             verb === 'edit'
               ? { text: editHandoff(found, tail.join(' '), now, tz), ack: `Handing this edit to Claude: ${found.id}` }
-              : { text: `${HANDOFF_MARK}run ${found.id}</request>\n${runPrompt(found, bodyOf(await io.read(found.path)), tail.join(' '))}`, ack: `Running ${found.title === '' ? found.id : found.title} (${found.kind}): handing it to Claude` }
+              : { text: `${HANDOFF_MARK}run ${found.id}</request>\n${runPrompt(found, bodyOf(await io.read(found.path)), tail.join(' '))}`, ack: `Running ${nameOf(found)} (${found.kind}): handing it to Claude` }
         } else {
           const git = parseConfig(await io.read(dirs.config).catch(() => '')).git
           const out = await act(io, dirs, { req: { id: found.id, action: verb, until: tail.join(' '), scope: where }, sid, now, tz, by: 'user', git })
@@ -674,7 +674,7 @@ export const register: Register = (on, options) => {
   // The model's tools: answered here, so no permission prompt for the file writes.
   on('tool.call', { tool: /^mcp__brewmod-reminders__/ }, async ($, e) => {
     const now = await $.clock.now()
-    const dirs = dirsOf(await $.session.root().catch(() => undefined), env.cfg, env.home, env.override)
+    const dirs = dirsOf(await $.session.root().catch(() => undefined), env)
     const tz = tzOf(await $.env.get('TZ'))
     const git = parseConfig(await io.read(dirs.config).catch(() => '')).git
     const input = e as unknown as Record<string, unknown>

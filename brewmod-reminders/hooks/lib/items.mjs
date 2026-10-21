@@ -21,6 +21,8 @@ export const sessionStateName = (sid) => `session-${sid}.json`
 export const offeredStateName = (sid) => `offered-${sid}.json`
 export const claimName = (id) => `${id}.json`
 export const itemKey = (item) => `${item.global ? 'g' : 'p'}:${item.id}:${item.dueRaw}`
+export const tagOf = (item) => `${item.id}${item.global ? ' (global)' : ''}`
+export const slugOf = (id) => id.replace(/^[^_]*_/, '').toLowerCase()
 export const isItemName = (name) => /\.md$/i.test(name) && !name.startsWith('.') && name.toLowerCase() !== 'readme.md'
 
 const pad = (n, w = 2) => String(n).padStart(w, '0')
@@ -71,7 +73,14 @@ function headerRange(lines) {
   const start = fenced ? 1 : 0
   let end = start
   while (end < lines.length && lines[end].trim() !== '' && !(fenced && lines[end].trim() === '---')) end++
-  return { start, end, fenced }
+  return { start, end, close: fenced && lines[end]?.trim() === '---' }
+}
+// Lines (kept with the first EOL style) and header range of a file's text; the BOM is set aside.
+function splitText(text) {
+  const bom = text.startsWith(BOM) ? BOM : ''
+  const parts = text.slice(bom.length).split(/(\r?\n)/)
+  const lines = parts.filter((_, i) => i % 2 === 0)
+  return { bom, parts, lines, eol: parts[1] ?? '\n', r: headerRange(lines) }
 }
 const KEY_RE = /^([A-Za-z][\w-]*):[ \t]*(.*?)[ \t]*$/
 
@@ -88,14 +97,13 @@ function parseDueZ(raw) {
 // `due: none` = someday (no date, never fires); `kind: note` = read-and-close, anything else = action.
 export function parseItem(name, text) {
   const lines = String(text ?? '').replace(/^\uFEFF/, '').split(/\r?\n/)
-  const { start, end, fenced } = headerRange(lines)
+  const { start, end, close } = headerRange(lines)
   const h = {}
   for (let i = start; i < end; i++) {
     const m = KEY_RE.exec(lines[i])
     if (m && !(m[1].toLowerCase() in h)) h[m[1].toLowerCase()] = m[2]
   }
-  const body = lines.slice(fenced && lines[end]?.trim() === '---' ? end + 1 : end)
-  const first = body.find((l) => l.trim() !== '') ?? ''
+  const first = lines.slice(end + (close ? 1 : 0)).find((l) => l.trim() !== '') ?? ''
   return {
     id: name.replace(/\.md$/i, ''),
     name,
@@ -114,11 +122,7 @@ export function parseItem(name, text) {
 
 // Rewrites header keys only (value null removes the key); a leading BOM and everything from the blank line on stay byte for byte.
 export function patchHeader(text, patch) {
-  const bom = text.startsWith(BOM) ? BOM : ''
-  const parts = text.slice(bom.length).split(/(\r?\n)/)
-  const lines = parts.filter((_, i) => i % 2 === 0)
-  const r = headerRange(lines)
-  const eol = parts[1] ?? '\n'
+  const { bom, parts, lines, eol, r } = splitText(text)
   const head = lines.slice(0, r.end)
   for (const [key, value] of Object.entries(patch)) {
     const idx = head.findIndex((l, i) => i >= r.start && KEY_RE.exec(l)?.[1].toLowerCase() === key)
@@ -140,40 +144,33 @@ export function buildItem({ dueMs, text, now, kind }) {
 export function bodyOf(text) {
   const lines = String(text ?? '').replace(/^\uFEFF/, '').split(/\r?\n/)
   const r = headerRange(lines)
-  return lines.slice(r.end + (r.fenced && lines[r.end]?.trim() === '---' ? 1 : 0)).join('\n').trim()
+  return lines.slice(r.end + (r.close ? 1 : 0)).join('\n').trim()
 }
 
 // Replaces the body (everything after the header, fence included), header bytes and BOM untouched.
 export function patchBody(text, body) {
-  const bom = text.startsWith(BOM) ? BOM : ''
-  const parts = text.slice(bom.length).split(/(\r?\n)/)
-  const lines = parts.filter((_, i) => i % 2 === 0)
-  const r = headerRange(lines)
-  const eol = parts[1] ?? '\n'
-  const close = r.fenced && lines[r.end]?.trim() === '---'
-  const head = lines.slice(0, r.end + (close ? 1 : 0))
+  const { bom, lines, eol, r } = splitText(text)
+  const head = lines.slice(0, r.end + (r.close ? 1 : 0))
   const b = String(body).trim()
-  return bom + (head.length === 0 ? '' : head.join(eol) + eol + (close ? '' : eol)) + b + eol
+  return bom + (head.length === 0 ? '' : head.join(eol) + eol + (r.close ? '' : eol)) + b + eol
 }
 
 // Edit one item file: text/kind/dueMs (number = date, null = someday, undefined = keep); a date or someday also sets status pending.
 export function editText(text, { text: body, kind, dueMs }) {
   const patch = {}
   if (kind === 'note' || kind === 'action') patch.kind = kind
-  if (dueMs !== undefined) Object.assign(patch, dueMs === null ? somedayPatch() : datePatch(dueMs))
+  if (dueMs !== undefined) Object.assign(patch, datePatch(dueMs))
   const withHead = Object.keys(patch).length > 0 ? patchHeader(text, patch) : text
   return body === undefined ? withHead : patchBody(withHead, body)
 }
 
-// Header patches: snooze/give a date (turns someday into a normal item), park as someday, bring a closed item back.
-export const datePatch = (ms) => ({ due: isoZ(ms), status: 'pending' })
-export const somedayPatch = () => ({ due: 'none', status: 'pending' })
+// Header patches: snooze/give a date (null = park as someday; a someday item becomes normal), bring a closed item back.
+export const datePatch = (ms) => ({ due: ms === null ? 'none' : isoZ(ms), status: 'pending' })
 export const reopenPatch = (ms) => ({ ...(ms === undefined || ms === null ? {} : { due: isoZ(ms) }), status: 'pending', done: null, cancelled: null, result: null })
 export function slugify(s) {
   return String(s).toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '') || 'reminder'
 }
 // Someday names `someday_<slug>.md` never start with digits, so they cannot collide with dated names.
-export const isSomedayName = (name) => /^someday_/i.test(name)
 export function itemName(dueMs, slug) {
   if (dueMs === null || dueMs === undefined) return `someday_${slugify(slug)}.md`
   const d = new Date(dueMs)
@@ -201,7 +198,7 @@ export function classify(item, claim, now) {
 
 // ---- sections, history, cleanup
 
-const closedAt = (item) => {
+export const closedAt = (item) => {
   const ms = Date.parse(item.status === 'cancelled' ? item.cancelled : item.done)
   return Number.isNaN(ms) ? null : ms
 }
@@ -361,14 +358,13 @@ export function formatWhen(ms, tz, now) {
 // exact id | exact slug | unique prefix of id or slug -> { id } | { error: 'none'|'ambiguous', candidates }
 export function matchId(ids, query) {
   const q = String(query ?? '').trim().toLowerCase().replace(/\.md$/, '')
-  const slug = (id) => id.replace(/^[^_]*_/, '').toLowerCase()
   const pick = (c) => (c.length === 1 ? { id: c[0] } : c.length === 0 ? { error: 'none', candidates: [] } : { error: 'ambiguous', candidates: c })
   if (q === '') return { error: 'none', candidates: [] }
   const exact = ids.filter((id) => id.toLowerCase() === q)
   if (exact.length === 1) return { id: exact[0] }
-  const bySlug = ids.filter((id) => slug(id) === q)
+  const bySlug = ids.filter((id) => slugOf(id) === q)
   if (bySlug.length === 1) return { id: bySlug[0] }
-  return pick(ids.filter((id) => id.toLowerCase().startsWith(q) || slug(id).startsWith(q)))
+  return pick(ids.filter((id) => id.toLowerCase().startsWith(q) || slugOf(id).startsWith(q)))
 }
 
 // First line of the /remind hand-off prompt (register.ts builds it); the offer skips that turn.
@@ -379,7 +375,8 @@ export const RUN_MARK = 'Run reminder '
 // Offer only on a real typed prompt: source user, or source absent and the module saw an interactive session.
 export function shouldOffer(payload, sessionState) {
   if (!payload || !validSid(payload.session_id) || payload.agent_id !== undefined) return false
-  if (typeof payload.prompt === 'string' && (/^\/[^\s/]+(\s|$)/.test(payload.prompt.trimStart()) || payload.prompt.trimStart().startsWith(HANDOFF_MARK) || payload.prompt.trimStart().startsWith(RUN_MARK))) return false
+  const prompt = typeof payload.prompt === 'string' ? payload.prompt.trimStart() : null
+  if (prompt !== null && (/^\/[^\s/]+(\s|$)/.test(prompt) || prompt.startsWith(HANDOFF_MARK) || prompt.startsWith(RUN_MARK))) return false
   if (payload.source === 'user') return true
   return payload.source === undefined && sessionState?.isInteractive === true
 }
@@ -394,14 +391,13 @@ export function parseConfig(text) {
 // args: { due:[{id,global,path,due,title,kind,body}], bad:[{id,global,path}], now, tz, git, legacy }
 export function buildOffer({ due, bad, now, tz, git, legacy }) {
   const out = []
-  const tag = (i) => `${i.id}${i.global ? ' (global)' : ''}`
   const notes = due.filter((i) => i.kind === 'note')
   const actions = due.filter((i) => i.kind !== 'note')
   if (due.length > 0) {
     out.push(`Reminders are due (${due.length}), stored as files:`)
     for (const i of [...due].sort((a, b) => a.due - b.due)) {
       const late = now - i.due > LATE_MS ? ` | OVERDUE by ${span(now - i.due)}` : ''
-      out.push(`- ${tag(i)} | due ${formatWhen(i.due, tz, now)}${late} | ${i.kind === 'note' ? '✎ note' : '▶ action'} | ${i.title} | ${i.path}`)
+      out.push(`- ${tagOf(i)} | due ${formatWhen(i.due, tz, now)}${late} | ${i.kind === 'note' ? '✎ note' : '▶ action'} | ${i.title} | ${i.path}`)
       if (i.kind === 'note') out.push(...String(i.body ?? '').split('\n').map((l) => `  | ${l}`))
     }
     out.push("Start your reply with ONE line, in the user's language, saying what fired, before anything else; then continue with the steps below and answer their prompt as usual.")
@@ -421,7 +417,7 @@ export function buildOffer({ due, bad, now, tz, git, legacy }) {
   }
   if (bad.length > 0) {
     out.push(`Unreadable reminder files (${bad.length}); the \`due:\` line must be UTC ending in Z (YYYY-MM-DDTHH:MM:SSZ). Tell the user and offer to fix:`)
-    for (const i of bad) out.push(`- ${tag(i)} | ${i.path}`)
+    for (const i of bad) out.push(`- ${tagOf(i)} | ${i.path}`)
   }
   if (legacy) out.push('Legacy: .claude/settings.json still registers the old due-checks.sh hook; tell the user to remove it, brewmod-reminders replaces it.')
   return out.join('\n')
