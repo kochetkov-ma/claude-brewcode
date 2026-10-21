@@ -121,7 +121,8 @@ function listText(all: Entry[], now: number, tz: string, dirs: Dirs, q: Query): 
   const inScope = (i: Entry): boolean => q.scope === undefined || i.global === (q.scope === 'global')
   const items = all.filter((i) => {
     const t = q.state === 'history' ? closedMs(i) : i.due
-    return inScope(i) && (!windowed || (t !== null && t >= q.from && t < q.to))
+    const firedAlways = i.state === 'due' && (q.state === 'all' || q.state === 'active')
+    return inScope(i) && (!windowed || firedAlways || (t !== null && t >= q.from && t < q.to))
   })
   const num = new Map(firedList(all).map((i, k) => [i.path, k + 1]))
   const whenOf = (i: Entry): string => (i.due !== null ? formatWhen(i.due, tz, now) : i.someday ? 'no date (someday)' : `bad due "${i.dueRaw}" (UTC with Z needed)`)
@@ -222,7 +223,7 @@ async function edit(io: Io, dirs: Dirs, e: Entry, req: Act, c: Ctx): Promise<Out
   const after = parseItem(e.name, next)
   const change = (a: string, b: string): string => (a === b ? a : `${a} → ${b}`)
   const head = `Reminder updated ${change(`${mark(e)} ${e.kind}`, `${mark(after)} ${after.kind}`)} · ${change(here, moveTo ?? here)} · ${e.id}`
-  return { text: `${head}\n- ${whenLine(e, tz, now)}  ${e.title}\n+ ${whenLine(after, tz, now)}  ${after.title}${moveTo === undefined ? gitNote(c.git, e) : ''}` }
+  return { text: `${head}\n- ${mark(e)} ${here} | ${whenLine(e, tz, now)}  ${e.title}\n+ ${mark(after)} ${moveTo ?? here} | ${whenLine(after, tz, now)}  ${after.title}${moveTo === undefined ? gitNote(c.git, e) : ''}` }
 }
 
 // start | done | snooze | cancel | edit | reopen; the model is refused on a live foreign claim, the person (by: 'user') is not.
@@ -279,7 +280,7 @@ async function add(io: Io, dirs: Dirs, a: Add, now: number, localTz: string, git
   if (text === '') return fail('text is required')
   const raw = (a.when ?? '').trim()
   const kind = a.kind === 'action' || a.kind === 'note' ? a.kind : null
-  const problems = [...(raw === '' ? [`when is required: nothing is saved without a trigger time. ${WHEN_RULE}`] : []), ...(kind === null ? [KIND_RULE] : [])]
+  const problems = [...(raw === '' ? [`when is required: nothing is saved without a trigger time. ${calendar(now, localTz)} ${WHEN_RULE}`] : []), ...(kind === null ? [KIND_RULE] : [])]
   if (problems.length > 0 || kind === null) return fail(problems.join(' '))
   const tz = a.tz !== undefined && a.tz !== '' ? a.tz : localTz
   if (!validTz(tz)) return fail(`unknown time zone "${tz}"`)
@@ -319,12 +320,21 @@ const HELP = (dirs: Dirs, hasTools: boolean, alert: string): string =>
     ...(hasTools ? [] : [NEEDS_TOOLS]),
   ].join('\n')
 
+// Computed calendar so the model never guesses a weekday: today plus the next 8 days in the local zone.
+const calendar = (now: number, tz: string): string => {
+  const f = (ms: number, o: Intl.DateTimeFormatOptions): string => new Intl.DateTimeFormat('en-GB', { timeZone: tz, ...o }).format(ms).replace(',', '')
+  const day = (ms: number): string => f(ms, { weekday: 'short', day: 'numeric', month: 'short' })
+  const next = Array.from({ length: 8 }, (_, k) => day(now + (k + 1) * 86_400_000))
+  return `Today is ${day(now)} ${f(now, { year: 'numeric' })} ${f(now, { hour: '2-digit', minute: '2-digit', hour12: false })} ${tz}; next days: ${next.join(', ')}. Use these weekday/date pairs verbatim in options.`
+}
+
 const stamp = (now: number, tz: string): string => `Now: ${formatWhen(now, tz, now).replace(/, now$/, '')}, time zone ${tz}, UTC ${isoZ(now)}. Times I give without a zone are in ${tz}.`
 
 const handoff = (request: string, scope: string | null, now: number, tz: string): string =>
   [
     `${HANDOFF_MARK}${request}</request>`,
     stamp(now, tz),
+    calendar(now, tz),
     `Scope: ${scope ?? 'not given: project unless I say global, everywhere or in every project; ask only when unclear, in the same single dialog'}.`,
     `Use the ${TOOL}* tools. To add: add_reminder saves at once (no preview, no confirm) when time, kind and scope are clear; then show me its confirmation line. Every reminder needs a trigger time and a kind (action or note; infer it from my words). ${WHEN_RULE} To look: list_reminders (state active|all|someday|done, from/to); to change: update_reminder (start|done|snooze|cancel|edit|reopen).`,
   ].join('\n')

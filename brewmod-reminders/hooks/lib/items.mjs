@@ -404,6 +404,7 @@ export function buildOffer({ due, bad, now, tz, git, legacy }) {
       out.push(`- ${tag(i)} | due ${formatWhen(i.due, tz, now)}${late} | ${i.kind === 'note' ? '✎ note' : '▶ action'} | ${i.title} | ${i.path}`)
       if (i.kind === 'note') out.push(...String(i.body ?? '').split('\n').map((l) => `  | ${l}`))
     }
+    out.push("Start your reply with ONE line, in the user's language, saying what fired, before anything else; then continue with the steps below and answer their prompt as usual.")
     if (actions.length > 0) {
       out.push('Actions: tell the user in one line, in their language, what fired and offer for each: run now, snooze, mark done, or cancel. Never run one unasked. Say plainly when one is more than 24 h late.')
     }

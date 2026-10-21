@@ -104,20 +104,20 @@ const shows: { name: string; run: Run; text: string }[] = [
   { name: '/remind show all', run: ($) => remind($, 'show all'), text: [NOW_LINE, ...ALL, WHERE].join('\n') },
   { name: '/remind list (alias of all)', run: ($) => remind($, 'list'), text: [NOW_LINE, ...ALL, WHERE].join('\n') },
   { name: '/remind all global week', run: ($) => remind($, 'all global week'), text: [NOW_LINE, 'Waiting (1):', L_G, WHERE].join('\n') },
-  { name: '/remind show all project tomorrow', run: ($) => remind($, 'show all project tomorrow'), text: [NOW_LINE, 'Waiting (1):', L_RUN, WHERE].join('\n') },
-  { name: '/remind all +1d', run: ($) => remind($, 'all +1d'), text: [NOW_LINE, 'Waiting (2):', L_G, L_RUN, WHERE].join('\n') },
-  { name: '/remind show all until 2026-10-22', run: ($) => remind($, 'show all until 2026-10-22'), text: [NOW_LINE, 'Waiting (2):', L_G, L_RUN, WHERE].join('\n') },
+  { name: '/remind show all project tomorrow', run: ($) => remind($, 'show all project tomorrow'), text: [NOW_LINE, 'Fired (1):', L_HOT, 'Waiting (1):', L_RUN, WHERE].join('\n') },
+  { name: '/remind all +1d', run: ($) => remind($, 'all +1d'), text: [NOW_LINE, 'Fired (1):', L_HOT, 'Waiting (2):', L_G, L_RUN, WHERE].join('\n') },
+  { name: '/remind show all until 2026-10-22', run: ($) => remind($, 'show all until 2026-10-22'), text: [NOW_LINE, 'Fired (1):', L_HOT, 'Waiting (2):', L_G, L_RUN, WHERE].join('\n') },
   { name: '/remind show active global', run: ($) => remind($, 'show active global'), text: NONE_FIRED },
   { name: '/remind someday', run: ($) => remind($, 'someday'), text: [NOW_LINE, 'Someday (1):', L_SD, WHERE].join('\n') },
   { name: '/remind history', run: ($) => remind($, 'history'), text: [NOW_LINE, ...HIST, WHERE].join('\n') },
   { name: '/remind show done (alias of history)', run: ($) => remind($, 'show done'), text: [NOW_LINE, ...HIST, WHERE].join('\n') },
   { name: '/remind history global', run: ($) => remind($, 'history global'), text: `No closed reminders yet. ${WHERE}` },
-  { name: 'list_reminders {scope project, from week}', run: ($) => tool($, 'list_reminders', { scope: 'project', from: 'week' }), text: [NOW_LINE, 'Waiting (2):', L_RUN, L_LATER, WHERE].join('\n') },
+  { name: 'list_reminders {scope project, from week}', run: ($) => tool($, 'list_reminders', { scope: 'project', from: 'week' }), text: [NOW_LINE, 'Fired (1):', L_HOT, 'Waiting (2):', L_RUN, L_LATER, WHERE].join('\n') },
   { name: 'list_reminders {state active}', run: ($) => tool($, 'list_reminders', { state: 'active' }), text: [NOW_LINE, ...FIRED, WHERE].join('\n') },
   { name: 'list_reminders {state someday}', run: ($) => tool($, 'list_reminders', { state: 'someday' }), text: [NOW_LINE, 'Someday (1):', L_SD, WHERE].join('\n') },
   { name: 'list_reminders {state done}', run: ($) => tool($, 'list_reminders', { state: 'done' }), text: [NOW_LINE, ...HIST, WHERE].join('\n') },
   { name: 'list_reminders {default state}', run: ($) => tool($, 'list_reminders', {}), text: [NOW_LINE, ...ALL, WHERE].join('\n') },
-  { name: 'list_reminders {from, to as dates}', run: ($) => tool($, 'list_reminders', { from: '2026-10-23', to: '2026-10-23' }), text: [NOW_LINE, 'Waiting (1):', L_LATER, WHERE].join('\n') },
+  { name: 'list_reminders {from, to as dates}', run: ($) => tool($, 'list_reminders', { from: '2026-10-23', to: '2026-10-23' }), text: [NOW_LINE, 'Fired (1):', L_HOT, 'Waiting (1):', L_LATER, WHERE].join('\n') },
   { name: 'list_reminders {state bogus}', run: ($) => tool($, 'list_reminders', { state: 'bogus' }), text: 'state is active, all, someday or done' },
   {
     name: 'list_reminders {from garbage}',
@@ -149,6 +149,7 @@ for (const { name, run, text } of shows) {
   })
 }
 
+const CAL = 'Today is Wed 21 Oct 2026 15:00 Europe/Lisbon; next days: Thu 22 Oct, Fri 23 Oct, Sat 24 Oct, Sun 25 Oct, Mon 26 Oct, Tue 27 Oct, Wed 28 Oct, Thu 29 Oct. Use these weekday/date pairs verbatim in options.'
 const WHEN_RULE =
   'If the request names no time, ask ONE AskUserQuestion "When should it fire?" with 2-3 options you derive from this reminder\'s own context (e.g. post-deploy prod check: tonight 23:00 / tomorrow 09:00 / in 1 week; renew a domain: in 2 weeks / in 1 month; check nightly-run logs: tonight / tomorrow morning), each label showing its concrete local time, the best fit marked "(Recommended)", plus a last option "No date (someday)" (answer -> when:"someday": it never fires and shows only when the user asks); free text stays available through Other; no fixed list. A kind (action or note) or scope (project or global) that is still unclear joins that same AskUserQuestion as extra questions; ask nothing else. An answer like "in 1 week" becomes a date-only when (YYYY-MM-DD, fires 00:00 local that day).'
 const KIND_RULE =
@@ -175,11 +176,11 @@ const rows: AddRow[] = [
     text: SAVED('someday_check-prod', 'someday (no date)'),
     writes: [[`${P_DIR}/someday_check-prod.md`, 'due: none\nstatus: pending\nkind: action\ncreated: 2026-10-21T14:00:00Z\n\nCheck prod.\n']],
   },
-  { name: 'no when', input: { ...ADD, when: undefined }, text: `when is required: nothing is saved without a trigger time. ${WHEN_RULE}`, writes: [] },
-  { name: 'a blank when', input: { ...ADD, when: '  ' }, text: `when is required: nothing is saved without a trigger time. ${WHEN_RULE}`, writes: [] },
+  { name: 'no when', input: { ...ADD, when: undefined }, text: `when is required: nothing is saved without a trigger time. ${CAL} ${WHEN_RULE}`, writes: [] },
+  { name: 'a blank when', input: { ...ADD, when: '  ' }, text: `when is required: nothing is saved without a trigger time. ${CAL} ${WHEN_RULE}`, writes: [] },
   { name: 'no kind', input: { ...ADD, kind: undefined }, text: KIND_RULE, writes: [] },
   { name: 'a bogus kind', input: { ...ADD, kind: 'task' }, text: KIND_RULE, writes: [] },
-  { name: 'no when and no kind', input: { ...ADD, when: undefined, kind: undefined }, text: `when is required: nothing is saved without a trigger time. ${WHEN_RULE} ${KIND_RULE}`, writes: [] },
+  { name: 'no when and no kind', input: { ...ADD, when: undefined, kind: undefined }, text: `when is required: nothing is saved without a trigger time. ${CAL} ${WHEN_RULE} ${KIND_RULE}`, writes: [] },
   {
     name: 'a date-only when (00:00 local)',
     input: { ...ADD, when: '2026-10-28' },
@@ -343,21 +344,21 @@ const acts: { name: string; tree: Tree; run: Run; text: string; isError?: true; 
     name: 'update_reminder edit of text, kind and time',
     tree: { [HOTFIX]: HOT },
     run: ($) => tool($, 'update_reminder', { id: 'hotfix', action: 'edit', text: ' Hotfix and DB pool ', kind: 'note', when: '2026-10-28' }),
-    text: `Reminder updated ▶ action → ✎ note · project · ${ID}\n- Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix\n+ Wed 28 Oct 00:00 Lisbon (00:00 UTC), in 6 d  Hotfix and DB pool`,
+    text: `Reminder updated ▶ action → ✎ note · project · ${ID}\n- ▶ project | Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix\n+ ✎ project | Wed 28 Oct 00:00 Lisbon (00:00 UTC), in 6 d  Hotfix and DB pool`,
     writes: [[HOTFIX, 'due: 2026-10-28T00:00:00Z\nstatus: pending\nkind: note\n\nHotfix and DB pool\n']],
   },
   {
     name: 'update_reminder edit to someday',
     tree: { [HOTFIX]: HOT },
     run: ($) => tool($, 'update_reminder', { id: 'hotfix', action: 'edit', when: 'someday' }),
-    text: `Reminder updated ▶ action · project · ${ID}\n- Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix\n+ no date (someday)  Hotfix`,
+    text: `Reminder updated ▶ action · project · ${ID}\n- ▶ project | Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix\n+ ▶ project | no date (someday)  Hotfix`,
     writes: [[HOTFIX, 'due: none\nstatus: pending\n\nHotfix\n']],
   },
   {
     name: 'update_reminder edit moves project to global',
     tree: { [HOTFIX]: HOT },
     run: ($) => tool($, 'update_reminder', { id: 'hotfix', action: 'edit', scope: 'global' }),
-    text: `Reminder updated ▶ action · project → global · ${ID}\n- Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix\n+ Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix`,
+    text: `Reminder updated ▶ action · project → global · ${ID}\n- ▶ project | Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix\n+ ▶ global | Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix`,
     writes: [
       [HOT_G, HOT],
       [HOTFIX, CANCELLED],
@@ -498,6 +499,7 @@ test('GIVEN a free-text /remind WHEN it runs THEN the ack returns at once and th
       [
         'Reminder helper. My request: <request>check prod tomorrow 9:00</request>',
         'Now: Wed 21 Oct 15:00 Lisbon (14:00 UTC), time zone Europe/Lisbon, UTC 2026-10-21T14:00:00Z. Times I give without a zone are in Europe/Lisbon.',
+        CAL,
         'Scope: global.',
         `Use the ${TOOL}* tools. To add: add_reminder saves at once (no preview, no confirm) when time, kind and scope are clear; then show me its confirmation line. Every reminder needs a trigger time and a kind (action or note; infer it from my words). ${WHEN_RULE} To look: list_reminders (state active|all|someday|done, from/to); to change: update_reminder (start|done|snooze|cancel|edit|reopen).`,
       ].join('\n'),

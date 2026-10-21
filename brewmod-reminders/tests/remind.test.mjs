@@ -114,6 +114,7 @@ test('GIVEN the prototype file verbatim WHEN remind.mjs runs THEN the offer text
   const expected = [
     'Reminders are due (1), stored as files:',
     `- ${PROTO.replace('.md', '')} | due Thu 22 Oct 09:03 Lisbon (08:03 UTC), 57 min ago | ▶ action | Post-hotfix prod check for v1.115.1 (main 24e2f198, deployed 2026-10-21 ~13:30Z) | ${PROTO_PATH(ctx)}`,
+    "Start your reply with ONE line, in the user's language, saying what fired, before anything else; then continue with the steps below and answer their prompt as usual.",
     'Actions: tell the user in one line, in their language, what fired and offer for each: run now, snooze, mark done, or cancel. Never run one unasked. Say plainly when one is more than 24 h late.',
     'Run accepted: update_reminder {id, action:"start"}, read the file, carry out its body, then update_reminder {id, action:"done", result}. Snooze: {id, action:"snooze", until}; cancel: {id, action:"cancel"}.',
     'update_reminder unavailable -> edit the file header: `status: done` plus `done: <UTC now, YYYY-MM-DDTHH:MM:SSZ>` (cancel: `status: cancelled` plus `cancelled: <UTC>`); never touch the body.',
@@ -358,6 +359,7 @@ test('GIVEN a fired note and a fired action WHEN remind.mjs runs THEN the note t
     `- 20261021-0900_csv | due Wed 21 Oct 10:00 Lisbon (09:00 UTC), 24 h ago | ✎ note | Finish the CSV export. | ${p('20261021-0900_csv.md')}`,
     '  | Finish the CSV export.',
     '  | Endpoint first.',
+    "Start your reply with ONE line, in the user's language, saying what fired, before anything else; then continue with the steps below and answer their prompt as usual.",
     'Actions: tell the user in one line, in their language, what fired and offer for each: run now, snooze, mark done, or cancel. Never run one unasked. Say plainly when one is more than 24 h late.',
     'Notes (kind note, text above after "|"): show each note\'s full text to the user now, say it was just a reminder (nothing to execute), then call update_reminder {id, action:"done"} for it without asking, then answer their prompt as usual.',
     'Run accepted: update_reminder {id, action:"start"}, read the file, carry out its body, then update_reminder {id, action:"done", result}. Snooze: {id, action:"snooze", until}; cancel: {id, action:"cancel"}.',
