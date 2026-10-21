@@ -46,10 +46,10 @@ Dev mode without installing: `claude --plugin-dir ./brewmod-reminders`
 | Field | Value |
 |-------|-------|
 | Command | `/remind` (keys run instantly, free text goes to Claude) |
-| Picker | `**` in the prompt (prefix is configurable) |
+| Picker | `**` (fired and someday) and `**?` (every reminder) in the prompt; prefix is configurable |
 | Kinds | `action`, `note`, `someday` |
 | Scopes | project (default), global |
-| Settings | `prefix`, `cooldownMinutes`, `notify`, `keepDays` in `/config`; `git` in `.claude/reminders.json` |
+| Settings | `prefix`, `cooldownMinutes`, `notify` in `/config`; `git` in `.claude/reminders.json` |
 | Requires | Claude Code 2.1.301+, `node` on the `PATH` |
 
 ## How it works
@@ -81,7 +81,7 @@ saved 20261022-0800_check-prod-logs (project) | [x]▶ action[/x] | due Thu 22 O
 
 <Console caption="Thursday 09:20: a new session shows the band at once" text={`[a]reminders · 1 fired[/a]
 1: [x]▶[/x] check the prod logs after the hotfix and show me errors  [d]20 min ago[/d]
-[d]press 1 then Enter to run · ** to pick · /remind all · snooze · done[/d]`} />
+[d]press 1 then Enter to run · ** to pick · **? all · /remind snooze · done[/d]`} />
 
 <Console caption="First prompt: Claude opens with one line, then answers" text={`[u]❯[/u] what is 2+2?
 
@@ -103,10 +103,20 @@ Thursday 11:00. An action is picked with `**` and run. A note is shown in full a
 2: [n]✎[/n] Reply to Ana about pricing: the new tier is 49 per month  [d]1 h ago[/d]
 
 [u]❯[/u] [h]**[/h]
-  [s]**1  ▶ check the prod logs after the hotfix and show me errors[/s]   [d]2 h ago[/d]
-  **2  [n]✎[/n] Reply to Ana about pricing: the new tier is 49 per month   [d]1 h ago[/d]
+  [s]**1  ▶ check the prod logs after the hotfix and show me errors[/s]   [d]2 h ago · project[/d]
+  **2  [n]✎[/n] Reply to Ana about pricing: the new tier is 49 per month   [d]1 h ago · project[/d]
   [d]── someday ──[/d]
-  [n]✎[/n] try the new semble release   [d]someday[/d]`} />
+  [n]✎[/n] try the new semble release   [d]someday · project[/d]
+  **?  all reminders · project + global`} />
+
+<Console caption="Type **? to see every reminder by state" text={`[u]❯[/u] [h]**?[/h]
+  [d]── fired (2) ──[/d]
+  [s]**1  ▶ check the prod logs after the hotfix and show me errors[/s]   [d]2 h ago · project[/d]
+  **2  [n]✎[/n] Reply to Ana about pricing: the new tier is 49 per month   [d]1 h ago · project[/d]
+  [d]── someday (1) ──[/d]
+  [n]✎[/n] try the new semble release   [d]someday · project[/d]
+  [d]── history (1) ──[/d]
+  ✓ ▶ renew the domain   [d]done 3 d ago · global[/d]`} />
 
 <Console caption="Run the action, then the note" text={`[u]❯[/u] [h]**1[/h]
 done: check the prod logs after the hotfix and show me errors (20261022-0800_check-prod-logs)
@@ -168,7 +178,7 @@ reopened: check the prod logs after the hotfix and show me errors (20261022-0800
 |------|------|----------------|--------------|
 | action | ▶ | Work for Claude: "check the prod logs and show me errors" | Claude claims it, runs it when you say so, closes it with a one-line result |
 | note | ✎ | A message to yourself: "build the CSV export" | Shown in full, Claude says it was just a reminder, closes it |
-| someday | ▶ or ✎ (its kind) | A thought with no date, an action or a note: "someday try the new semble release" | Never fires. Not in the band, toast, alert or Claude's line. Shown only when you ask: the `/remind all` Someday section, `/remind someday`, the `**` picker (after a divider), or "anything to remind me?" |
+| someday | ▶ or ✎ (its kind) | A thought with no date, an action or a note: "someday try the new semble release" | Never fires. Not in the band, toast, alert or Claude's line. Shown only when you ask: the `/remind all` Someday section, `/remind someday`, the `**` picker (after a divider), the `**?` picker, or "anything to remind me?" |
 
 Say "move it to Friday" and a someday item becomes a normal reminder.
 
@@ -195,12 +205,17 @@ When you give no time, Claude asks one question, "When should it fire?", with 2-
 | Plain prompt | `remind me tomorrow at 9 to check the prod logs` | Claude creates it. Also answers `anything to remind me?` and `what fires this week?` |
 | `/remind` with free text | `/remind check prod tomorrow 9:00` | Handed to Claude: create or answer. Start with `global` or `project` to fix the scope |
 | `/remind` with a key | `/remind snooze 1 +1h` | Instant, printed by the mod, no Claude turn |
-| `**` picker | `**`, `**1`, `**1 **2` | Pick and run fired reminders |
+| `**` picker | `**`, `**1`, `**1 **2` | Pick and run fired reminders; someday ones follow a divider |
+| `**?` picker | `**?` | Every reminder, project and global, grouped by state with counts |
 | Band keys | `1`, `2`, `3` | Fill `**N` in an empty prompt; Enter runs it |
 
 ### Pick and run with `**`
 
-- Type `**` to open the picker: fired reminders first, then a `── someday ──` divider and the someday ones. Arrows plus Tab insert `**1`; Enter sends.
+- Type `**` to open the picker: fired reminders first, then a `── someday ──` divider and the someday ones. Each reminder row ends with `· project` or `· global`. Arrows plus Tab insert `**1`; Enter sends.
+- A bare `**` ends with the row `**?  all reminders · project + global`, which inserts `**?`; it is absent for `**1` or `**pro`. The row `no reminders · ask Claude "remind me ..."` appears above it only when no reminder file with a known status exists in either folder. With only waiting or closed items, the bare `**` picker shows just the `**?` row.
+- Type `**?` for everything: sections fired, running, waiting (with relative time), someday, unreadable and history, each with a count. History lists the 10 newest, then `+N more · /remind history`. Fired rows insert `**N`; running, waiting and someday rows insert `**<id>`; the other rows (dividers, unreadable, history) insert nothing new.
+- The same id open in both scopes inserts `**project:<id>` or `**global:<id>`, so the right copy runs.
+- Bare `**` plus Enter prints `/remind all`; bare `**?` plus Enter prints that and the newest history. No Claude turn. This applies to prompts typed in the terminal; prompts from Remote Control or the SDK pass through.
 - Type `**1` directly. `**1 **2` runs both. `**1 only the last hour` adds your words. `**<id>` works for any reminder, someday included.
 - Band keys: a digit `1` to `3` typed into an empty prompt, then a pause of about 0.4 s while a reminder is fired, fills `**1` without sending. Enter runs it; ctrl+u undoes the fill.
 - `/remind run <N|id>` does the same; so does saying "run the prod logs one".
@@ -224,7 +239,7 @@ When you give no time, Claude asks one question, "When should it fire?", with 2-
 | `/remind help` | Help text, and whether the desktop alert is on |
 | `/remind [global\|project] <any words>` | Handed to Claude, which adds or answers |
 
-Aliases: `show active|all|done`, `list`. The id is the file name without `.md`; a unique prefix of the slug also matches. Closed reminders are deleted after `keepDays`.
+Aliases: `show active|all|done`, `list`. The id is the file name without `.md`; a unique prefix of the slug also matches. Closed reminders are deleted after 30 days. With `git` set to `commit` or `commit-push` in `.claude/reminders.json`, expired project files are kept and Claude is asked to delete and commit them.
 
 ## Settings
 
@@ -233,7 +248,6 @@ Aliases: `show active|all|done`, `list`. The id is the file name without `.md`; 
 | `prefix` | `/config` | `**` | Picker and run token |
 | `cooldownMinutes` | `/config` | 60 | Minutes between offers in one session; a newly fired reminder is offered at once |
 | `notify` | `/config` | on | Desktop alert when a reminder fires in an open session |
-| `keepDays` | `/config` | 30 | Days a closed reminder is kept |
 | `git` | `.claude/reminders.json` | `off` | `off`, `commit` or `commit-push` for the item file only |
 
 ## Good to know

@@ -1,23 +1,23 @@
 
-[38;5;231m⏺[39m Reminder set for tomorrow (Thu 22 Oct) at 09:00 Lisbon time: "Run npm test." It's
-  saved to this project.
+[38;5;231m⏺[39m Reminder saved for tomorrow, Thu 22 Oct at 09:00 (Lisbon time). When it fires, I'll
+  run [38;5;153mnpm test[39m. It's a project reminder, so it lives in this repo.
 
-[38;5;246m✻[39m [38;5;246mBaked for 3s · done 6:10 PM[39m
+[38;5;246m✻[39m [38;5;246mBaked for 4s · done 9:03 PM[39m
 
 [38;5;246m[48;5;237m❯ [38;5;231mremind me tomorrow at 5pm to reply to Ana: new tier is 49/month[39m
 
-[38;5;114m[49m⏺[39m [1mbrewmod-reminders - add_reminder (MCP)[0m(scope: "project", kind: "note", when: "tomorrow
-                                        17:00", text: "Reply to Ana: new tier is
-                                        49/month", slug: "reply-ana-tier")
-[38;5;246m  ⎿  [39msaved 20261022-1600_reply-ana-tier (project) | ✎ note | due Thu 22 Oct 17:00 L
-     isbon (16:00 UTC), in 23 h | /Volumes/brewery/.claude/scheduled/20261022-1600_
-     reply-ana-tier.md
-     change it by saying so · /remind cancel 20261022-1600_reply-ana-tier
+[38;5;114m[49m⏺[39m [1mbrewmod-reminders - add_reminder (MCP)[0m(scope: "project", kind: "note", text: "Reply to
+                                        Ana: new tier is 49/month.", slug:
+                                        "reply-ana-new-tier", when: "2026-10-22 17:00")
+[38;5;246m  ⎿  [39msaved 20261022-1600_reply-ana-new-tier (project) | ✎ note | due Thu 22 Oct 17:
+     00 Lisbon (16:00 UTC), in 20 h | /Volumes/brewery/.claude/scheduled/20261022-1
+     600_reply-ana-new-tier.md
+     change it by saying so · /remind cancel 20261022-1600_reply-ana-new-tier
 
-[38;5;231m⏺[39m Reminder set for tomorrow (Thu 22 Oct) at 17:00 Lisbon time: "Reply to Ana: new tier
-  is 49/month." It's saved to this project.
+[38;5;231m⏺[39m Reminder saved for tomorrow, Thu 22 Oct at 17:00 (Lisbon time): "Reply to Ana: new
+  tier is 49/month." It's a project reminder, so it lives in this repo.
 
-[38;5;246m✻[39m [38;5;246mCogitated for 3s · done 6:11 PM[39m
+[38;5;246m✻[39m [38;5;246mWorked for 3s · done 9:03 PM[39m
 
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
 [39m❯ 

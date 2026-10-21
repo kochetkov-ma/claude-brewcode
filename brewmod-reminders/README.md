@@ -49,19 +49,22 @@ Every reminder needs a time or "someday"; if you give none, Claude asks once ("W
 
 - **action**: Claude does the work when you run it ("check the prod logs"), then closes it.
 - **note**: only reminds you ("build the CSV export"); shown in full, closed once shown.
-- **someday**: no date, never fires; listed only when you ask (`/remind someday`, the `**` picker).
+- **someday**: no date, never fires; listed only when you ask (`/remind someday`, the `**` and `**?` pickers).
 
 ## Commands
 
 | Command | Result |
 |---------|--------|
 | `/remind` | Fired reminders, numbered like the band |
-| `**` / `**1` | Picker of fired reminders / run the first one |
+| `**` | Picker of fired and someday reminders, last row `**?`; Enter on a bare `**` in the terminal prints the `/remind all` list (Remote Control and SDK prompts pass through to Claude) |
+| `**1` | Run the first fired reminder (`**1 **2` runs several) |
+| `**?` | Every reminder by state, tagged project or global; Enter in the terminal prints the `/remind all` list plus the 10 newest closed |
+| `**<id>` / `**project:<id>` / `**global:<id>` | Run one by id; the scoped form picks the copy when the id exists in both folders |
 | `/remind all` | Fired, Waiting and Someday |
 | `/remind snooze <N\|id> <when>` | New time (`+2h`, `tomorrow 9:00`, `fri 14:00`) |
 | `/remind help` | Summary, folders, desktop alert state |
 
-All commands, settings (`prefix`, `cooldownMinutes`, `notify`, `keepDays`, git mode), file format and tools: [full docs](https://doc-claude.brewcode.app/mods/reminders/).
+All commands, settings (`prefix`, `cooldownMinutes`, `notify`, git mode), file format (closed items deleted after 30 days; with `git` set to `commit` or `commit-push`, expired project files are kept and Claude is asked to delete and commit them) and tools: [full docs](https://doc-claude.brewcode.app/mods/reminders/).
 
 [Project page](https://brewcode.app/mods/reminders/) | [Source](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewmod-reminders) | [All mods](../README.md#claude-code-mods) | [Release notes](../RELEASE-NOTES.md)
 

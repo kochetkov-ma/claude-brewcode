@@ -329,7 +329,6 @@ const old30 = '2026-09-20T00:00:00Z'
 const expRows = [
   ['default 30 days', 30, ['d-old', 'c-old']],
   ['7 days', 7, ['d-old', 'c-old', 'd-mid']],
-  ['invalid falls back to 30', Number.NaN, ['d-old', 'c-old']],
 ]
 test('GIVEN old closed, recent closed, pending, someday and undated-closed items WHEN expiredIds runs THEN only old closed ids return', () => {
   const items = [
@@ -425,8 +424,7 @@ const expiredHead = (git, tail) =>
   `Expired reminder files (2), closed over 30 days ago; kept because .claude/reminders.json sets git: ${git}. Delete each file, then commit only these deletions${tail} following the repo's conventions; never stage anything else. Mention it to the user in one line.`
 const cleanRows = [
   ['default 30 days', {}, '{}', KEPT, [], [], [PEND], []],
-  ['keepDays 90', { CLAUDE_PLUGIN_OPTION_KEEPDAYS: '90' }, '{}', ['20260801-0800_old-done.md', ...KEPT], ['20260801-0800_old-done.json'], ['20260801-0800_g-done.md'], [PEND], []],
-  ['an unusable keepDays falls back to 30', { CLAUDE_PLUGIN_OPTION_KEEPDAYS: '0' }, '{}', KEPT, [], [], [PEND], []],
+  ['a keepDays option set (ignored: fixed 30 days)', { CLAUDE_PLUGIN_OPTION_KEEPDAYS: '90' }, '{}', KEPT, [], [], [PEND], []],
   ['git commit keeps project files and offers them', {}, '{"git":"commit"}', [...OLD.map((n) => `${n}.md`), ...KEPT], [], [], [PEND, ...OLD], [expiredHead('commit', ' (no push)')]],
   ['git commit-push keeps project files and offers them', {}, '{"git":"commit-push"}', [...OLD.map((n) => `${n}.md`), ...KEPT], [], [], [PEND, ...OLD], [expiredHead('commit-push', ' and push')]],
 ]

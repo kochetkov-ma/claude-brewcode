@@ -1,23 +1,23 @@
 
 
-❯ Run reminder 20261022-1600_reply-ana-tier (Reply to Ana: new tier is 49/month, note):
-  Reply to Ana: new tier is 49/month
+❯ Run reminder 20261022-1600_reply-ana-new-tier (Reply to Ana: new tier is 49/month.,
+  note): Reply to Ana: new tier is 49/month.
   This is a note: show me its full text above, say it was just a reminder (nothing to
-  execute), then call update_reminder {id:"20261022-1600_reply-ana-tier",
+  execute), then call update_reminder {id:"20261022-1600_reply-ana-new-tier",
   action:"done"}.
 
-⏺ Reminder text: Reply to Ana: new tier is 49/month
+⏺ The reminder's full text is: "Reply to Ana: new tier is 49/month." It is a note, so it
+  was only a reminder and there was nothing to execute. Marking it done now.
 
-  This was just a reminder. Nothing to execute.
+⏺ brewmod-reminders - update_reminder (MCP)(id: "20261022-1600_reply-ana-new-tier",
+                                           action: "done", result: "Note shown to user;
+                                           nothing to execute.")
+  ⎿  done: Reply to Ana: new tier is 49/month. (20261022-1600_reply-ana-new-tier)
 
-⏺ brewmod-reminders - update_reminder (MCP)(id: "20261022-1600_reply-ana-tier", action:
-                                           "done")
-  ⎿  done: Reply to Ana: new tier is 49/month (20261022-1600_reply-ana-tier)
+⏺ The reminder "Reply to Ana: new tier is 49/month." is marked done. I showed it as a
+  note and did not reply to Ana, since a note only tells you and has nothing to run.
 
-⏺ The reminder is marked done. Its text was "Reply to Ana: new tier is 49/month", and I
-  didn't send anything to Ana.
-
-✻ Brewed for 4s · done 6:13 PM
+✻ Brewed for 6s · done 9:05 PM
 
 ────────────────────────────────────────────────────────────────────────────────────────
 ❯ 

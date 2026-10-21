@@ -3,13 +3,13 @@
  ▝▝   ▝▝   /Volumes/brewery
 
 reminders · 1 fired                                                                 [-]
-1: ✎ Reply to Ana: new tier is 49/month  now
-press 1 then Enter to run · ** to pick · /remind all · snooze · done
+1: ✎ Reply to Ana: new tier is 49/month.  1 min ago
+press 1 then Enter to run · ** to pick · **? all · /remind snooze · done
 
 ────────────────────────────────────────────────────────────────────────────────────────
 ❯ 
 ────────────────────────────────────────────────────────────────────────────────────────
-  ⏸ manual mode on · ? for shortcuts
+  ⏸ manual mode on · ? for shortcuts · ← for agents                 ◐ medium · /effort
 
 
 

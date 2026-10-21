@@ -5,18 +5,18 @@
 
 ❯ remind me tomorrow at 9 to have you run npm test, short text
 
-⏺ brewmod-reminders - add_reminder (MCP)(scope: "project", kind: "action", when:
-                                        "tomorrow 9:00", text: "Run npm test", slug:
-                                        "run-npm-test")
+⏺ brewmod-reminders - add_reminder (MCP)(scope: "project", kind: "action", text: "Run
+                                        npm test.", slug: "run-npm-test", when:
+                                        "2026-10-22 09:00")
   ⎿  saved 20261022-0800_run-npm-test (project) | ▶ action | due Thu 22 Oct 09:00 L
-     isbon (08:00 UTC), in 15 h | /Volumes/brewery/.claude/scheduled/20261022-0800_
+     isbon (08:00 UTC), in 12 h | /Volumes/brewery/.claude/scheduled/20261022-0800_
      run-npm-test.md
      change it by saying so · /remind cancel 20261022-0800_run-npm-test
 
-⏺ Reminder set for tomorrow (Thu 22 Oct) at 09:00 Lisbon time: "Run npm test." It's
-  saved to this project.
+⏺ Reminder saved for tomorrow, Thu 22 Oct at 09:00 (Lisbon time). When it fires, I'll
+  run npm test. It's a project reminder, so it lives in this repo.
 
-✻ Baked for 3s · done 6:10 PM
+✻ Baked for 4s · done 9:03 PM
 
 ────────────────────────────────────────────────────────────────────────────────────────
 ❯ remind me tomorrow at 5pm to reply to Ana: new tier is 49/month
