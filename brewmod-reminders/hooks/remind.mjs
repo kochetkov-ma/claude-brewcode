@@ -61,13 +61,13 @@ function prune(dir, now) {
   }
 }
 
-export function nowOf(env) {
+function nowOf(env) {
   const raw = env.REMIND_NOW
   const ms = raw === undefined || raw === '' ? NaN : /^\d+$/.test(raw) ? Number(raw) : Date.parse(raw)
   return Number.isFinite(ms) ? ms : Date.now()
 }
 
-export function run(e, env, now = nowOf(env)) {
+function run(e, env, now = nowOf(env)) {
   if (!e || !validSid(e.session_id)) return {}
   const root = env.CLAUDE_PLUGIN_ROOT || path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
   const state = path.join(root, '.state')
@@ -104,13 +104,10 @@ export function run(e, env, now = nowOf(env)) {
   return { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } }
 }
 
-// Runs only as the hook command; tests spawn it.
-if (path.basename(process.argv[1] ?? '') === 'remind.mjs') {
-  let out = {}
-  try {
-    out = run(JSON.parse(fs.readFileSync(0, 'utf8')), process.env)
-  } catch {
-    out = {}
-  }
-  process.stdout.write(JSON.stringify(out))
+let out = {}
+try {
+  out = run(JSON.parse(fs.readFileSync(0, 'utf8')), process.env)
+} catch {
+  // fail open: no offer
 }
+process.stdout.write(JSON.stringify(out))

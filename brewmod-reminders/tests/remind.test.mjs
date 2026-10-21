@@ -15,6 +15,7 @@ const PROTO_PATH = (ctx) => join(ctx.proj, '.claude', 'scheduled', PROTO)
 const NOW = '2026-10-22T09:00:00Z'
 const item = (due, status, body = 'Check prod.') => `due: ${due}\nstatus: ${status}\n\n${body}\n`
 
+const newCtx = () => ({ proj: mkdtempSync(join(tmpdir(), 'remind-p-')), cfg: mkdtempSync(join(tmpdir(), 'remind-c-')), plugin: mkdtempSync(join(tmpdir(), 'remind-r-')) })
 const put = (dir, name, text) => {
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, name), text)
@@ -69,7 +70,7 @@ const rows = [
 
 for (const [name, setup, extras, expected] of rows) {
   test(`GIVEN ${name} WHEN remind.mjs runs THEN the offered ids and rc are exact`, () => {
-    const ctx = { proj: mkdtempSync(join(tmpdir(), 'remind-p-')), cfg: mkdtempSync(join(tmpdir(), 'remind-c-')), plugin: mkdtempSync(join(tmpdir(), 'remind-r-')) }
+    const ctx = newCtx()
     setup(ctx)
     const got = extras.map((x) => {
       const { rc, ids } = call(ctx, {}, x)
@@ -80,7 +81,7 @@ for (const [name, setup, extras, expected] of rows) {
 }
 
 test('GIVEN REMIND_GLOBAL_DIR WHEN remind.mjs runs THEN that folder, not CLAUDE_CONFIG_DIR/reminders, is the global one', () => {
-  const ctx = { proj: mkdtempSync(join(tmpdir(), 'remind-p-')), cfg: mkdtempSync(join(tmpdir(), 'remind-c-')), plugin: mkdtempSync(join(tmpdir(), 'remind-r-')) }
+  const ctx = newCtx()
   const over = mkdtempSync(join(tmpdir(), 'remind-g-'))
   put(over, 'o.md', item('2026-10-21T08:00:00Z', 'pending'))
   put(join(ctx.cfg, 'reminders'), 'c.md', item('2026-10-21T08:00:00Z', 'pending'))
@@ -89,7 +90,7 @@ test('GIVEN REMIND_GLOBAL_DIR WHEN remind.mjs runs THEN that folder, not CLAUDE_
 })
 
 test('GIVEN the prototype file verbatim WHEN remind.mjs runs THEN the offer text is exact', () => {
-  const ctx = { proj: mkdtempSync(join(tmpdir(), 'remind-p-')), cfg: mkdtempSync(join(tmpdir(), 'remind-c-')), plugin: mkdtempSync(join(tmpdir(), 'remind-r-')) }
+  const ctx = newCtx()
   mkdirSync(join(ctx.proj, '.claude', 'scheduled'), { recursive: true })
   copyFileSync(join(HERE, 'fixtures', PROTO), PROTO_PATH(ctx))
   writeFileSync(join(ctx.proj, '.claude', 'reminders.json'), '{"git":"commit-push"}')
@@ -108,7 +109,7 @@ test('GIVEN the prototype file verbatim WHEN remind.mjs runs THEN the offer text
 })
 
 test('GIVEN a 8-day-old foreign state file WHEN the hook offers THEN it is pruned and fresh ones stay', () => {
-  const ctx = { proj: mkdtempSync(join(tmpdir(), 'remind-p-')), cfg: mkdtempSync(join(tmpdir(), 'remind-c-')), plugin: mkdtempSync(join(tmpdir(), 'remind-r-')) }
+  const ctx = newCtx()
   old(ctx)
   const dir = join(ctx.plugin, '.state')
   put(dir, 'offered-zz.json', '{}')
@@ -152,7 +153,7 @@ test('GIVEN today/tomorrow wall times near the Lisbon DST end WHEN parseWhenNatu
 })
 
 test('GIVEN an offered item whose due line was snoozed WHEN the next prompt arrives THEN it is offered again once it is due', () => {
-  const ctx = { proj: mkdtempSync(join(tmpdir(), 'remind-p-')), cfg: mkdtempSync(join(tmpdir(), 'remind-c-')), plugin: mkdtempSync(join(tmpdir(), 'remind-r-')) }
+  const ctx = newCtx()
   old(ctx)
   const first = call(ctx, {}, {}).ids
   sched(ctx, `${A}.md`, item('2026-10-22T08:30:00Z', 'pending'))

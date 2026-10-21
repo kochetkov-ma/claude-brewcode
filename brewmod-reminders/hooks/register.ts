@@ -8,6 +8,7 @@ import {
   parseItem, parseWhenNatural, patchHeader, relative, sessionStateJson, sessionStateName, slugify, systemTz, validSid,
   type Claim, type Item, type State,
 } from './lib/items.mjs'
+import type { ReminderView } from '../types'
 
 // The band reads this view; the atom is declared in this file only (the scan reads it).
 const viewAtom = atom({ plugin: 'brewmod-reminders', key: 'view' } as const, { due: 0, open: 0, rows: [], more: 0 })
@@ -27,7 +28,6 @@ type Io = {
 }
 type Dirs = { project: string; global: string | null; config: string }
 type Out = { text: string; isError?: true }
-type View = { due: number; open: number; rows: { text: string; isDue: boolean }[]; more: number }
 
 // override = REMIND_GLOBAL_DIR: the global folder itself (live tests; unset in normal use).
 const dirsOf = (root: string | undefined, cfg: string | undefined, home: string | undefined, override?: string): Dirs => ({
@@ -72,7 +72,7 @@ const loadAll = async (io: Io, dirs: Dirs, now: number): Promise<Entry[]> => [
 const byDue = (a: Entry, b: Entry): number => (a.due ?? 0) - (b.due ?? 0) || a.id.localeCompare(b.id)
 const tag = (i: Entry): string => `${i.id}${i.global ? ' (global)' : ''}`
 
-function viewOf(items: Entry[], now: number): View {
+function viewOf(items: Entry[], now: number): ReminderView {
   const open = items.filter((i) => i.state === 'due' || i.state === 'pending' || i.state === 'running').sort(byDue)
   const rows = open.slice(0, BAND_ROWS).map((i) => ({
     text: `${i.title === '' ? i.id : i.title}  ${relative(i.due ?? now, now)}${i.state === 'running' ? ' · running' : ''}${i.global ? ' (global)' : ''}`,
@@ -102,7 +102,7 @@ function listText(items: Entry[], now: number, tz: string, dirs: Dirs): string {
 const gitNote = (mode: string, i: { global: boolean; path: string }): string =>
   i.global || mode === 'off' ? '' : `\nGit: commit only ${i.path}${mode === 'commit-push' ? ' and push' : ' (no push)'} following the repo's conventions; stage nothing else.`
 
-// Picks one item: a scope filter, id/slug/prefix match per scope; null error text means found.
+// One item by id/slug/prefix within the scope filter; a string is the refusal text.
 function pick(items: Entry[], id: string, scope: string | undefined): Entry | string {
   const scopes = scope === 'project' ? [false] : scope === 'global' ? [true] : [false, true]
   const hits = scopes.map((g) => ({ g, m: matchId(items.filter((i) => i.global === g).map((i) => i.id), id) }))
@@ -253,6 +253,8 @@ export const register: Register = (on) => {
   let refresh: (() => Promise<void>) | null = null // the band/toast refresh of this session, set at session.start
   let shownKey = ''
   let seenDue: Set<string> | null = null
+  let io: Io // set at session.start; `$` is never passed on, so the hooks share these closures
+  let dirs: Dirs
 
   on('session.start', async ($, e, next) => {
     const now = await $.clock.now()
@@ -266,11 +268,11 @@ export const register: Register = (on) => {
       for (const t of TOOLS) await $.tool.register({ name: t.name, description: t.description, inputSchema: t.inputSchema, isDeferred: false })
       hasTools = true
     } catch {
-      hasTools = false
+      // older build: /remind still lists and edits, only the hand-off needs the tools
     }
+    io = { exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p), write: (p, t) => $.fs.write(p, t) }
+    dirs = dirsOf(await $.session.root().catch(() => undefined), await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')), await $.env.get('REMIND_GLOBAL_DIR'))
     if (e.isInteractive) {
-      const io: Io = { exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p), write: (p, t) => $.fs.write(p, t) }
-      const dirs = dirsOf(await $.session.root().catch(() => undefined), await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')), await $.env.get('REMIND_GLOBAL_DIR'))
       refresh = async () => {
         const t = await $.clock.now()
         const items = await loadAll(io, dirs, t)
@@ -316,8 +318,6 @@ export const register: Register = (on) => {
   })
 
   on('command.run', { command: 'remind' }, async ($, e) => {
-    const io: Io = { exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p), write: (p, t) => $.fs.write(p, t) }
-    const dirs = dirsOf(await $.session.root().catch(() => undefined), await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')), await $.env.get('REMIND_GLOBAL_DIR'))
     const now = await $.clock.now()
     const tz = tzOf(await $.env.get('TZ'))
     const words = e.args.trim().split(/\s+/).filter((w) => w !== '')
@@ -353,8 +353,6 @@ export const register: Register = (on) => {
 
   // The model's tools: answered here, so no permission prompt for the file writes.
   on('tool.call', { tool: /^mcp__brewmod-reminders__/ }, async ($, e) => {
-    const io: Io = { exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p), write: (p, t) => $.fs.write(p, t) }
-    const dirs = dirsOf(await $.session.root().catch(() => undefined), await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')), await $.env.get('REMIND_GLOBAL_DIR'))
     const now = await $.clock.now()
     const tz = tzOf(await $.env.get('TZ'))
     const git = parseConfig(await io.read(dirs.config).catch(() => '')).git
@@ -370,7 +368,7 @@ export const register: Register = (on) => {
       out = await act(io, dirs, { req: { id: str(input.id) ?? '', action: str(input.action) ?? '', until: str(input.until), result: str(input.result), scope: str(input.scope) }, sid: await $.session.id(), now, tz, by: 'model', git })
     } else out = fail(`unknown tool ${e.tool}`)
     if (e.tool !== `${TOOL}list_reminders`) await refresh?.().catch(() => undefined)
-    return out.isError === true ? { result: out.text, text: out.text, isError: true } : { result: out.text, text: out.text }
+    return { result: out.text, ...out }
   }).catch((_$, _e, next) => {
     const text = `failed: ${next.error.message ?? next.error.kind}`
     return { result: text, text, isError: true }

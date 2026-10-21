@@ -2,17 +2,16 @@
 // Copyright (c) 2025-2026 Maksim Kochetkov
 
 // Pure reminder core for hooks/remind.mjs and register.ts: strings + `now` in, values out, no IO.
-// API: parseItem classify parseWhen parseWhenNatural isoZ formatWhen relative patchHeader buildItem itemName matchId claim* shouldOffer buildOffer.
 
 // Items: <dir>/<YYYYMMDD-HHMM>_<slug>.md, header until the first blank line, id = basename without .md.
 // State: .state/session-<sid>.json {isInteractive,ts} (module writes), .state/offered-<sid>.json {offered:{key:ts}}.
 
-export const CLAIM_TTL_MS = 6 * 3600 * 1000
-export const LATE_MS = 24 * 3600 * 1000
+const CLAIM_TTL_MS = 6 * 3600 * 1000
+const LATE_MS = 24 * 3600 * 1000
 export const STATE_TTL_MS = 7 * 24 * 3600 * 1000
 export const CLAIMS_DIR = '.claims'
-export const SID_RE = /^[A-Za-z0-9_-]+$/
-export const GIT_MODES = ['off', 'commit', 'commit-push']
+const SID_RE = /^[A-Za-z0-9_-]+$/
+const GIT_MODES = ['off', 'commit', 'commit-push']
 export const STATE_NAME_RE = /^(session|offered)-[A-Za-z0-9_-]+\.json(\.\d+\.tmp)?$/
 
 export const validSid = (sid) => typeof sid === 'string' && SID_RE.test(sid)
@@ -24,10 +23,11 @@ export const isItemName = (name) => /\.md$/i.test(name) && !name.startsWith('.')
 
 const pad = (n, w = 2) => String(n).padStart(w, '0')
 export const isoZ = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z')
+const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 const parseJson = (text) => {
   try {
     const v = JSON.parse(text)
-    return v !== null && typeof v === 'object' && !Array.isArray(v) ? v : null
+    return isObject(v) ? v : null
   } catch {
     return null
   }
@@ -42,11 +42,9 @@ export function parseSessionState(text) {
 }
 export const offeredJson = (offered) => JSON.stringify({ offered })
 export function parseOffered(text) {
-  const v = parseJson(text)
-  const o = v && parseJsonObject(v.offered)
-  return o ?? {}
+  const o = parseJson(text)?.offered
+  return isObject(o) ? o : {}
 }
-const parseJsonObject = (o) => (o !== null && typeof o === 'object' && !Array.isArray(o) ? o : null)
 
 // ---- header and item
 
@@ -60,7 +58,7 @@ function headerRange(lines) {
 const KEY_RE = /^([A-Za-z][\w-]*):[ \t]*(.*?)[ \t]*$/
 
 // Strict stored form: UTC with Z; a naive time is unparseable on purpose.
-export function parseDueZ(raw) {
+function parseDueZ(raw) {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?Z$/.exec(raw ?? '')
   if (!m) return null
   const ms = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] ?? 0))
@@ -147,7 +145,7 @@ export function classify(item, claim, now) {
 export function parseWhen(input, now, tz) {
   const s = String(input ?? '').trim()
   let ms = null
-  let rel = /^\+(\d+)([mhd])$/.exec(s)
+  const rel = /^\+(\d+)([mhd])$/.exec(s)
   if (rel) ms = now + +rel[1] * { m: 60000, h: 3600000, d: 86400000 }[rel[2]]
   else {
     const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(Z|[+-]\d{2}(?::?\d{2})?)?$/.exec(s)
@@ -207,7 +205,7 @@ function zonedToUtc(naive, tz) {
 
 export const systemTz = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 
-export function span(ms) {
+function span(ms) {
   const a = Math.abs(ms)
   if (a < 3600000) return `${Math.max(1, Math.round(a / 60000))} min`
   if (a < 48 * 3600000) return `${Math.round(a / 3600000)} h`

@@ -239,6 +239,18 @@ test('GIVEN a free-text /remind WHEN it runs THEN the ack returns at once and th
 
 const flat = (n: any): string[] => (n === null || typeof n !== 'object' ? (typeof n === 'string' ? [n] : []) : n.type === 'Text' ? [(n.children ?? []).flatMap(flat).join('')] : (n.children ?? []).flatMap(flat))
 
+async function band($: any): Promise<string[]> {
+  const ui = await $.ui.mount({
+    plugin: 'brewmod-reminders',
+    component: 'AbovePrompt',
+    surface: 'terminal',
+    props: { hasSurvey: false, isWorking: false, maxRows: 24, bodyColumns: 100, scroll: { bodyRows: 23, offset: 0 }, view: {} },
+  })
+  const rows = flat(await ui.drawn())
+  await ui.unmount()
+  return rows
+}
+
 test('GIVEN one due and four upcoming items WHEN the band is drawn THEN it shows the counts, 3 rows, +2 more and the /remind hint', async ($, on) => {
   mock.clock(on, { now: NOW })
   const tree: Tree = { [HOTFIX]: item('2026-10-21T08:03:00Z', 'Hotfix'), [GLOBAL]: item('2026-10-22T08:00:00Z', 'Global thing') }
@@ -246,21 +258,13 @@ test('GIVEN one due and four upcoming items WHEN the band is drawn THEN it shows
   wire(on, tree)
   await start($)
 
-  const ui = await $.ui.mount({
-    plugin: 'brewmod-reminders',
-    component: 'AbovePrompt',
-    surface: 'terminal',
-    props: { hasSurvey: false, isWorking: false, maxRows: 24, bodyColumns: 100, scroll: { bodyRows: 23, offset: 0 }, view: {} },
-  })
-
-  expect(flat(await ui.drawn()), 'band rows').toEqual([
+  expect(await band($), 'band rows').toEqual([
     'reminders · 1 due · 4 upcoming',
     '  Hotfix  6 h ago',
     '  Global thing  in 18 h (global)',
     '  Task 24  in 3 d',
     '+2 more · /remind  list · done · snooze · or say what to add',
   ])
-  await ui.unmount()
 })
 
 test('GIVEN an item due in 30 s and one due 30 s ago WHEN the band is drawn THEN the upcoming one reads in <1 min and the due one now', async ($, on) => {
@@ -268,20 +272,12 @@ test('GIVEN an item due in 30 s and one due 30 s ago WHEN the band is drawn THEN
   wire(on, { [LATER]: item('2026-10-21T14:00:30Z', 'Rotate keys'), [HOTFIX]: item('2026-10-21T13:59:30Z', 'Hotfix') })
   await start($)
 
-  const ui = await $.ui.mount({
-    plugin: 'brewmod-reminders',
-    component: 'AbovePrompt',
-    surface: 'terminal',
-    props: { hasSurvey: false, isWorking: false, maxRows: 24, bodyColumns: 100, scroll: { bodyRows: 23, offset: 0 }, view: {} },
-  })
-
-  expect(flat(await ui.drawn()), 'band rows').toEqual([
+  expect(await band($), 'band rows').toEqual([
     'reminders · 1 due · 1 upcoming',
     '  Hotfix  now',
     '  Rotate keys  in <1 min',
     '/remind  list · done · snooze · or say what to add',
   ])
-  await ui.unmount()
 })
 
 test('GIVEN an item due in 30 s WHEN the 60 s tick fires THEN one toast names it, and the next tick adds none', async ($, on) => {
