@@ -14,7 +14,7 @@ export const HANDOFF_MARK: string
 export const validSid: (sid: unknown) => boolean
 export const sessionStateName: (sid: string) => string
 export const claimName: (id: string) => string
-export const itemKey: (item: { global?: boolean; id: string; dueRaw: string }) => string
+export const itemKey: (item: { id: string; dueRaw: string }) => string
 export const tagOf: (item: { id: string; global?: boolean }) => string
 export const slugOf: (id: string) => string
 export const isItemName: (name: string) => boolean
@@ -41,6 +41,7 @@ export const expiredIds: (items: Item[], now: number, keepDays: number) => strin
 export const patchHeader: (text: string, patch: Record<string, string | null>) => string
 export const parseItem: (name: string, text: string) => Item
 export const parseWhenNatural: (input: string, now: number, tz: string) => When
+export const calendar: (now: number, tz: string) => string
 export const windowOf: (input: string, now: number, tz: string) => { from: number; to: number } | null
 export const rangeOf: (from: string | undefined, to: string | undefined, now: number, tz: string) => { ok: true; from: number; to: number } | { ok: false; error: string }
 export const formatWhen: (ms: number, tz: string, now: number) => string

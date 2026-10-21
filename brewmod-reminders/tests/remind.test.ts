@@ -19,7 +19,7 @@ const item = (due: string, title: string, status = 'pending', extra = ''): strin
 // Stubs beneath the mod: an in-memory file system over `tree`, fixed env and session, recorders for toasts, tools, command, submits.
 function wire(on: On, tree: Tree) {
   const live = { root: ROOT, sid: SID }
-  const ops = { vars: {} as Record<string, string>, live, writes: [] as [string, string][], toasts: [] as string[], notifies: [] as [string, string | undefined][], tools: [] as string[], cmds: [] as unknown[], submits: [] as string[], fills: [] as string[] }
+  const ops = { vars: {} as Record<string, string>, live, writes: [] as [string, string][], toasts: [] as string[], notifies: [] as [string, string | undefined][], tools: [] as string[], defs: [] as { name: string; description: string; inputSchema: { required?: string[] } }[], cmds: [] as unknown[], submits: [] as string[], fills: [] as string[] }
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('fs.exists', (_$, e) => ({ value: e.path in tree || Object.keys(tree).some((k) => k.startsWith(`${e.path}/`)) }) as never)
   on('fs.list', (_$, e) => {
@@ -44,7 +44,7 @@ function wire(on: On, tree: Tree) {
   on('session.id', () => ({ value: live.sid }) as never)
   on('ui.toast', (_$, e) => (ops.toasts.push(e.text), { value: undefined }) as never)
   on('command.register', (_$, e) => (ops.cmds.push(e), { value: { command: e.name } }) as never)
-  on('tool.register', (_$, e) => (ops.tools.push(e.name), { value: { tool: `${TOOL}${e.name}` } }) as never)
+  on('tool.register', (_$, e) => (ops.tools.push(e.name), ops.defs.push(e as never), { value: { tool: `${TOOL}${e.name}` } }) as never)
   on('prompt.submit', (_$, e) => (ops.submits.push(e.text), { text: e.text }))
   on('turn.complete', (_$, e) => ({ text: e.answer }))
   on('prompt.fill', (_$, e) => (ops.fills.push(e.text), { isFilled: true }) as never)
@@ -76,6 +76,19 @@ test('GIVEN an interactive start WHEN session.start runs THEN the command, the t
     cmd: 'remind',
     tools: ['list_reminders', 'add_reminder', 'update_reminder'],
     state: [`{"isInteractive":true,"ts":${NOW}}`],
+  })
+})
+
+test('GIVEN an interactive start WHEN add_reminder registers THEN when is optional and the model is told to call it without when first', async ($, on) => {
+  mock.clock(on, { now: NOW })
+  const ops = wire(on, {})
+
+  await start($)
+
+  const add = ops.defs.find((d) => d.name === 'add_reminder')
+  expect({ required: add?.inputSchema.required, noTime: add?.description.split('. ').find((x) => x.startsWith('When the request names no time')) }, 'add_reminder schema').toEqual({
+    required: ['scope', 'kind', 'text', 'slug'],
+    noTime: "When the request names no time, FIRST call this tool without when: it saves nothing and returns today's date with the weekdays of the next days and the ask rule; then ask",
   })
 })
 
@@ -122,7 +135,7 @@ const shows: { name: string; run: Run; text: string }[] = [
   {
     name: 'list_reminders {from garbage}',
     run: ($) => tool($, 'list_reminders', { from: 'soon' }),
-    text: 'unrecognised time "soon": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local), a weekday like "fri 14:00" or +<n>m|h|d|w',
+    text: 'unrecognised time "soon": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local; as to: through that day), +<n>m|h|d|w or today|tomorrow|week|+Nd|+Nw|until YYYY-MM-DD',
   },
 ]
 for (const { name, run, text } of shows) {
@@ -151,7 +164,7 @@ for (const { name, run, text } of shows) {
 
 const CAL = 'Today is Wed 21 Oct 2026 15:00 Europe/Lisbon; next days: Thu 22 Oct, Fri 23 Oct, Sat 24 Oct, Sun 25 Oct, Mon 26 Oct, Tue 27 Oct, Wed 28 Oct, Thu 29 Oct. Use these weekday/date pairs verbatim in options.'
 const WHEN_RULE =
-  'If the request names no time, ask ONE AskUserQuestion "When should it fire?" with 2-3 options you derive from this reminder\'s own context (e.g. post-deploy prod check: tonight 23:00 / tomorrow 09:00 / in 1 week; renew a domain: in 2 weeks / in 1 month; check nightly-run logs: tonight / tomorrow morning), each label showing its concrete local time, the best fit marked "(Recommended)", plus a last option "No date (someday)" (answer -> when:"someday": it never fires and shows only when the user asks); free text stays available through Other; no fixed list. A kind (action or note) or scope (project or global) that is still unclear joins that same AskUserQuestion as extra questions; ask nothing else. An answer like "in 1 week" becomes a date-only when (YYYY-MM-DD, fires 00:00 local that day).'
+  'If the request names no time, ask ONE AskUserQuestion "When should it fire?" with 2-3 options you derive from this reminder\'s own context (e.g. post-deploy prod check: tonight 23:00 / tomorrow 09:00 / in 1 week; renew a domain: in 2 weeks / in 1 month; check nightly-run logs: tonight / tomorrow morning), each label showing its concrete local time, the best fit marked "(Recommended)", plus a last option "No date (someday)" (answer -> when:"someday": it never fires and shows only when the user asks); free text stays available through Other; no fixed list. A kind (action or note) or scope (project or global) that is still unclear joins that same AskUserQuestion as extra questions; ask nothing else. Every option is a concrete local time: a day-level answer like "in 1 week" or "next Monday" is saved at the time its label showed (default 09:00 local), e.g. when:"2026-10-28 09:00" or "mon 09:00"; never a bare date.'
 const KIND_RULE =
   'kind is required: action (Claude does the work when the user runs it, e.g. "check the prod logs") or note (only tells the user, closes once shown, e.g. "reply to Ana"). Infer it from the request; ask only when it is unclear, as an extra question in the same single AskUserQuestion as the time.'
 const ADD = { scope: 'project', kind: 'action', when: 'tomorrow 9:00', text: 'Check prod.', slug: 'Check prod' }
@@ -182,10 +195,17 @@ const rows: AddRow[] = [
   { name: 'a bogus kind', input: { ...ADD, kind: 'task' }, text: KIND_RULE, writes: [] },
   { name: 'no when and no kind', input: { ...ADD, when: undefined, kind: undefined }, text: `when is required: nothing is saved without a trigger time. ${CAL} ${WHEN_RULE} ${KIND_RULE}`, writes: [] },
   {
-    name: 'a date-only when (00:00 local)',
+    name: 'a date-only when (09:00 local)',
     input: { ...ADD, when: '2026-10-28' },
-    text: SAVED('20261028-0000_check-prod', 'due Wed 28 Oct 00:00 Lisbon (00:00 UTC), in 6 d'),
-    writes: [[`${P_DIR}/20261028-0000_check-prod.md`, BODY.replace('2026-10-22T08:00:00Z', '2026-10-28T00:00:00Z')]],
+    text: SAVED('20261028-0900_check-prod', 'due Wed 28 Oct 09:00 Lisbon (09:00 UTC), in 7 d'),
+    writes: [[`${P_DIR}/20261028-0900_check-prod.md`, BODY.replace('2026-10-22T08:00:00Z', '2026-10-28T09:00:00Z')]],
+  },
+  { name: 'a bare tomorrow (09:00 local)', input: { ...ADD, when: 'tomorrow' }, text: SAVED('20261022-0800_check-prod'), writes: [[`${P_DIR}/20261022-0800_check-prod.md`, BODY]] },
+  {
+    name: 'an unknown when word',
+    input: { ...ADD, when: 'soon' },
+    text: 'unrecognised time "soon": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (09:00 local), "today|tomorrow [HH:MM]" (default 09:00), a weekday like "fri 14:00" (next such day, default 09:00) or +<n>m|h|d|w',
+    writes: [],
   },
   {
     name: 'a +1w when',
@@ -344,25 +364,93 @@ const acts: { name: string; tree: Tree; run: Run; text: string; isError?: true; 
     name: 'update_reminder edit of text, kind and time',
     tree: { [HOTFIX]: HOT },
     run: ($) => tool($, 'update_reminder', { id: 'hotfix', action: 'edit', text: ' Hotfix and DB pool ', kind: 'note', when: '2026-10-28' }),
-    text: `Reminder updated ▶ action → ✎ note · project · ${ID}\n- ▶ project | Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix\n+ ✎ project | Wed 28 Oct 00:00 Lisbon (00:00 UTC), in 6 d  Hotfix and DB pool`,
-    writes: [[HOTFIX, 'due: 2026-10-28T00:00:00Z\nstatus: pending\nkind: note\n\nHotfix and DB pool\n']],
+    text: [
+      `Reminder updated ▶ action → ✎ note · project · ${ID}`,
+      '- ▶ project | Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix',
+      '+ ✎ project | Wed 28 Oct 09:00 Lisbon (09:00 UTC), in 7 d  Hotfix and DB pool',
+      `Undo, when the user asks: update_reminder {"id":"${ID}","action":"edit","text":"Hotfix","kind":"action","from_scope":"project"} (the old time 2026-10-21T08:03:00Z has passed or is unreadable: ask for a new one)`,
+      `Old file (${HOTFIX}):`,
+      'due: 2026-10-21T08:03:00Z\nstatus: pending\n\nHotfix',
+    ].join('\n'),
+    writes: [[HOTFIX, 'due: 2026-10-28T09:00:00Z\nstatus: pending\nkind: note\n\nHotfix and DB pool\n']],
   },
   {
     name: 'update_reminder edit to someday',
     tree: { [HOTFIX]: HOT },
     run: ($) => tool($, 'update_reminder', { id: 'hotfix', action: 'edit', when: 'someday' }),
-    text: `Reminder updated ▶ action · project · ${ID}\n- ▶ project | Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix\n+ ▶ project | no date (someday)  Hotfix`,
+    text: [
+      `Reminder updated ▶ action · project · ${ID}`,
+      '- ▶ project | Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix',
+      '+ ▶ project | no date (someday)  Hotfix',
+      `Undo, when the user asks: update_reminder {"id":"${ID}","action":"edit","from_scope":"project"} (the old time 2026-10-21T08:03:00Z has passed or is unreadable: ask for a new one)`,
+      `Old file (${HOTFIX}):`,
+      'due: 2026-10-21T08:03:00Z\nstatus: pending\n\nHotfix',
+    ].join('\n'),
     writes: [[HOTFIX, 'due: none\nstatus: pending\n\nHotfix\n']],
   },
   {
-    name: 'update_reminder edit moves project to global',
-    tree: { [HOTFIX]: HOT },
+    name: 'update_reminder edit of a multi-line text',
+    tree: { [LATER]: item('2026-10-23T08:00:00Z', 'Rotate keys\nthen restart') },
+    run: ($) => tool($, 'update_reminder', { id: 'later', action: 'edit', text: 'Rotate keys only' }),
+    text: [
+      'Reminder updated ▶ action · project · 20261023-0800_later',
+      '- ▶ project | Fri 23 Oct 09:00 Lisbon (08:00 UTC), in 42 h  Rotate keys',
+      '+ ▶ project | Fri 23 Oct 09:00 Lisbon (08:00 UTC), in 42 h  Rotate keys only',
+      'Undo, when the user asks: update_reminder {"id":"20261023-0800_later","action":"edit","text":"Rotate keys\\nthen restart","from_scope":"project"}',
+      `Old file (${LATER}):`,
+      'due: 2026-10-23T08:00:00Z\nstatus: pending\n\nRotate keys\nthen restart',
+    ].join('\n'),
+    writes: [[LATER, 'due: 2026-10-23T08:00:00Z\nstatus: pending\n\nRotate keys only\n']],
+  },
+  {
+    name: 'git commit and update_reminder edit moves project to global',
+    tree: { [HOTFIX]: HOT, [`${ROOT}/.claude/reminders.json`]: '{"git":"commit"}' },
     run: ($) => tool($, 'update_reminder', { id: 'hotfix', action: 'edit', scope: 'global' }),
-    text: `Reminder updated ▶ action · project → global · ${ID}\n- ▶ project | Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix\n+ ▶ global | Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix`,
+    text: [
+      `Reminder updated ▶ action · project → global · ${ID}`,
+      '- ▶ project | Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix',
+      '+ ▶ global | Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix',
+      `Git: commit only ${HOTFIX} (no push) following the repo's conventions; stage nothing else.`,
+      `Undo, when the user asks: update_reminder {"id":"${ID}","action":"edit","scope":"project","from_scope":"global"}`,
+      `Old file (${HOTFIX}):`,
+      'due: 2026-10-21T08:03:00Z\nstatus: pending\n\nHotfix',
+    ].join('\n'),
     writes: [
       [HOT_G, HOT],
       [HOTFIX, CANCELLED],
     ],
+  },
+  {
+    name: 'an undo moving back over the cancelled same-name file',
+    tree: { [HOTFIX]: CANCELLED, [HOT_G]: HOT },
+    run: ($) => tool($, 'update_reminder', { id: ID, action: 'edit', scope: 'project', from_scope: 'global' }),
+    text: [
+      `Reminder updated ▶ action · global → project · ${ID}`,
+      '- ▶ global | Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix',
+      '+ ▶ project | Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago  Hotfix',
+      `Undo, when the user asks: update_reminder {"id":"${ID}","action":"edit","scope":"global","from_scope":"project"}`,
+      `Old file (${HOT_G}):`,
+      'due: 2026-10-21T08:03:00Z\nstatus: pending\n\nHotfix',
+    ].join('\n'),
+    writes: [
+      [HOTFIX, HOT],
+      [HOT_G, CANCELLED],
+    ],
+  },
+  {
+    name: 'a move onto an open same-name file',
+    tree: { [HOTFIX]: HOT, [HOT_G]: HOT },
+    run: ($) => tool($, 'update_reminder', { id: ID, action: 'edit', scope: 'global', from_scope: 'project' }),
+    text: `${ID}.md already exists in global; edit it there`,
+    isError: true,
+    writes: [],
+  },
+  {
+    name: 'a moved item (cancelled project copy) and done without scope',
+    tree: { [HOTFIX]: CANCELLED, [HOT_G]: HOT },
+    run: ($) => tool($, 'update_reminder', { id: 'hotfix', action: 'done' }),
+    text: `done: Hotfix (${ID} (global))`,
+    writes: [[HOT_G, 'due: 2026-10-21T08:03:00Z\nstatus: done\ndone: 2026-10-21T14:00:00Z\n\nHotfix\n']],
   },
   { name: 'update_reminder edit with nothing to change', tree: { [HOTFIX]: HOT }, run: ($) => tool($, 'update_reminder', { id: 'hotfix', action: 'edit' }), text: 'nothing to change: pass text, kind, when or scope', isError: true, writes: [] },
   { name: 'update_reminder edit with a bogus kind', tree: { [HOTFIX]: HOT }, run: ($) => tool($, 'update_reminder', { id: 'hotfix', action: 'edit', kind: 'task' }), text: 'kind is action or note', isError: true, writes: [] },
@@ -590,6 +678,16 @@ for (const { name, options, notifies, before, after } of ticks) {
     expect({ toasts: ops.toasts, notifies: ops.notifies, helpBefore, helpAfter: await helpLine($) }, name).toEqual({ toasts: ['reminder fired: Rotate keys · ** to pick'], notifies, helpBefore: before, helpAfter: after })
   })
 }
+
+test('GIVEN a fired project item seen at start WHEN update_reminder edit moves it to global THEN no fired toast or desktop alert is raised', async ($, on) => {
+  mock.clock(on, { now: NOW })
+  const ops = wire(on, { [HOTFIX]: HOT })
+  await start($)
+
+  await tool($, 'update_reminder', { id: 'hotfix', action: 'edit', scope: 'global' })
+
+  expect({ toasts: ops.toasts, notifies: ops.notifies }, 'alerts after a move').toEqual({ toasts: [], notifies: [] })
+})
 
 const FRESH_ID = '20261021-1359_fresh'
 const PICK_TREE = (): Tree => ({

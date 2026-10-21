@@ -20,7 +20,8 @@ export const validSid = (sid) => typeof sid === 'string' && SID_RE.test(sid)
 export const sessionStateName = (sid) => `session-${sid}.json`
 export const offeredStateName = (sid) => `offered-${sid}.json`
 export const claimName = (id) => `${id}.json`
-export const itemKey = (item) => `${item.global ? 'g' : 'p'}:${item.id}:${item.dueRaw}`
+// id:due, no scope: a scope move keeps the key, so it raises no new fired alert or offer.
+export const itemKey = (item) => `${item.id}:${item.dueRaw}`
 export const tagOf = (item) => `${item.id}${item.global ? ' (global)' : ''}`
 export const slugOf = (id) => id.replace(/^[^_]*_/, '').toLowerCase()
 export const isItemName = (name) => /\.md$/i.test(name) && !name.startsWith('.') && name.toLowerCase() !== 'readme.md'
@@ -223,15 +224,20 @@ export function expiredIds(items, now, keepDays) {
   return items.filter((i) => (i.status === 'done' || i.status === 'cancelled') && closedAt(i) !== null && now - closedAt(i) > days * 86400000).map((i) => i.id)
 }
 
+// Accepted forms per caller, for the "unrecognised time" error.
+const BASE_FORMS = 'ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local) or +<n>m|h|d|w'
+const RANGE_FORMS = 'ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local; as to: through that day), +<n>m|h|d|w or today|tomorrow|week|+Nd|+Nw|until YYYY-MM-DD'
+const WHEN_FORMS = 'ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (09:00 local), "today|tomorrow [HH:MM]" (default 09:00), a weekday like "fri 14:00" (next such day, default 09:00) or +<n>m|h|d|w'
+
 // -> { ok:true, ms } | { ok:false, error }; offset/Z ISO, local `YYYY-MM-DD[ HH:MM[:SS]]` in tz (date only = 00:00), or +<n>m|h|d|w; no past check.
-function parseTime(input, now, tz) {
+function parseTime(input, now, tz, forms = BASE_FORMS) {
   const s = String(input ?? '').trim()
   let ms = null
   const rel = /^\+(\d+)([mhdw])$/.exec(s)
   if (rel) ms = now + +rel[1] * { m: 60000, h: 3600000, d: 86400000, w: 7 * 86400000 }[rel[2]]
   else {
     const m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(Z|[+-]\d{2}(?::?\d{2})?)?)?$/.exec(s)
-    if (!m) return { ok: false, error: `unrecognised time "${s}": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local), a weekday like "fri 14:00" or +<n>m|h|d|w` }
+    if (!m) return { ok: false, error: `unrecognised time "${s}": use ${forms}` }
     const [y, mo, d, h, mi, sec] = [+m[1], +m[2], +m[3], +(m[4] ?? 0), +(m[5] ?? 0), +(m[6] ?? 0)]
     const naive = Date.UTC(y, mo - 1, d, h, mi, sec)
     const nd = new Date(naive)
@@ -254,8 +260,8 @@ function parseTime(input, now, tz) {
 }
 
 // -> { ok:true, ms, iso } | { ok:false, error }; parseTime, a past time rejected.
-export function parseWhen(input, now, tz) {
-  const t = parseTime(input, now, tz)
+export function parseWhen(input, now, tz, forms = BASE_FORMS) {
+  const t = parseTime(input, now, tz, forms)
   return !t.ok ? t : t.ms <= now ? { ok: false, error: `${isoZ(t.ms)} is in the past` } : { ok: true, ms: t.ms, iso: isoZ(t.ms) }
 }
 
@@ -286,7 +292,7 @@ export function rangeOf(from, to, now, tz) {
     if (v === undefined || String(v).trim() === '') return { ok: true, ms: dflt }
     const w = windowOf(v, now, tz)
     if (w) return { ok: true, ms: w[key] }
-    const t = parseTime(v, now, tz)
+    const t = parseTime(v, now, tz, RANGE_FORMS)
     return !t.ok ? t : { ok: true, ms: key === 'to' && /^\d{4}-\d{2}-\d{2}$/.test(String(v).trim()) ? dayStart(t.ms, tz, 1) : t.ms }
   }
   const a = side(from, 'from', -Infinity)
@@ -295,15 +301,17 @@ export function rangeOf(from, to, now, tz) {
   return !a.ok ? a : !b.ok ? b : { ok: true, from: a.ms, to: b.ms }
 }
 
-// parseWhen plus `today|tomorrow H[:MM]` and `<weekday> [H[:MM]]` (next such day after today, default 09:00) as wall time in tz.
+// parseWhen plus `today|tomorrow [H[:MM]]`, `<weekday> [H[:MM]]` (next such day after today) and a bare `YYYY-MM-DD`, as wall time in tz, default 09:00.
 const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 export function parseWhenNatural(input, now, tz) {
   const s = String(input ?? '').trim()
-  const m = /^(?:(today|tomorrow)\s+|([a-z]+)(?:\s+|$))(\d{1,2})?(?::(\d{2}))?$/i.exec(s)
-  const word = m ? (m[1] ?? m[2] ?? '').toLowerCase() : ''
-  const wd = DAYS.indexOf(word) >= 0 ? DAYS.indexOf(word) : DAY_NAMES.indexOf(word)
-  if (!m || (m[1] ? m[3] === undefined : wd < 0 || (m[3] === undefined && m[4] !== undefined))) return parseWhen(s, now, tz)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return parseWhen(`${s} 09:00`, now, tz, WHEN_FORMS)
+  const m = /^([a-z]+)(?:\s+(\d{1,2})(?::(\d{2}))?)?$/i.exec(s)
+  const word = (m?.[1] ?? '').toLowerCase()
+  const wd = Math.max(DAYS.indexOf(word), DAY_NAMES.indexOf(word))
+  const rel = word === 'today' || word === 'tomorrow'
+  if (!m || (!rel && wd < 0)) return parseWhen(s, now, tz, WHEN_FORMS)
   let p
   try {
     p = zoneParts(now, tz, 'numeric')
@@ -311,9 +319,18 @@ export function parseWhenNatural(input, now, tz) {
     return { ok: false, error: `unknown time zone "${tz}"` }
   }
   const today = Date.UTC(+p.year, +p.month - 1, +p.day)
-  const add = m[1] ? (word === 'tomorrow' ? 1 : 0) : ((wd - new Date(today).getUTCDay() + 6) % 7) + 1
+  const add = rel ? (word === 'tomorrow' ? 1 : 0) : ((wd - new Date(today).getUTCDay() + 6) % 7) + 1
   const d = new Date(today + add * 86400000)
-  return parseWhen(`${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(+(m[3] ?? 9))}:${m[4] ?? '00'}`, now, tz)
+  return parseWhen(`${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(+(m[2] ?? 9))}:${m[3] ?? '00'}`, now, tz, WHEN_FORMS)
+}
+
+// Today plus the next 8 local calendar days in tz (date arithmetic at UTC noon, so DST never repeats or skips a day).
+export function calendar(now, tz) {
+  const p = zoneParts(now, tz, 'numeric')
+  const f = (ms, o, zone) => new Intl.DateTimeFormat('en-GB', { timeZone: zone, ...o }).format(ms).replace(',', '')
+  const day = (ms, zone) => f(ms, { weekday: 'short', day: 'numeric', month: 'short' }, zone)
+  const next = Array.from({ length: 8 }, (_, k) => day(Date.UTC(+p.year, +p.month - 1, +p.day + k + 1, 12), 'UTC'))
+  return `Today is ${day(now, tz)} ${p.year} ${pad(+p.hour % 24)}:${p.minute} ${tz}; next days: ${next.join(', ')}. Use these weekday/date pairs verbatim in options.`
 }
 
 function zoneParts(ms, tz, month = 'short') {

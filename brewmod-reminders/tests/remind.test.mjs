@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { run } from '../hooks/remind.mjs'
-import { bodyOf, buildItem, classify, closedLabel, editText, expiredIds, formatWhen, itemName, matchId, parseItem, parseWhen, parseWhenNatural, patchBody, patchHeader, rangeOf, reopenPatch, sections, windowOf } from '../hooks/lib/items.mjs'
+import { bodyOf, buildItem, calendar, classify, closedLabel, editText, expiredIds, formatWhen, itemName, matchId, parseItem, parseWhen, parseWhenNatural, patchBody, patchHeader, rangeOf, reopenPatch, sections, windowOf } from '../hooks/lib/items.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SCRIPT = join(HERE, '..', 'hooks', 'remind.mjs')
@@ -28,17 +28,17 @@ const put = (dir, name, text) => {
 const sched = (ctx, name, text) => put(join(ctx.proj, '.claude', 'scheduled'), name, text)
 const session = (ctx, interactive) => put(join(ctx.plugin, '.state'), 'session-s1.json', JSON.stringify({ isInteractive: interactive, ts: 1 }))
 
+// extra: payload fields, or { raw } = stdin text sent as is.
 const call = (ctx, env, extra) =>
   new Promise((resolve) => {
-    const payload = { hook_event_name: 'UserPromptSubmit', session_id: 's1', prompt: 'hi', source: 'user', cwd: ctx.proj, ...extra }
-    const input = extra === 'garbage' ? '{not json' : JSON.stringify(payload)
+    const input = extra.raw ?? JSON.stringify({ hook_event_name: 'UserPromptSubmit', session_id: 's1', prompt: 'hi', source: 'user', cwd: ctx.proj, ...extra })
     const base = { PATH: process.env.PATH, TZ: 'Europe/Lisbon', CLAUDE_PLUGIN_ROOT: ctx.plugin, CLAUDE_PROJECT_DIR: ctx.proj, CLAUDE_CONFIG_DIR: ctx.cfg, HOME: ctx.cfg, REMIND_NOW: NOW }
     const p = spawn('node', [SCRIPT], { env: { ...base, ...env } })
     let stdout = ''
     p.stdout.on('data', (d) => (stdout += d))
     p.on('close', (rc) => {
       const text = JSON.parse(stdout).hookSpecificOutput?.additionalContext
-      resolve({ rc, text, ids: text === undefined ? null : text.split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2).split(' | ')[0]) })
+      resolve({ rc, text, ids: text?.split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2).split(' | ')[0]) ?? null })
     })
     p.stdin.end(input)
   })
@@ -75,7 +75,7 @@ const rows = [
   ['live foreign claim hides the item', (c) => (old(c), put(join(c.proj, '.claude', 'scheduled', '.claims'), `${A}.json`, JSON.stringify({ session: 'o', at: Date.parse(NOW) - 3600000 }))), [{}], [NONE]],
   ['expired claim is offered again', (c) => (old(c), put(join(c.proj, '.claude', 'scheduled', '.claims'), `${A}.json`, JSON.stringify({ session: 'o', at: Date.parse(NOW) - 7 * 3600000 }))), [{}], [IDS(A)]],
   ['scheduled path is a file: fail open', (c) => put(join(c.proj, '.claude'), 'scheduled', 'not a dir'), [{}], [NONE]],
-  ['garbage stdin: fail open', old, ['garbage'], [NONE]],
+  ['garbage stdin: fail open', old, [{ raw: '{not json' }], [NONE]],
   ['absolute path prompt is offered', old, [{ prompt: '/Users/me/app.log shows a 500' }], [IDS(A)]],
   ['slash command with args is skipped', old, [{ prompt: '  /remind x' }], [NONE]],
   ['bare slash command is skipped', old, [{ prompt: '/help' }], [NONE]],
@@ -152,7 +152,7 @@ const when = [
   ['local in the DST gap', '2026-03-29 01:30', LIS, { ok: false, error: '"2026-03-29 01:30" does not exist in Europe/Lisbon (DST gap)' }],
   ['relative hours', '+2h', LIS, { ok: true, ms: T0 + 7200000, iso: '2026-03-01T02:00:00Z' }],
   ['past is rejected', '2026-02-01 09:00', LIS, { ok: false, error: '2026-02-01T09:00:00Z is in the past' }],
-  ['garbage is rejected', 'tomorrow', LIS, { ok: false, error: 'unrecognised time "tomorrow": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local), a weekday like "fri 14:00" or +<n>m|h|d|w' }],
+  ['a natural word is not a plain time', 'tomorrow', LIS, { ok: false, error: 'unrecognised time "tomorrow": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local) or +<n>m|h|d|w' }],
   ['relative weeks', '+1w', LIS, { ok: true, ms: T0 + 7 * 86400000, iso: '2026-03-08T00:00:00Z' }],
   ['date only before the DST change (00:00 WET)', '2026-03-28', LIS, { ok: true, ms: Date.parse('2026-03-28T00:00:00Z'), iso: '2026-03-28T00:00:00Z' }],
   ['date only after the DST change (00:00 WEST)', '2026-03-30', LIS, { ok: true, ms: Date.parse('2026-03-29T23:00:00Z'), iso: '2026-03-29T23:00:00Z' }],
@@ -173,6 +173,16 @@ const natural = [
   ['tomorrow with hour only', 'Tomorrow 7', 'UTC', { ok: true, ms: Date.parse('2026-10-25T07:00:00Z'), iso: '2026-10-25T07:00:00Z' }],
   ['plain forms pass through', '+30m', LIS, { ok: true, ms: NAT_NOW + 1800000, iso: '2026-10-24T23:00:00Z' }],
   ['unknown zone', 'tomorrow 9:00', 'Mars/Base', { ok: false, error: 'unknown time zone "Mars/Base"' }],
+  ['bare tomorrow defaults to 09:00 (+0 after the DST end)', 'tomorrow', LIS, { ok: true, ms: Date.parse('2026-10-25T09:00:00Z'), iso: '2026-10-25T09:00:00Z' }],
+  ['bare today defaults to 09:00, already past', 'Today', LIS, { ok: false, error: '2026-10-24T08:00:00Z is in the past' }],
+  ['a date only defaults to 09:00 local', '2026-10-28', LIS, { ok: true, ms: Date.parse('2026-10-28T09:00:00Z'), iso: '2026-10-28T09:00:00Z' }],
+  ['a date only in WEST is 08:00Z', '2026-10-24', LIS, { ok: false, error: '2026-10-24T08:00:00Z is in the past' }],
+  [
+    'an unknown word lists the natural forms',
+    'soon',
+    LIS,
+    { ok: false, error: 'unrecognised time "soon": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (09:00 local), "today|tomorrow [HH:MM]" (default 09:00), a weekday like "fri 14:00" (next such day, default 09:00) or +<n>m|h|d|w' },
+  ],
 ]
 const WED = Date.parse('2026-10-21T12:00:00Z')
 const FRI = Date.parse('2026-10-23T12:00:00Z')
@@ -189,6 +199,16 @@ test('GIVEN weekday names WHEN parseWhenNatural runs THEN it picks the next such
 })
 test('GIVEN today/tomorrow wall times near the Lisbon DST end WHEN parseWhenNatural runs THEN the results are exact', () => {
   assert.deepEqual(natural.map(([, s, tz]) => parseWhenNatural(s, NAT_NOW, tz)), natural.map((r) => r[3]), 'natural rows')
+})
+
+const cal = (today, next) => `Today is ${today}; next days: ${next}. Use these weekday/date pairs verbatim in options.`
+const calendars = [
+  ['a plain Wednesday', '2026-10-21T14:00:00Z', cal('Wed 21 Oct 2026 15:00 Europe/Lisbon', 'Thu 22 Oct, Fri 23 Oct, Sat 24 Oct, Sun 25 Oct, Mon 26 Oct, Tue 27 Oct, Wed 28 Oct, Thu 29 Oct')],
+  ['the DST end night (25 h day)', '2026-10-24T23:30:00Z', cal('Sun 25 Oct 2026 00:30 Europe/Lisbon', 'Mon 26 Oct, Tue 27 Oct, Wed 28 Oct, Thu 29 Oct, Fri 30 Oct, Sat 31 Oct, Sun 1 Nov, Mon 2 Nov')],
+  ['the eve of the DST start (23 h day next)', '2027-03-27T23:30:00Z', cal('Sat 27 Mar 2027 23:30 Europe/Lisbon', 'Sun 28 Mar, Mon 29 Mar, Tue 30 Mar, Wed 31 Mar, Thu 1 Apr, Fri 2 Apr, Sat 3 Apr, Sun 4 Apr')],
+]
+test('GIVEN nows around the Lisbon DST changes WHEN calendar runs THEN every next day appears once, in order', () => {
+  assert.deepEqual(calendars.map(([, iso]) => calendar(Date.parse(iso), LIS)), calendars.map((r) => r[2]), 'calendar rows')
 })
 
 test('GIVEN an offered item whose due line was snoozed WHEN the next prompt arrives THEN it is offered again once it is due', async (t) => {
@@ -237,7 +257,12 @@ const ranges = [
   ['a window word alone', ['week', undefined], { ok: true, from: W_NOW, to: z('2026-10-26T00:00:00Z') }],
   ['ISO from and to', ['2026-10-22T00:00:00Z', '2026-10-23T00:00:00Z'], { ok: true, from: z('2026-10-22T00:00:00Z'), to: z('2026-10-23T00:00:00Z') }],
   ['a date-only to runs through that day', ['2026-10-22', '2026-10-22'], { ok: true, from: z('2026-10-21T23:00:00Z'), to: z('2026-10-22T23:00:00Z') }],
-  ['garbage', ['soon', undefined], { ok: false, error: 'unrecognised time "soon": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local), a weekday like "fri 14:00" or +<n>m|h|d|w' }],
+  [
+    'garbage lists only the range forms',
+    ['soon', undefined],
+    { ok: false, error: 'unrecognised time "soon": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local; as to: through that day), +<n>m|h|d|w or today|tomorrow|week|+Nd|+Nw|until YYYY-MM-DD' },
+  ],
+  ['a weekday is not a range form', ['fri 9', undefined], { ok: false, error: 'unrecognised time "fri 9": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local; as to: through that day), +<n>m|h|d|w or today|tomorrow|week|+Nd|+Nw|until YYYY-MM-DD' }],
 ]
 test('GIVEN from/to values WHEN rangeOf runs in Lisbon THEN the range is exact', () => {
   assert.deepEqual(ranges.map(([, [a, b]]) => rangeOf(a, b, W_NOW, LIS)), ranges.map((r) => r[2]), 'range rows')
@@ -275,7 +300,10 @@ test('GIVEN dated, someday and colliding slugs WHEN itemName, buildItem and matc
   }, 'names, built files and slug ambiguity')
 })
 
-const mk = (id, status, f = {}) => parseItem(`${id}.md`, `due: ${f.due ?? '2026-10-20T08:00:00Z'}\nstatus: ${status}\n${f.kind ? `kind: ${f.kind}\n` : ''}${f.created ? `created: ${f.created}\n` : ''}${f.done ? `done: ${f.done}\n` : ''}${f.cancelled ? `cancelled: ${f.cancelled}\n` : ''}\nbody\n`)
+const mk = (id, status, f = {}) => {
+  const extra = ['kind', 'created', 'done', 'cancelled'].filter((k) => f[k] !== undefined).map((k) => `${k}: ${f[k]}\n`)
+  return parseItem(`${id}.md`, `due: ${f.due ?? '2026-10-20T08:00:00Z'}\nstatus: ${status}\n${extra.join('')}\nbody\n`)
+}
 const bundle = [
   mk('f2', 'pending', { due: '2026-10-21T10:00:00Z' }),
   mk('f1', 'pending', { due: '2026-10-21T09:00:00Z' }),
@@ -343,12 +371,18 @@ const B = '20261022-0905_b'
 const noSeed = () => {}
 const seedB = (ctx) => sched(ctx, `${B}.md`, item('2026-10-22T09:05:00Z', 'pending'))
 const LABEL = { [A]: 'A', [B]: 'B', none: 'none' }
+// A scope move: the same file in the global folder, the project copy cancelled.
+const moveA = (ctx) => {
+  put(join(ctx.cfg, 'reminders'), `${A}.md`, item('2026-10-21T08:00:00Z', 'pending'))
+  sched(ctx, `${A}.md`, item('2026-10-21T08:00:00Z', 'cancelled').replace('status: cancelled', 'status: cancelled\ncancelled: 2026-10-22T09:05:00Z'))
+}
 const cooldownRows = [
   ['default 60 min: silent at +30, nudge at +61', {}, [[0, 'A', noSeed], [30, 'none', noSeed], [61, 'A', noSeed]]],
   ['5 min cooldown: nudge at +30', { CLAUDE_PLUGIN_OPTION_COOLDOWNMINUTES: '5' }, [[0, 'A', noSeed], [3, 'none', noSeed], [30, 'A', noSeed]]],
   ['0 min cooldown: every prompt', { CLAUDE_PLUGIN_OPTION_COOLDOWNMINUTES: '0' }, [[0, 'A', noSeed], [1, 'A', noSeed]]],
   ['an unusable option falls back to 60', { CLAUDE_PLUGIN_OPTION_COOLDOWNMINUTES: 'abc' }, [[0, 'A', noSeed], [30, 'none', noSeed], [61, 'A', noSeed]]],
   ['a newly fired item skips the cooldown and lists both', {}, [[0, 'A', noSeed], [10, 'AB', seedB]]],
+  ['a scope move of a fired item keeps the cooldown', {}, [[0, 'A', noSeed], [10, 'none', moveA]]],
 ]
 for (const [name, env, steps] of cooldownRows) {
   test(`GIVEN ${name} WHEN prompts arrive at those minutes THEN each offers exactly the listed items`, async (t) => {

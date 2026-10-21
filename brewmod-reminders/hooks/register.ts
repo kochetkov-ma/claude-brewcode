@@ -4,7 +4,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 import {
-  CLAIMS_DIR, HANDOFF_MARK, RUN_MARK, bodyOf, buildItem, claimJson, claimLive, claimName, classify, closedAt, closedLabel, datePatch, editText, formatWhen, isItemName, isoZ, itemKey, itemName, matchId,
+  CLAIMS_DIR, HANDOFF_MARK, RUN_MARK, bodyOf, buildItem, calendar, claimJson, claimLive, claimName, classify, closedAt, closedLabel, datePatch, editText, formatWhen, isItemName, isoZ, itemKey, itemName, matchId,
   parseClaim, parseConfig, parseItem, parseWhenNatural, patchHeader, rangeOf, relative, reopenPatch, sections, sessionStateJson, sessionStateName, slugOf, slugify, systemTz, tagOf, validSid, windowOf,
   type Claim, type Item, type State,
 } from './lib/items.mjs'
@@ -180,17 +180,20 @@ function listText(all: Entry[], now: number, tz: string, dirs: Dirs, q: Query): 
 const gitNote = (mode: string, i: { global: boolean; path: string }): string =>
   i.global || mode === 'off' ? '' : `\nGit: commit only ${i.path}${mode === 'commit-push' ? ' and push' : ' (no push)'} following the repo's conventions; stage nothing else.`
 
+const isClosed = (e: Entry): boolean => e.state === 'done' || e.state === 'cancelled'
 // One item by id/slug/prefix within the scope filter; a string is the refusal text.
-function pick(items: Entry[], id: string, scope: string | undefined): Entry | string {
+// Same id in both folders (e.g. after a scope move): the one open copy wins (wantClosed: the one closed copy).
+function pick(items: Entry[], id: string, scope: string | undefined, wantClosed = false): Entry | string {
   const scopes = scope === 'project' ? [false] : scope === 'global' ? [true] : [false, true]
   const hits = scopes.map((g) => ({ g, m: matchId(items.filter((i) => i.global === g).map((i) => i.id), id) }))
   const found = hits.flatMap((h) => ('id' in h.m ? [{ g: h.g, id: h.m.id }] : []))
   const q = id.trim().toLowerCase().replace(/\.md$/, '')
   const exact = found.filter((f) => f.id.toLowerCase() === q || slugOf(f.id) === q)
-  const hit = found.length > 1 && exact.length === 1 ? exact : found
-  if (hit.length > 1) return `"${id}" exists in project and global: pass scope`
-  const [one] = hit
-  if (one !== undefined) return items.find((i) => i.global === one.g && i.id === one.id) as Entry
+  const hit = (found.length > 1 && exact.length === 1 ? exact : found).map((h) => items.find((i) => i.global === h.g && i.id === h.id) as Entry)
+  const fit = hit.length > 1 ? hit.filter((x) => isClosed(x) === wantClosed) : hit
+  if (hit.length > 1 && fit.length !== 1) return `"${id}" exists in project and global: pass scope`
+  const [one] = fit
+  if (one !== undefined) return one
   const bad = hits.flatMap((h) => ('candidates' in h.m ? h.m.candidates : []))
   return bad.length > 0 ? `"${id}" is ambiguous: ${bad.join(', ')}` : `no reminder matches "${id}"; /remind all lists the ids`
 }
@@ -220,7 +223,8 @@ type Ctx = { sid: string; now: number; tz: string; by: 'model' | 'user'; git: st
 const ACTIONS = ['start', 'done', 'snooze', 'cancel', 'edit', 'reopen']
 const SOMEDAY_RE = /^(none|someday)$/i
 
-// edit: text/kind/when/scope in one write; a scope move writes the new file, then cancels the old one. Returns old and new.
+// edit: text/kind/when/scope in one write; a scope move writes the new file, then cancels the old one (a cancelled same-name file at the target is overwritten).
+// Returns old and new lines, a one-line undo call and the old file.
 async function edit(io: Io, dirs: Dirs, e: Entry, req: Act, c: Ctx): Promise<Out> {
   const { now, tz } = c
   if (req.kind !== undefined && req.kind !== 'action' && req.kind !== 'note') return fail('kind is action or note')
@@ -243,7 +247,8 @@ async function edit(io: Io, dirs: Dirs, e: Entry, req: Act, c: Ctx): Promise<Out
     const dir = moveTo === 'global' ? dirs.global : dirs.project
     if (dir === null) return fail('the global reminders folder is unavailable (no home directory)')
     const dest = `${dir}/${e.name}`
-    if (await io.exists(dest)) return fail(`${e.name} already exists in ${moveTo}; edit it there`)
+    const there = (await io.exists(dest)) ? parseItem(e.name, await io.read(dest)) : null
+    if (there !== null && there.status !== 'cancelled') return fail(`${e.name} already exists in ${moveTo}; edit it there`)
     await io.write(dest, next)
     await io.write(e.path, patchHeader(old, { status: 'cancelled', cancelled: isoZ(now) }))
     if (e.claim !== null) await io.write(claimFile(e), '')
@@ -251,7 +256,24 @@ async function edit(io: Io, dirs: Dirs, e: Entry, req: Act, c: Ctx): Promise<Out
   const after = parseItem(e.name, next)
   const change = (a: string, b: string): string => (a === b ? a : `${a} → ${b}`)
   const head = `Reminder updated ${change(`${mark(e)} ${e.kind}`, `${mark(after)} ${after.kind}`)} · ${change(here, moveTo ?? here)} · ${e.id}`
-  return { text: `${head}\n- ${mark(e)} ${here} | ${whenLine(e, tz, now)}  ${e.title}\n+ ${mark(after)} ${moveTo ?? here} | ${whenLine(after, tz, now)}  ${after.title}${moveTo === undefined ? gitNote(c.git, e) : ''}` }
+  // The project-side file this edit wrote: the moved-in copy, the cancelled source, or the edited file.
+  const projectFile = moveTo === 'project' ? `${dirs.project}/${e.name}` : e.path
+  const git = gitNote(c.git, { global: moveTo === undefined && e.global, path: projectFile })
+  const oldWhen = e.someday ? 'someday' : e.due !== null && e.due > now ? isoZ(e.due) : null
+  const undo = {
+    id: e.id,
+    action: 'edit',
+    ...(body !== undefined && body !== bodyOf(old) ? { text: bodyOf(old) } : {}),
+    ...(req.kind !== undefined && req.kind !== e.kind ? { kind: e.kind } : {}),
+    ...(dueMs !== undefined && oldWhen !== null ? { when: oldWhen } : {}),
+    ...(moveTo === undefined ? {} : { scope: here }),
+    from_scope: moveTo ?? here,
+  }
+  const lost = dueMs !== undefined && oldWhen === null ? ` (the old time ${e.dueRaw} has passed or is unreadable: ask for a new one)` : ''
+  const undoLine = Object.keys(undo).length > 3 || lost !== '' ? `Undo, when the user asks: update_reminder ${JSON.stringify(undo)}${lost}` : 'Undo: nothing changed'
+  return {
+    text: `${head}\n- ${mark(e)} ${here} | ${whenLine(e, tz, now)}  ${e.title}\n+ ${mark(after)} ${moveTo ?? here} | ${whenLine(after, tz, now)}  ${after.title}${git}\n${undoLine}\nOld file (${e.path}):\n${old.trimEnd()}`,
+  }
 }
 
 // start | done | snooze | cancel | edit | reopen; the model is refused on a live foreign claim, the person (by: 'user') is not.
@@ -259,9 +281,9 @@ async function act(io: Io, dirs: Dirs, a: { req: Act } & Ctx): Promise<Out> {
   const { req, sid, now, tz } = a
   if (!ACTIONS.includes(req.action)) return fail(`unknown action "${req.action}": start, done, snooze, cancel, edit or reopen`)
   if ([req.scope, req.fromScope].some((s) => s !== undefined && s !== 'project' && s !== 'global')) return fail('scope is project or global')
-  const e = pick(await loadAll(io, dirs, now), req.id, req.action === 'edit' ? req.fromScope : (req.fromScope ?? req.scope))
+  const e = pick(await loadAll(io, dirs, now), req.id, req.action === 'edit' ? req.fromScope : (req.fromScope ?? req.scope), req.action === 'reopen')
   if (typeof e === 'string') return fail(e)
-  const closed = e.state === 'done' || e.state === 'cancelled'
+  const closed = isClosed(e)
   if (req.action === 'reopen' ? !closed : closed) return fail(req.action === 'reopen' ? `${e.id} is not closed` : `${e.id} is already ${e.state}`)
   if (e.state === 'ignored') return fail(`${e.id} has no status header; add \`status: pending\` and \`due:\` first`)
   const foreign = foreignClaim(e, sid, now)
@@ -325,18 +347,18 @@ async function add(io: Io, dirs: Dirs, a: Add, now: number, localTz: string, git
 }
 
 const WHEN_RULE =
-  'If the request names no time, ask ONE AskUserQuestion "When should it fire?" with 2-3 options you derive from this reminder\'s own context (e.g. post-deploy prod check: tonight 23:00 / tomorrow 09:00 / in 1 week; renew a domain: in 2 weeks / in 1 month; check nightly-run logs: tonight / tomorrow morning), each label showing its concrete local time, the best fit marked "(Recommended)", plus a last option "No date (someday)" (answer -> when:"someday": it never fires and shows only when the user asks); free text stays available through Other; no fixed list. A kind (action or note) or scope (project or global) that is still unclear joins that same AskUserQuestion as extra questions; ask nothing else. An answer like "in 1 week" becomes a date-only when (YYYY-MM-DD, fires 00:00 local that day).'
+  'If the request names no time, ask ONE AskUserQuestion "When should it fire?" with 2-3 options you derive from this reminder\'s own context (e.g. post-deploy prod check: tonight 23:00 / tomorrow 09:00 / in 1 week; renew a domain: in 2 weeks / in 1 month; check nightly-run logs: tonight / tomorrow morning), each label showing its concrete local time, the best fit marked "(Recommended)", plus a last option "No date (someday)" (answer -> when:"someday": it never fires and shows only when the user asks); free text stays available through Other; no fixed list. A kind (action or note) or scope (project or global) that is still unclear joins that same AskUserQuestion as extra questions; ask nothing else. Every option is a concrete local time: a day-level answer like "in 1 week" or "next Monday" is saved at the time its label showed (default 09:00 local), e.g. when:"2026-10-28 09:00" or "mon 09:00"; never a bare date.'
 const KIND_RULE =
   'kind is required: action (Claude does the work when the user runs it, e.g. "check the prod logs") or note (only tells the user, closes once shown, e.g. "reply to Ana"). Infer it from the request; ask only when it is unclear, as an extra question in the same single AskUserQuestion as the time.'
 
 const HELP = (dirs: Dirs, hasTools: boolean, alert: string): string =>
   [
     '/remind                      = the fired reminders, numbered like the band (no Claude turn)',
-    '/remind all [project|global] [today|tomorrow|week|+Nd|until YYYY-MM-DD]   Fired, Waiting and Someday; the window filters by trigger time (week = until Sunday 23:59, local)',
+    '/remind all [project|global] [today|tomorrow|week|+Nd|+Nw|until YYYY-MM-DD]   Fired, Waiting and Someday; the window filters by trigger time (week = until Sunday 23:59, local)',
     '/remind history [filters]    = closed: done, shown notes, cancelled   |   /remind someday = only the undated ones   (show active|all|done and list still work)',
     '/remind run <N|id> [words]   Claude runs it (action) or shows it and closes it (note); N = number in /remind',
     '/remind done|cancel [project|global] <N|id>   close without running (id = file name, slug or unique prefix; no Claude turn)',
-    '/remind snooze [project|global] <N|id> <when>   +2h | +1d | tomorrow 9:00 | today 17:30 | fri 14:00 (next Friday, default 09:00) | 2026-10-22 09:00 (your local zone; gives a someday item a date; no Claude turn)',
+    '/remind snooze [project|global] <N|id> <when>   +2h | +1d | tomorrow 9:00 | today 17:30 | fri 14:00 (next Friday) | 2026-10-22 09:00 (your local zone; a day without a time = 09:00; gives a someday item a date; no Claude turn)',
     '/remind reopen <id> [when]   bring a closed one back, with a new time if given   |   /remind edit <N|id> <change>   Claude changes text, kind, time or scope and shows old and new',
     '/remind <words>              add or ask in your words: /remind check prod tomorrow 9:00',
     '/remind project|global <words>   same with the folder fixed (default project)',
@@ -345,14 +367,6 @@ const HELP = (dirs: Dirs, hasTools: boolean, alert: string): string =>
     `Desktop alert: ${alert}`,
     ...(hasTools ? [] : [NEEDS_TOOLS]),
   ].join('\n')
-
-// Computed calendar so the model never guesses a weekday: today plus the next 8 days in the local zone.
-const calendar = (now: number, tz: string): string => {
-  const f = (ms: number, o: Intl.DateTimeFormatOptions): string => new Intl.DateTimeFormat('en-GB', { timeZone: tz, ...o }).format(ms).replace(',', '')
-  const day = (ms: number): string => f(ms, { weekday: 'short', day: 'numeric', month: 'short' })
-  const next = Array.from({ length: 8 }, (_, k) => day(now + (k + 1) * 86_400_000))
-  return `Today is ${day(now)} ${f(now, { year: 'numeric' })} ${f(now, { hour: '2-digit', minute: '2-digit', hour12: false })} ${tz}; next days: ${next.join(', ')}. Use these weekday/date pairs verbatim in options.`
-}
 
 const stamp = (now: number, tz: string): string => `Now: ${formatWhen(now, tz, now).replace(/, now$/, '')}, time zone ${tz}, UTC ${isoZ(now)}. Times I give without a zone are in ${tz}.`
 
@@ -394,41 +408,41 @@ const TOOLS = [
       properties: {
         scope: { type: 'string', enum: ['project', 'global'], description: 'omit for both' },
         state: { type: 'string', enum: ['active', 'all', 'someday', 'done'], description: 'default all' },
-        from: { type: 'string', description: 'earliest trigger: ISO, "YYYY-MM-DD" (00:00 local) or today|tomorrow|week|+Nd|until YYYY-MM-DD (the window start)' },
+        from: { type: 'string', description: 'earliest trigger: ISO, "YYYY-MM-DD" (00:00 local) or today|tomorrow|week|+Nd|+Nw|until YYYY-MM-DD (the window start)' },
         to: { type: 'string', description: 'latest trigger, exclusive: ISO, "YYYY-MM-DD" (through that day) or a window word (the window end)' },
       },
     },
   },
   {
     name: 'add_reminder',
-    description: `Add a durable reminder: a file that survives sessions and is offered at the first prompt of a later session once due. Unlike CronCreate or /loop (session-only, lost when the session ends), use it for EVERY 'remind me ...' request, short ones too ('in 2 minutes', 'tomorrow 9:00 check prod'); CronCreate only for repeating in-session polling. It saves at once (no preview, no confirm) and returns a confirmation line with the id; show it to the user. Every reminder MUST have a trigger time (or the explicit 'someday' = no date, never fires) and a kind; when the request names no time, do not call this tool yet. ${WHEN_RULE} kind: action = Claude does the work when the user runs it (check the logs, run a migration dry run); note = only tells the user, closes once shown (build the CSV export, reply to Ana); infer it from context and ask only when unclear, in the same single AskUserQuestion as the time. scope: project (this repo) unless the user says global, everywhere or in every project; ask only when unclear, in that same question. text: what to do when due, in the user's words, self-contained. slug: 2-5 lowercase ASCII words. when: ISO with offset or Z, local 'YYYY-MM-DD HH:MM' in the user's zone (or tz), 'YYYY-MM-DD' (00:00 local), 'today|tomorrow HH:MM', a weekday 'fri 14:00' (next such day, default 09:00), +<n>m|h|d|w, or 'someday'; a past time is rejected. Take the date and zone from the Now line of the helper text or the current date.`,
+    description: `Add a durable reminder: a file that survives sessions and is offered at the first prompt of a later session once due. Unlike CronCreate or /loop (session-only, lost when the session ends), use it for EVERY 'remind me ...' request, short ones too ('in 2 minutes', 'tomorrow 9:00 check prod'); CronCreate only for repeating in-session polling. It saves at once (no preview, no confirm) and returns a confirmation line with the id; show it to the user. Every reminder MUST have a trigger time (or the explicit 'someday' = no date, never fires) and a kind. When the request names no time, FIRST call this tool without when: it saves nothing and returns today's date with the weekdays of the next days and the ask rule; then ask. ${WHEN_RULE} kind: action = Claude does the work when the user runs it (check the logs, run a migration dry run); note = only tells the user, closes once shown (build the CSV export, reply to Ana); infer it from context and ask only when unclear, in the same single AskUserQuestion as the time. scope: project (this repo) unless the user says global, everywhere or in every project; ask only when unclear, in that same question. text: what to do when due, in the user's words, self-contained. slug: 2-5 lowercase ASCII words. when: ISO with offset or Z, local 'YYYY-MM-DD HH:MM' in the user's zone (or tz), 'YYYY-MM-DD' (09:00 local), 'today|tomorrow [HH:MM]' (default 09:00), a weekday 'fri 14:00' (next such day, default 09:00), +<n>m|h|d|w, or 'someday'; a past time is rejected. Take the date and zone from the Now line of the helper text or the current date.`,
     inputSchema: {
       type: 'object',
       properties: {
         scope: { type: 'string', enum: ['project', 'global'], description: 'project (this repo, default) or global (all projects)' },
         kind: { type: 'string', enum: ['action', 'note'], description: 'action = Claude does it when run; note = just a reminder, closes once shown' },
-        when: { type: 'string', description: 'ISO with offset/Z, "YYYY-MM-DD HH:MM" local, "YYYY-MM-DD" (00:00 local), "tomorrow 9:00", "fri 14:00" (next Friday), +2h, +1w or "someday" (no date); required: ask the user when they named none' },
+        when: { type: 'string', description: 'ISO with offset/Z, "YYYY-MM-DD HH:MM" local, "YYYY-MM-DD" (09:00 local), "tomorrow 9:00", "fri 14:00" (next Friday), +2h, +1w or "someday" (no date); needed to save: when the user named none, call without it first to get the calendar, then ask' },
         text: { type: 'string', description: 'what to do when it is due' },
         slug: { type: 'string', description: 'short ascii file name part' },
         tz: { type: 'string', description: 'IANA zone for a local time; default the user zone' },
       },
-      required: ['scope', 'kind', 'when', 'text', 'slug'],
+      required: ['scope', 'kind', 'text', 'slug'],
     },
   },
   {
     name: 'update_reminder',
     description:
-      'Change a reminder by id (file name, slug or unique prefix). Never run a due reminder unasked: offer it, then act on the answer. start: claim it before running its text (refused while another live session runs it; returns the text). done: after running (or after showing a note), result = one-line outcome. snooze: until = +2h, "tomorrow 9:00", "YYYY-MM-DD HH:MM" or ISO; gives a someday item a date. cancel: drop it. reopen: bring a closed one back, until = optional new time. edit: change any of text, kind (action|note), when (a time, or "someday" for no date), scope (the folder to MOVE it to; from_scope names where it is now); returns the old and new lines, show them. scope (other actions) or from_scope only when the id exists in both project and global.',
+      'Change a reminder by id (file name, slug or unique prefix). Never run a due reminder unasked: offer it, then act on the answer. start: claim it before running its text (refused while another live session runs it; returns the text). done: after running (or after showing a note), result = one-line outcome. snooze: until = +2h, "tomorrow 9:00", a weekday "fri 14:00" (next such day, default 09:00), "YYYY-MM-DD HH:MM" or ISO; gives a someday item a date. cancel: drop it. reopen: bring a closed one back, until = optional new time. edit: change any of text, kind (action|note), when (a time in the snooze forms, or "someday" for no date), scope (the folder to MOVE it to; from_scope names where it is now); returns the old and new lines, show them, plus an Undo call and the old file: when the user says undo, make that call. scope (other actions) or from_scope only when the id exists in both project and global.',
     inputSchema: {
       type: 'object',
       properties: {
         id: { type: 'string', description: 'reminder id from list_reminders or the offer' },
         action: { type: 'string', enum: ['start', 'done', 'snooze', 'cancel', 'edit', 'reopen'] },
-        until: { type: 'string', description: 'snooze: the new time; reopen: optional new time' },
+        until: { type: 'string', description: 'snooze: the new time (+2h, "tomorrow 9:00", "fri 14:00", "YYYY-MM-DD HH:MM", ISO); reopen: optional new time' },
         result: { type: 'string', description: 'done only: one-line outcome' },
         text: { type: 'string', description: 'edit only: the new body' },
         kind: { type: 'string', enum: ['action', 'note'], description: 'edit only' },
-        when: { type: 'string', description: 'edit only: a time, or "someday" for no date' },
+        when: { type: 'string', description: 'edit only: a time (+2h, "tomorrow 9:00", "fri 14:00", "YYYY-MM-DD HH:MM", ISO), or "someday" for no date' },
         scope: { type: 'string', enum: ['project', 'global'], description: 'edit: the folder to move it to; other actions: only when the id exists in both' },
         from_scope: { type: 'string', enum: ['project', 'global'], description: 'only when the id exists in both (edit: where it is now)' },
       },
