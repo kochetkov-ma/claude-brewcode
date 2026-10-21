@@ -131,7 +131,10 @@ CLAUDE_CONFIG_DIR=<team profile dir> claude -p "<prompt with the token>" --plugi
 | effort reached the request | session JSONL `effort` of assistant records (`xhigh` x3 for a plan-mode run) | F1 §4 |
 | UI side | tmux, no prompt submitted: band, typeahead, `/placeholders list` | F1 §2 |
 | isolate from other installs | `--settings '{"enabledPlugins":{"<plugin>@<market>":false}}'` per installed plugin that would also load, inject or write (F1 debug showed the installed `brewmod-*` loading beside the probe); isolates the mod under test from the profile | F1; AB |
+| refusal wording | a haiku-driven live run ignores a tool refusal that lacks an instruction: the body of a claimed item ran after a bare `is running in session ...` result (LR r6-a2refused2); put `do not run it ... tell the user` in the refusal text, then re-run live | LR |
 | side effects | note transcripts left in profile dirs; remove `plugins/data/<mod>-inline` dirs a command hook created; no `~/.claude/dev-mods/` writes | F1 §6 |
+
+Team 2.1.306 (brewmod-reminders, `~/.claude-work`, 2026-10-21): TUI band, `command.run` hand-off, mod tools and bundled hook context all observed (`r10-*`, `t1.debug`); `r10-p-*` `-p` runs show seat (`seated outermost`) vs control (`not seated ... (max)`) only (reply `OK`).
 
 Marketplace install: a mixed `hooks.json` from a git-source marketplace passed on Team + Max (T6P); a local-path marketplace loads in place, so it does not test the cache copy.
 

@@ -63,7 +63,8 @@ Each row checked against 2.1.300/2.1.306 types or a live run; claims that held l
 | classic-chain wrap + per-block de-dup (D6) as the injection recipe | module hook runs inside `next(e)` of the settings hook | `classic.UserPromptSubmit` of a user-installed mod is bypassed on Team orgs; recipe removed, brewtools codewords gone; mod-throw fail-open proof (T2.R rev2) is kept as the lesson above | F1 §2; C43 |
 | rejected `ExitPlanMode` | shape unknown | `isError: true`, never `deny`; absent in plain `-p` (plan L5 does not reproduce) | T11 Q3 |
 | `HookFailure.cause` / `kind: 're-entry'` (2.1.300 pack, OD v2.1.290) | exist | absent from 2.1.306 types: `kind` is `throw` or `timeout` | T:5297-5316; D306 |
-| Team seat: deferred `$.prompt.submit` and a mod tool "NOT run" (older rows) | not run | never exercised live: UNVERIFIED | F1; D306 |
+| Team seat: deferred `$.prompt.submit` and a mod tool "NOT run" (older rows) | not run | both run on Team 2.1.306 (brewmod-reminders: hand-off from `command.run`, tools answered in `tool.call`, no permission prompt; also `ui.render` band, bundled command hook context); `$.session.append` own call on Team still UNVERIFIED | F1; D306; LR r10-saved |
+| module importing `update($, atom)` from `claude-code`: floor | 2.1.287 (mods on) | 2.1.280 refuses at load, 2.1.281-2.1.285 need `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` in `-p`, 2.1.286+ loads by default, TUI band captured 2.1.290 and 2.1.301 (`mods-api.md` Manifest floor table) | LR floor-*, tui-* |
 | no 50 ms `prompt.edit` budget (2.1.300 pack) | none documented | OD Limits: 50 ms; 2.1.306 types: 10 s for all hooks; both recorded | OD; T:5277 |
 | band `Button` `hotkey` "never from the composer" | never | a bare digit in an empty composer answers a band Button | T:9848-9859; OD |
 | headless effort proxy | `PostToolBatch` `effort.level` shows xhigh | stays session level; only session JSONL `api-request` shows override | T11 Q2; X |
