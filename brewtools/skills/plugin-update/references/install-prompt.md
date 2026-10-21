@@ -5,10 +5,11 @@ Execute these commands in this Claude Code session, one by one, show full output
 2. claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
 3. claude plugin install brewmod-placeholders@claude-brewcode
 4. claude plugin install brewmod-plan-effort@claude-brewcode
-5. claude plugin install brewcode@claude-brewcode
-6. claude plugin install brewdoc@claude-brewcode
-7. claude plugin install brewtools@claude-brewcode
-8. claude plugin install brewui@claude-brewcode
+5. claude plugin install brewmod-reminders@claude-brewcode
+6. claude plugin install brewcode@claude-brewcode
+7. claude plugin install brewdoc@claude-brewcode
+8. claude plugin install brewtools@claude-brewcode
+9. claude plugin install brewui@claude-brewcode
 
 After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unavailable, tell me to type `exit` and run `claude` again. Run the commands now.
 ```

@@ -1,6 +1,6 @@
 # Plugin Update
 
-Updates every installed brewcode plugin (brewcode, brewdoc, brewtools, brewui) and mod (`brewmod-placeholders`, `brewmod-plan-effort`) in one run, each at the scope it is installed in. It never asks whether to update. The one question offers the mods and plugins you do not have yet. The run ends with one report: versions before and after, what changed for you, and numbered next steps.
+Updates every installed brewcode plugin (brewcode, brewdoc, brewtools, brewui) and mod (`brewmod-placeholders`, `brewmod-plan-effort`, `brewmod-reminders`) in one run, each at the scope it is installed in. It never asks whether to update. The one question offers the mods and plugins you do not have yet. The run ends with one report: versions before and after, what changed for you, and numbered next steps.
 
 ## Install
 
@@ -77,7 +77,7 @@ Manual equivalent:
 
 ```bash
 claude plugin marketplace update claude-brewcode
-for p in brewmod-placeholders brewmod-plan-effort brewcode brewdoc brewtools brewui; do claude plugin update "$p@claude-brewcode"; done
+for p in brewmod-placeholders brewmod-plan-effort brewmod-reminders brewcode brewdoc brewtools brewui; do claude plugin update "$p@claude-brewcode"; done
 ```
 
 - **One name per call.** `claude plugin update` updates only the first name and silently ignores the rest, so a list of names or the brace form `{a,b}@claude-brewcode` updates a single plugin.

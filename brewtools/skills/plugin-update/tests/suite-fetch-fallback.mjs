@@ -16,7 +16,7 @@ writeFileSync(join(bin, 'curl'), '#!/usr/bin/env bash\nexit 22\n');
 writeFileSync(join(bin, 'gh'), `#!/usr/bin/env bash\necho call >> "${calls}"\nprintf '%s\\n' "\${GH_TAG:-}"\n`);
 chmodSync(join(bin, 'curl'), 0o755);
 chmodSync(join(bin, 'gh'), 0o755);
-const NAMES = ['brewcode', 'brewdoc', 'brewtools', 'brewui', 'brewmod-placeholders', 'brewmod-plan-effort'];
+const NAMES = ['brewcode', 'brewdoc', 'brewtools', 'brewui', 'brewmod-placeholders', 'brewmod-plan-effort', 'brewmod-reminders'];
 const everyPlugin = (version) => Object.fromEntries(NAMES.map((name) => [name, version]));
 const run = (ghTag) => {
     rmSync(calls, { force: true });
@@ -26,9 +26,9 @@ const run = (ghTag) => {
     return { status: r.status, json: JSON.parse(r.stdout), ghCalls: existsSync(calls) ? readFileSync(calls, 'utf8') : '' };
 };
 
-// GIVEN curl fails for every plugin and gh answers a release tag WHEN fetched THEN all six get that tag from one gh call.
+// GIVEN curl fails for every plugin and gh answers a release tag WHEN fetched THEN all seven get that tag from one gh call.
 assert.deepEqual(run('v9.8.7'), { status: 0, json: everyPlugin('9.8.7'), ghCalls: 'call\n' },
-    'THEN the release tag is resolved once and shared by all six plugins');
+    'THEN the release tag is resolved once and shared by all seven plugins');
 
 // GIVEN curl fails and gh answers nothing WHEN fetched THEN every plugin is "unknown" and gh is still asked only once.
 assert.deepEqual(run(''), { status: 0, json: everyPlugin('unknown'), ghCalls: 'call\n' },

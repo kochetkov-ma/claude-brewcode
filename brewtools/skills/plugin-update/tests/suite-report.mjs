@@ -12,7 +12,7 @@ const SKILL = readFileSync(join(ROOT, 'SKILL.md'), 'utf8');
 const fenceKey = body => (body.match(/"✅ (.+?) OK"/) || body.match(/(prune --dry-run)/) || [null, null])[1];
 const FENCES = SKILL.split(/^(?=## )/m).flatMap(s => [...s.matchAll(/```bash\n([\s\S]*?)```/g)]
     .map(m => ({ phase: s.split('\n')[0].slice(3, 10), key: fenceKey(m[1]), body: m[1] })));
-const NAMES = ['brewmod-placeholders', 'brewmod-plan-effort', 'brewcode', 'brewdoc', 'brewtools', 'brewui'];
+const NAMES = ['brewmod-placeholders', 'brewmod-plan-effort', 'brewmod-reminders', 'brewcode', 'brewdoc', 'brewtools', 'brewui'];
 const ID = name => `${name}@claude-brewcode`;
 const NOTES_URL = 'https://github.com/kochetkov-ma/claude-brewcode/blob/main/RELEASE-NOTES.md';
 // One stub for claude, curl and gh: logs every call; claude keeps the inventory in STUB_STATE, curl serves the clone.
@@ -206,6 +206,7 @@ assert.deepEqual(play('update', ['brewmod-placeholders']), {
 |---|---|---|---|
 | **brewmod-placeholders** | — | **6.9.6** | 🟢 installed |
 | **brewmod-plan-effort** | — | — | ⚪ not installed |
+| **brewmod-reminders** | — | — | ⚪ not installed |
 | **brewcode** | 6.7.1 | **6.9.6** | 🟢 updated |
 | **brewcode** (project: \`<base>/other\`) | 6.7.1 | **6.9.6** | 🟢 updated |
 | **brewcode** (project: \`<base>/proj\`) | 6.7.1 | **6.9.6** | 🟢 updated |
@@ -214,6 +215,8 @@ assert.deepEqual(play('update', ['brewmod-placeholders']), {
 | **brewui** | — | — | ⚪ not installed |
 
 🔵 **brewmod-plan-effort** is not installed (effort \`xhigh\` in plan mode): \`claude plugin install brewmod-plan-effort@claude-brewcode\`
+
+🔵 **brewmod-reminders** is not installed (durable reminders that survive sessions): \`claude plugin install brewmod-reminders@claude-brewcode\`
 
 🔵 **brewui** is not installed (placeholder for future UI tools, no skills yet): \`claude plugin install brewui@claude-brewcode\`
 
@@ -233,7 +236,7 @@ ${AUTO}
 assert.deepEqual(play('check', []), {
     markers: ['SCRATCH <dir>', '✅ scratch OK', '✅ list OK', '✅ fetch OK', '✅ plan OK', '✅ report OK'],
     calls: ['claude <base>/session --version', 'claude <base>/session plugin list --json',
-        ...['brewcode', 'brewdoc', 'brewtools', 'brewui', 'brewmod-placeholders', 'brewmod-plan-effort'].map(n => `curl <base>/session -sSL --max-time 10 https://raw.githubusercontent.com/kochetkov-ma/claude-brewcode/main/${n}/.claude-plugin/plugin.json`)],
+        ...['brewcode', 'brewdoc', 'brewtools', 'brewui', 'brewmod-placeholders', 'brewmod-plan-effort', 'brewmod-reminders'].map(n => `curl <base>/session -sSL --max-time 10 https://raw.githubusercontent.com/kochetkov-ma/claude-brewcode/main/${n}/.claude-plugin/plugin.json`)],
     stderr: '',
     report: `## 🔵 brewcode check: 4 of 5 components can be updated
 
@@ -241,6 +244,7 @@ assert.deepEqual(play('check', []), {
 |---|---|---|---|
 | **brewmod-placeholders** | — | 6.9.6 | ⚪ not installed |
 | **brewmod-plan-effort** | — | 6.9.6 | ⚪ not installed |
+| **brewmod-reminders** | — | 6.9.6 | ⚪ not installed |
 | **brewcode** | 6.7.1 | **6.9.6** | 🔵 update available |
 | **brewcode** (project: \`<base>/other\`) | 6.7.1 | **6.9.6** | 🔵 update available |
 | **brewcode** (project: \`<base>/proj\`) | 6.7.1 | **6.9.6** | 🔵 update available |
@@ -253,6 +257,8 @@ assert.deepEqual(play('check', []), {
 🔵 **brewmod-placeholders** is not installed (\`++r\` and other prompt blocks): \`claude plugin install brewmod-placeholders@claude-brewcode\`
 
 🔵 **brewmod-plan-effort** is not installed (effort \`xhigh\` in plan mode): \`claude plugin install brewmod-plan-effort@claude-brewcode\`
+
+🔵 **brewmod-reminders** is not installed (durable reminders that survive sessions): \`claude plugin install brewmod-reminders@claude-brewcode\`
 
 🔵 **brewui** is not installed (placeholder for future UI tools, no skills yet): \`claude plugin install brewui@claude-brewcode\`
 
