@@ -1,0 +1,21 @@
+{
+  "name": "brewmod-reminders",
+  "version": "6.10.0",
+  "description": "Brewmod reminders -- durable file-based reminders (check prod tomorrow 09:00) that survive sessions: band at session start, offered at the first prompt, nothing runs unasked (Claude Code 2.1.301+ mod)",
+  "author": {
+    "name": "Maksim Kochetkov",
+    "email": "apmatypa88@gmail.com",
+    "url": "https://github.com/kochetkov-ma"
+  },
+  "homepage": "https://doc-claude.brewcode.app/mods/reminders/",
+  "repository": "https://github.com/kochetkov-ma/claude-brewcode.git",
+  "license": "MIT",
+  "keywords": [
+    "brewmod",
+    "mod",
+    "reminders",
+    "scheduled",
+    "durable"
+  ],
+  "types": "./types/index.d.ts"
+}
