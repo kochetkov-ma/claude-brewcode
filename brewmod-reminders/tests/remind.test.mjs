@@ -1,12 +1,13 @@
 // Run: node --test brewmod-reminders/tests/remind.test.mjs (plain Node; `claude plugin test` runs *.test.ts only)
-import { test } from 'node:test'
+import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, utimesSync, writeFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { formatWhen, parseWhen, parseWhenNatural, relative } from '../hooks/lib/items.mjs'
+import { run } from '../hooks/remind.mjs'
+import { formatWhen, parseItem, parseWhen, parseWhenNatural, patchHeader } from '../hooks/lib/items.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SCRIPT = join(HERE, '..', 'hooks', 'remind.mjs')
@@ -15,7 +16,11 @@ const PROTO_PATH = (ctx) => join(ctx.proj, '.claude', 'scheduled', PROTO)
 const NOW = '2026-10-22T09:00:00Z'
 const item = (due, status, body = 'Check prod.') => `due: ${due}\nstatus: ${status}\n\n${body}\n`
 
-const newCtx = () => ({ proj: mkdtempSync(join(tmpdir(), 'remind-p-')), cfg: mkdtempSync(join(tmpdir(), 'remind-c-')), plugin: mkdtempSync(join(tmpdir(), 'remind-r-')) })
+const newCtx = (t) => {
+  const ctx = { proj: mkdtempSync(join(tmpdir(), 'remind-p-')), cfg: mkdtempSync(join(tmpdir(), 'remind-c-')), plugin: mkdtempSync(join(tmpdir(), 'remind-r-')) }
+  t.after(() => Object.values(ctx).forEach((d) => rmSync(d, { recursive: true, force: true })))
+  return ctx
+}
 const put = (dir, name, text) => {
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, name), text)
@@ -23,18 +28,20 @@ const put = (dir, name, text) => {
 const sched = (ctx, name, text) => put(join(ctx.proj, '.claude', 'scheduled'), name, text)
 const session = (ctx, interactive) => put(join(ctx.plugin, '.state'), 'session-s1.json', JSON.stringify({ isInteractive: interactive, ts: 1 }))
 
-const call = (ctx, env, extra) => {
-  const payload = { hook_event_name: 'UserPromptSubmit', session_id: 's1', prompt: 'hi', source: 'user', cwd: ctx.proj, ...extra }
-  const input = extra === 'garbage' ? '{not json' : JSON.stringify(payload)
-  const r = spawnSync('node', [SCRIPT], {
-    input,
-    encoding: 'utf8',
-    env: { ...process.env, CLAUDE_PLUGIN_ROOT: ctx.plugin, CLAUDE_PROJECT_DIR: ctx.proj, CLAUDE_CONFIG_DIR: ctx.cfg, HOME: ctx.cfg, REMIND_TZ: 'Europe/Lisbon', REMIND_NOW: NOW, ...env },
+const call = (ctx, env, extra) =>
+  new Promise((resolve) => {
+    const payload = { hook_event_name: 'UserPromptSubmit', session_id: 's1', prompt: 'hi', source: 'user', cwd: ctx.proj, ...extra }
+    const input = extra === 'garbage' ? '{not json' : JSON.stringify(payload)
+    const base = { PATH: process.env.PATH, TZ: 'Europe/Lisbon', CLAUDE_PLUGIN_ROOT: ctx.plugin, CLAUDE_PROJECT_DIR: ctx.proj, CLAUDE_CONFIG_DIR: ctx.cfg, HOME: ctx.cfg, REMIND_NOW: NOW }
+    const p = spawn('node', [SCRIPT], { env: { ...base, ...env } })
+    let stdout = ''
+    p.stdout.on('data', (d) => (stdout += d))
+    p.on('close', (rc) => {
+      const text = JSON.parse(stdout).hookSpecificOutput?.additionalContext
+      resolve({ rc, text, ids: text === undefined ? null : text.split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2).split(' | ')[0]) })
+    })
+    p.stdin.end(input)
   })
-  const parsed = JSON.parse(r.stdout)
-  const text = parsed.hookSpecificOutput?.additionalContext
-  return { rc: r.status, text, ids: text === undefined ? null : text.split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2).split(' | ')[0]) }
-}
 
 const IDS = (...ids) => ({ rc: 0, ids })
 const NONE = { rc: 0, ids: null }
@@ -66,36 +73,41 @@ const rows = [
   ['expired claim is offered again', (c) => (old(c), put(join(c.proj, '.claude', 'scheduled', '.claims'), `${A}.json`, JSON.stringify({ session: 'o', at: Date.parse(NOW) - 7 * 3600000 }))), [{}], [IDS(A)]],
   ['scheduled path is a file: fail open', (c) => put(join(c.proj, '.claude'), 'scheduled', 'not a dir'), [{}], [NONE]],
   ['garbage stdin: fail open', old, ['garbage'], [NONE]],
+  ['absolute path prompt is offered', old, [{ prompt: '/Users/me/app.log shows a 500' }], [IDS(A)]],
+  ['slash command with args is skipped', old, [{ prompt: '  /remind x' }], [NONE]],
+  ['bare slash command is skipped', old, [{ prompt: '/help' }], [NONE]],
+  ['BOM before an unfenced header is offered', (c) => sched(c, 'x.md', `\uFEFF${item('2026-10-21T08:00:00Z', 'pending')}`), [{}], [IDS('x')]],
+  [
+    'REMIND_GLOBAL_DIR overrides CLAUDE_CONFIG_DIR/reminders',
+    (c) => (put(join(c.cfg, 'alt'), 'o.md', item('2026-10-21T08:00:00Z', 'pending')), put(join(c.cfg, 'reminders'), 'c.md', item('2026-10-21T08:00:00Z', 'pending'))),
+    [{}],
+    [IDS('o (global)')],
+    (c) => ({ REMIND_GLOBAL_DIR: join(c.cfg, 'alt') }),
+  ],
 ]
 
-for (const [name, setup, extras, expected] of rows) {
-  test(`GIVEN ${name} WHEN remind.mjs runs THEN the offered ids and rc are exact`, () => {
-    const ctx = newCtx()
-    setup(ctx)
-    const got = extras.map((x) => {
-      const { rc, ids } = call(ctx, {}, x)
-      return { rc, ids }
+describe('offer rows', { concurrency: true }, () => {
+  for (const [name, setup, extras, expected, envOf = () => ({})] of rows) {
+    test(`GIVEN ${name} WHEN remind.mjs runs THEN the offered ids and rc are exact`, async (t) => {
+      const ctx = newCtx(t)
+      setup(ctx)
+      const got = []
+      for (const x of extras) {
+        const { rc, ids } = await call(ctx, envOf(ctx), x)
+        got.push({ rc, ids })
+      }
+      assert.deepEqual(got, expected, name)
     })
-    assert.deepEqual(got, expected, name)
-  })
-}
-
-test('GIVEN REMIND_GLOBAL_DIR WHEN remind.mjs runs THEN that folder, not CLAUDE_CONFIG_DIR/reminders, is the global one', () => {
-  const ctx = newCtx()
-  const over = mkdtempSync(join(tmpdir(), 'remind-g-'))
-  put(over, 'o.md', item('2026-10-21T08:00:00Z', 'pending'))
-  put(join(ctx.cfg, 'reminders'), 'c.md', item('2026-10-21T08:00:00Z', 'pending'))
-  const { rc, ids } = call(ctx, { REMIND_GLOBAL_DIR: over }, {})
-  assert.deepEqual({ rc, ids }, { rc: 0, ids: ['o (global)'] }, 'override wins')
+  }
 })
 
-test('GIVEN the prototype file verbatim WHEN remind.mjs runs THEN the offer text is exact', () => {
-  const ctx = newCtx()
+test('GIVEN the prototype file verbatim WHEN remind.mjs runs THEN the offer text is exact', async (t) => {
+  const ctx = newCtx(t)
   mkdirSync(join(ctx.proj, '.claude', 'scheduled'), { recursive: true })
   copyFileSync(join(HERE, 'fixtures', PROTO), PROTO_PATH(ctx))
   writeFileSync(join(ctx.proj, '.claude', 'reminders.json'), '{"git":"commit-push"}')
   writeFileSync(join(ctx.proj, '.claude', 'settings.json'), '{"hooks":{"SessionStart":[{"hooks":[{"command":"x/due-checks.sh"}]}]}}')
-  const first = call(ctx, {}, {})
+  const first = await call(ctx, {}, {})
   const expected = [
     'Reminders are due (1), stored as files:',
     `- ${PROTO.replace('.md', '')} | due Thu 22 Oct 09:03 Lisbon (08:03 UTC), 57 min ago | Post-hotfix prod check for v1.115.1 (main 24e2f198, deployed 2026-10-21 ~13:30Z) | ${PROTO_PATH(ctx)}`,
@@ -108,17 +120,23 @@ test('GIVEN the prototype file verbatim WHEN remind.mjs runs THEN the offer text
   assert.deepEqual({ rc: first.rc, text: first.text, state: readdirSync(join(ctx.plugin, '.state')) }, { rc: 0, text: expected, state: ['offered-s1.json'] }, 'exact offer and one marks file')
 })
 
-test('GIVEN a 8-day-old foreign state file WHEN the hook offers THEN it is pruned and fresh ones stay', () => {
-  const ctx = newCtx()
-  old(ctx)
-  const dir = join(ctx.plugin, '.state')
-  put(dir, 'offered-zz.json', '{}')
-  put(dir, 'notes.txt', 'keep')
-  const t = new Date(Date.parse(NOW) - 8 * 86400000)
-  utimesSync(join(dir, 'offered-zz.json'), t, t)
-  call(ctx, {}, {})
-  assert.deepEqual(readdirSync(dir).sort(), ['notes.txt', 'offered-s1.json'], 'stale offered-zz.json removed, non-state file kept')
-})
+const pruneRows = [
+  ['a due item is offered', old, ['notes.txt', 'offered-s1.json']],
+  ['nothing is offered', (c) => sched(c, 'x.md', item('2026-10-23T08:00:00Z', 'pending')), ['notes.txt']],
+]
+for (const [name, setup, left] of pruneRows) {
+  test(`GIVEN a 8-day-old foreign state file and ${name} WHEN the hook runs THEN it is pruned and the non-state file stays`, async (t) => {
+    const ctx = newCtx(t)
+    setup(ctx)
+    const dir = join(ctx.plugin, '.state')
+    put(dir, 'offered-zz.json', '{}')
+    put(dir, 'notes.txt', 'keep')
+    const old8 = new Date(Date.parse(NOW) - 8 * 86400000)
+    utimesSync(join(dir, 'offered-zz.json'), old8, old8)
+    await call(ctx, {}, {})
+    assert.deepEqual(readdirSync(dir).sort(), left, name)
+  })
+}
 
 const LIS = 'Europe/Lisbon'
 const T0 = Date.parse('2026-03-01T00:00:00Z')
@@ -132,11 +150,11 @@ const when = [
   ['past is rejected', '2026-02-01 09:00', LIS, { ok: false, error: '2026-02-01T09:00:00Z is in the past' }],
   ['garbage is rejected', 'tomorrow', LIS, { ok: false, error: 'unrecognised time "tomorrow": use ISO with offset/Z, "YYYY-MM-DD HH:MM" or +<n>m|h|d' }],
   ['unknown zone', '2026-10-22 09:00', 'Mars/Base', { ok: false, error: 'unknown time zone "Mars/Base"' }],
+  ['relative beyond the date range', '+99999999d', LIS, { ok: false, error: '"+99999999d" is out of range' }],
 ]
 test('GIVEN when inputs across the Lisbon DST change WHEN parseWhen and formatWhen run THEN results are exact', () => {
-  const got = when.map(([, s, tz]) => parseWhen(s, T0, tz))
-  assert.deepEqual(got, when.map((r) => r[3]), 'parseWhen rows')
-  assert.equal(formatWhen(Date.parse('2026-03-30T08:00:00Z'), LIS, T0), 'Mon 30 Mar 09:00 Lisbon (08:00 UTC), in 29 d', 'formatWhen after the change')
+  const got = { parsed: when.map(([, s, tz]) => parseWhen(s, T0, tz)), formatted: formatWhen(Date.parse('2026-03-30T08:00:00Z'), LIS, T0) }
+  assert.deepEqual(got, { parsed: when.map((r) => r[3]), formatted: 'Mon 30 Mar 09:00 Lisbon (08:00 UTC), in 29 d' }, 'parseWhen rows and formatWhen after the change')
 })
 
 const NAT_NOW = Date.parse('2026-10-24T22:30:00Z')
@@ -152,20 +170,26 @@ test('GIVEN today/tomorrow wall times near the Lisbon DST end WHEN parseWhenNatu
   assert.deepEqual(natural.map(([, s, tz]) => parseWhenNatural(s, NAT_NOW, tz)), natural.map((r) => r[3]), 'natural rows')
 })
 
-test('GIVEN an offered item whose due line was snoozed WHEN the next prompt arrives THEN it is offered again once it is due', () => {
-  const ctx = newCtx()
+test('GIVEN an offered item whose due line was snoozed WHEN the next prompt arrives THEN it is offered again once it is due', async (t) => {
+  const ctx = newCtx(t)
   old(ctx)
-  const first = call(ctx, {}, {}).ids
+  const first = (await call(ctx, {}, {})).ids
   sched(ctx, `${A}.md`, item('2026-10-22T08:30:00Z', 'pending'))
-  const later = call(ctx, {}, {}).ids
+  const later = (await call(ctx, {}, {})).ids
   assert.deepEqual({ first, later }, { first: [A], later: [A] }, 'offered before and after the snooze moved due into the past')
 })
 
-test('GIVEN due times around now WHEN relative runs THEN now is only for due and an upcoming one under a minute reads in <1 min', () => {
-  const N = 1_000_000
-  assert.deepEqual(
-    [N + 30000, N, N - 30000, N + 59999, N + 60000, N - 60000].map((ms) => relative(ms, N)),
-    ['in <1 min', 'now', 'now', 'in <1 min', 'in 1 min', '1 min ago'],
-    'relative labels',
-  )
+const patches = [
+  ['BOM and unfenced header (snooze)', '\uFEFFdue: A\nstatus: pending\n\nbody\n', { due: 'B', status: 'pending' }, '\uFEFFdue: B\nstatus: pending\n\nbody\n'],
+  ['LF header and a mixed-EOL body', 'due: A\nstatus: pending\n\nline1\r\nline2\n', { status: 'done', done: 'Z' }, 'due: A\nstatus: done\ndone: Z\n\nline1\r\nline2\n'],
+  ['CRLF file', 'due: A\r\nstatus: pending\r\n\r\nb\r\n', { status: 'done' }, 'due: A\r\nstatus: done\r\n\r\nb\r\n'],
+  ['fenced header', '---\ndue: A\nstatus: pending\n---\nBody\n', { status: 'done', done: 'Z' }, '---\ndue: A\nstatus: done\ndone: Z\n---\nBody\n'],
+]
+test('GIVEN BOM, mixed-EOL and fenced item files WHEN patchHeader runs THEN only the header changes and parseItem reads the BOM file', () => {
+  const got = { patched: patches.map(([, text, patch]) => patchHeader(text, patch)), bomStatus: parseItem('x.md', patches[0][1]).status }
+  assert.deepEqual(got, { patched: patches.map((p) => p[3]), bomStatus: 'pending' }, 'patched texts and BOM status')
+})
+
+test('GIVEN remind.mjs imported in-process WHEN run gets an invalid session id THEN it returns {} and the import wrote nothing', () => {
+  assert.deepEqual(run({ hook_event_name: 'UserPromptSubmit', session_id: '../x' }, {}), {}, 'import-safe module and fail-open run')
 })

@@ -11,6 +11,8 @@ const LATE_MS = 24 * 3600 * 1000
 export const STATE_TTL_MS = 7 * 24 * 3600 * 1000
 export const CLAIMS_DIR = '.claims'
 const SID_RE = /^[A-Za-z0-9_-]+$/
+const BOM = '\uFEFF'
+const MAX_MS = Date.UTC(9999, 11, 31, 23, 59, 59)
 const GIT_MODES = ['off', 'commit', 'commit-push']
 export const STATE_NAME_RE = /^(session|offered)-[A-Za-z0-9_-]+\.json(\.\d+\.tmp)?$/
 
@@ -68,7 +70,7 @@ function parseDueZ(raw) {
 
 // -> { id, name, due (ms|null), dueRaw, status, created, done, cancelled, result, title }; header keys only, first wins.
 export function parseItem(name, text) {
-  const lines = String(text ?? '').split(/\r?\n/)
+  const lines = String(text ?? '').replace(/^\uFEFF/, '').split(/\r?\n/)
   const { start, end, fenced } = headerRange(lines)
   const h = {}
   for (let i = start; i < end; i++) {
@@ -91,24 +93,20 @@ export function parseItem(name, text) {
   }
 }
 
-// Rewrites header keys (value null removes); body bytes and EOL style untouched.
+// Rewrites header keys only; a leading BOM and everything from the blank line on stay byte for byte.
 export function patchHeader(text, patch) {
-  const eol = /\r\n/.test(text) ? '\r\n' : '\n'
-  const lines = text.split(/\r?\n/)
+  const bom = text.startsWith(BOM) ? BOM : ''
+  const parts = text.slice(bom.length).split(/(\r?\n)/)
+  const lines = parts.filter((_, i) => i % 2 === 0)
   const r = headerRange(lines)
-  let end = r.end
+  const eol = parts[1] ?? '\n'
+  const head = lines.slice(0, r.end)
   for (const [key, value] of Object.entries(patch)) {
-    const idx = lines.findIndex((l, i) => i >= r.start && i < end && KEY_RE.exec(l)?.[1].toLowerCase() === key)
-    if (idx >= 0 && value === null) {
-      lines.splice(idx, 1)
-      end--
-    } else if (idx >= 0) lines[idx] = `${key}: ${value}`
-    else if (value !== null) {
-      lines.splice(end, 0, `${key}: ${value}`)
-      end++
-    }
+    const idx = head.findIndex((l, i) => i >= r.start && KEY_RE.exec(l)?.[1].toLowerCase() === key)
+    if (idx >= 0) head[idx] = `${key}: ${value}`
+    else head.push(`${key}: ${value}`)
   }
-  return lines.join(eol)
+  return bom + head.join(eol) + (head.length > 0 && r.end < lines.length ? eol : '') + parts.slice(2 * r.end).join('')
 }
 
 export function buildItem({ dueMs, text, now }) {
@@ -167,6 +165,7 @@ export function parseWhen(input, now, tz) {
       if (ms === null) return { ok: false, error: `"${s}" does not exist in ${tz} (DST gap)` }
     }
   }
+  if (!(ms <= MAX_MS)) return { ok: false, error: `"${s}" is out of range` }
   ms = Math.floor(ms / 1000) * 1000
   return ms <= now ? { ok: false, error: `${isoZ(ms)} is in the past` } : { ok: true, ms, iso: isoZ(ms) }
 }
@@ -250,7 +249,7 @@ export const HANDOFF_MARK = 'Reminder helper. My request: <request>'
 // Offer only on a real typed prompt: source user, or source absent and the module saw an interactive session.
 export function shouldOffer(payload, sessionState) {
   if (!payload || !validSid(payload.session_id) || payload.agent_id !== undefined) return false
-  if (typeof payload.prompt === 'string' && (payload.prompt.trim().startsWith('/') || payload.prompt.trimStart().startsWith(HANDOFF_MARK))) return false
+  if (typeof payload.prompt === 'string' && (/^\/[^\s/]+(\s|$)/.test(payload.prompt.trimStart()) || payload.prompt.trimStart().startsWith(HANDOFF_MARK))) return false
   if (payload.source === 'user') return true
   return payload.source === undefined && sessionState?.isInteractive === true
 }

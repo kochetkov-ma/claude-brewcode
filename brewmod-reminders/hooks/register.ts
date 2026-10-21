@@ -11,7 +11,7 @@ import {
 import type { ReminderView } from '../types'
 
 // The band reads this view; the atom is declared in this file only (the scan reads it).
-const viewAtom = atom({ plugin: 'brewmod-reminders', key: 'view' } as const, { due: 0, open: 0, rows: [], more: 0 })
+const viewAtom = atom({ plugin: 'brewmod-reminders', key: 'view' } as const, { due: 0, open: 0, running: 0, rows: [] })
 
 const TICK_MS = 60_000
 const BAND_ROWS = 3
@@ -37,14 +37,18 @@ const dirsOf = (root: string | undefined, cfg: string | undefined, home: string 
 })
 const fail = (text: string): Out => ({ text, isError: true })
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined)
-const tzOf = (fromEnv: string | undefined): string => {
-  const tz = fromEnv !== undefined && fromEnv !== '' ? fromEnv : systemTz()
+const validTz = (tz: string): boolean => {
   try {
     new Intl.DateTimeFormat('en', { timeZone: tz })
-    return tz
+    return tz !== ''
   } catch {
-    return 'UTC'
+    return false
   }
+}
+// env TZ may be POSIX-style (":Europe/Lisbon"); an unusable value falls back to the system zone, then UTC.
+const tzOf = (fromEnv: string | undefined): string => {
+  const tz = (fromEnv ?? '').replace(/^:/, '')
+  return validTz(tz) ? tz : validTz(systemTz()) ? systemTz() : 'UTC'
 }
 const oneLine = (s: string, max: number): string => s.replace(/\s+/g, ' ').trim().slice(0, max)
 
@@ -78,7 +82,7 @@ function viewOf(items: Entry[], now: number): ReminderView {
     text: `${i.title === '' ? i.id : i.title}  ${relative(i.due ?? now, now)}${i.state === 'running' ? ' · running' : ''}${i.global ? ' (global)' : ''}`,
     isDue: i.state === 'due',
   }))
-  return { due: open.filter((i) => i.state === 'due').length, open: open.length, rows, more: open.length - rows.length }
+  return { due: open.filter((i) => i.state === 'due').length, open: open.length, running: open.filter((i) => i.state === 'running').length, rows }
 }
 
 function listText(items: Entry[], now: number, tz: string, dirs: Dirs): string {
@@ -107,8 +111,11 @@ function pick(items: Entry[], id: string, scope: string | undefined): Entry | st
   const scopes = scope === 'project' ? [false] : scope === 'global' ? [true] : [false, true]
   const hits = scopes.map((g) => ({ g, m: matchId(items.filter((i) => i.global === g).map((i) => i.id), id) }))
   const found = hits.flatMap((h) => ('id' in h.m ? [{ g: h.g, id: h.m.id }] : []))
-  if (found.length > 1) return `"${id}" exists in project and global: pass scope`
-  const [one] = found
+  const q = id.trim().toLowerCase().replace(/\.md$/, '')
+  const exact = found.filter((f) => f.id.toLowerCase() === q || f.id.replace(/^[^_]*_/, '').toLowerCase() === q)
+  const hit = found.length > 1 && exact.length === 1 ? exact : found
+  if (hit.length > 1) return `"${id}" exists in project and global: pass scope`
+  const [one] = hit
   if (one !== undefined) return items.find((i) => i.global === one.g && i.id === one.id) as Entry
   const bad = hits.flatMap((h) => ('candidates' in h.m ? h.m.candidates : []))
   return bad.length > 0 ? `"${id}" is ambiguous: ${bad.join(', ')}` : `no reminder matches "${id}"; /remind list shows the ids`
@@ -133,6 +140,7 @@ async function act(io: Io, dirs: Dirs, a: { req: Act; sid: string; now: number; 
   if (typeof found === 'string') return fail(found)
   const e = found
   if (e.state === 'done' || e.state === 'cancelled') return fail(`${e.id} is already ${e.state}`)
+  if (e.state === 'ignored') return fail(`${e.id} has no status header; add \`status: pending\` and \`due:\` first`)
   const foreign = claimLive(e.claim, now) && e.claim !== null && e.claim.session !== sid
   if (foreign && a.by === 'model') return fail(`${e.id} is running in session ${e.claim?.session} since ${e.claim === null ? '?' : formatWhen(e.claim.at, tz, now)}; do not run it or change it, tell the user`)
   if (req.action === 'start') {
@@ -141,7 +149,7 @@ async function act(io: Io, dirs: Dirs, a: { req: Act; sid: string; now: number; 
     return lost ?? { text: `started ${tag(e)}; carry out the text below, then update_reminder {id, action:"done", result}.\n${await io.read(e.path)}` }
   }
   const text = await io.read(e.path)
-  let patch: Record<string, string | null>
+  let patch: Record<string, string>
   if (req.action === 'done') {
     const result = oneLine(req.result ?? '', 400)
     patch = { status: 'done', done: isoZ(now), ...(result === '' ? {} : { result }) }
@@ -167,12 +175,14 @@ async function add(io: Io, dirs: Dirs, a: Add, now: number, localTz: string, git
   if (dir === null) return fail('the global reminders folder is unavailable (no home directory)')
   const text = (a.text ?? '').trim()
   if (text === '') return fail('text is required')
-  const tz = tzOf(a.tz ?? localTz)
+  const tz = a.tz !== undefined && a.tz !== '' ? a.tz : localTz
+  if (!validTz(tz)) return fail(`unknown time zone "${tz}"`)
   const w = parseWhenNatural(a.when ?? '', now, tz)
   if (!w.ok) return fail(w.error)
   const slug = slugify(a.slug !== undefined && a.slug !== '' ? a.slug : text)
   let name = itemName(w.ms, slug)
-  for (let n = 2; n < 20 && (await io.exists(`${dir}/${name}`)); n++) name = itemName(w.ms, `${slug}-${n}`)
+  for (let n = 2; n <= 99 && (await io.exists(`${dir}/${name}`)); n++) name = itemName(w.ms, `${slug.slice(0, 40 - `-${n}`.length)}-${n}`)
+  if (await io.exists(`${dir}/${name}`)) return fail(`no free file name for "${slug}" at that time; use another slug`)
   const id = name.replace(/\.md$/, '')
   const when = formatWhen(w.ms, tz, now)
   if (a.confirm !== true) {
@@ -188,8 +198,8 @@ async function add(io: Io, dirs: Dirs, a: Add, now: number, localTz: string, git
 const HELP = (dirs: Dirs, hasTools: boolean): string =>
   [
     '/remind                      list: due, running, pending, last done (no Claude turn)',
-    '/remind done|cancel <id>     mark an item (id = file name, slug or unique prefix; no Claude turn)',
-    '/remind snooze <id> <when>   +2h | +1d | tomorrow 9:00 | today 17:30 | 2026-10-22 09:00 (your local zone; no Claude turn)',
+    '/remind done|cancel [project|global] <id>   mark an item (id = file name, slug or unique prefix; no Claude turn)',
+    '/remind snooze [project|global] <id> <when>   +2h | +1d | tomorrow 9:00 | today 17:30 | 2026-10-22 09:00 (your local zone; no Claude turn)',
     '/remind <words>              add or ask in your words: /remind check prod tomorrow 9:00',
     '/remind project|global <words>   same with the folder fixed (default project; Claude asks when unsure)',
     `Items: ${dirs.project}/<YYYYMMDD-HHMM>_<slug>.md (project), ${dirs.global ?? '~/.claude/reminders'}/ (global); header due (UTC, Z), status, body = the task.`,
@@ -254,12 +264,16 @@ export const register: Register = (on) => {
   let shownKey = ''
   let seenDue: Set<string> | null = null
   let io: Io // set at session.start; `$` is never passed on, so the hooks share these closures
-  let dirs: Dirs
+  let env: { cfg: string | undefined; home: string | undefined; override: string | undefined } // static env; the project root is read per call (/cd, worktree)
+  let interactive = false
+  let stateSid = ''
 
   on('session.start', async ($, e, next) => {
     const now = await $.clock.now()
     const sid = await $.session.id()
     // remind.mjs reads this file to tell a typed prompt from a headless one when the hook payload lacks `source`.
+    interactive = e.isInteractive
+    if (validSid(sid)) stateSid = sid
     if (validSid(sid)) await $.fs.write(`${$.plugin.root}/.state/${sessionStateName(sid)}`, sessionStateJson(e.isInteractive, now)).catch(() => undefined)
     await $.command
       .register({ name: 'remind', description: 'List durable reminders, mark them done, snooze or cancel, or say in any words what to remind you of', argumentHint: '[done|cancel <id> | snooze <id> <when> | help | any words]' })
@@ -271,10 +285,11 @@ export const register: Register = (on) => {
       // older build: /remind still lists and edits, only the hand-off needs the tools
     }
     io = { exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p), write: (p, t) => $.fs.write(p, t) }
-    dirs = dirsOf(await $.session.root().catch(() => undefined), await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')), await $.env.get('REMIND_GLOBAL_DIR'))
+    env = { cfg: await $.env.get('CLAUDE_CONFIG_DIR'), home: (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')), override: await $.env.get('REMIND_GLOBAL_DIR') }
     if (e.isInteractive) {
       refresh = async () => {
         const t = await $.clock.now()
+        const dirs = dirsOf(await $.session.root().catch(() => undefined), env.cfg, env.home, env.override)
         const items = await loadAll(io, dirs, t)
         const view = viewOf(items, t)
         const key = JSON.stringify(view)
@@ -298,6 +313,16 @@ export const register: Register = (on) => {
     return next(e)
   })
 
+  // /clear fires no session.start: refresh the state file under the new session id for remind.mjs.
+  on('turn.complete', async ($, e, next) => {
+    const sid = await $.session.id()
+    if (validSid(sid) && sid !== stateSid) {
+      stateSid = sid
+      await $.fs.write(`${$.plugin.root}/.state/${sessionStateName(sid)}`, sessionStateJson(interactive, await $.clock.now())).catch(() => undefined)
+    }
+    return next(e)
+  })
+
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const view = await read($, viewAtom)
     if (e.props.hasSurvey || view.open === 0 || e.props.maxRows < 3) return next(e)
@@ -309,7 +334,7 @@ export const register: Register = (on) => {
       key: 'band',
       flexDirection: 'column',
       children: [
-        Text({ color: view.due > 0 ? 'warning' : 'text', bold: true, children: `reminders · ${view.due} due · ${view.open - view.due} upcoming` }),
+        Text({ color: view.due > 0 ? 'warning' : 'text', bold: true, children: `reminders · ${view.due} due · ${view.open - view.due - view.running} upcoming${view.running > 0 ? ` · ${view.running} running` : ''}` }),
         ...rows.map((r) => Text({ color: r.isDue ? 'warning' : 'text', wrap: 'truncate-end', children: `  ${r.text}` })),
         Text({ dimColor: true, wrap: 'truncate-end', children: `${more > 0 ? `+${more} more · ` : ''}/remind  list · done · snooze · or say what to add` }),
       ],
@@ -320,23 +345,37 @@ export const register: Register = (on) => {
   on('command.run', { command: 'remind' }, async ($, e) => {
     const now = await $.clock.now()
     const tz = tzOf(await $.env.get('TZ'))
+    const dirs = dirsOf(await $.session.root().catch(() => undefined), env.cfg, env.home, env.override)
     const words = e.args.trim().split(/\s+/).filter((w) => w !== '')
     const [head = '', ...rest] = words
     const verb = head.toLowerCase()
-    if (verb === 'help') return { text: HELP(dirs, hasTools) }
-    if (verb === '' || verb === 'list') return { text: listText(await loadAll(io, dirs, now), now, tz, dirs) }
+    if (verb === 'help' && words.length === 1) return { text: HELP(dirs, hasTools) }
+    if (words.length === 0 || (verb === 'list' && words.length === 1)) return { text: listText(await loadAll(io, dirs, now), now, tz, dirs) }
+    let refused = ''
     if (verb === 'done' || verb === 'cancel' || verb === 'snooze') {
-      const [id = '', ...tail] = rest
-      if (id === '' || (verb === 'snooze' && tail.length === 0)) return { text: `usage: /remind ${verb} <id>${verb === 'snooze' ? ' <when>' : ''}` }
-      const git = parseConfig(await io.read(dirs.config).catch(() => '')).git
-      const out = await act(io, dirs, { req: { id, action: verb, until: tail.join(' ') }, sid: await $.session.id(), now, tz, by: 'user', git })
-      await refresh?.().catch(() => undefined)
-      return { text: out.text }
+      const usage = { text: `usage: /remind ${verb} [project|global] <id>${verb === 'snooze' ? ' <when>' : ''}` }
+      if (rest.length === 0) return usage
+      const word = rest[0]?.toLowerCase()
+      const scoped = (word === 'project' || word === 'global') && rest.length >= (verb === 'snooze' ? 3 : 2)
+      const [id = '', ...tail] = scoped ? rest.slice(1) : rest
+      const scope = scoped ? word : undefined
+      // free text that merely starts with a verb ("cancel the ...") goes to the model unless the id resolves
+      const found = verb !== 'snooze' && tail.length > 0 ? null : pick(await loadAll(io, dirs, now), id, scope)
+      if (typeof found === 'string') {
+        if (!found.startsWith('no reminder matches')) return { text: found }
+        refused = found
+      } else if (found !== null) {
+        if (verb === 'snooze' && tail.length === 0) return usage
+        const git = parseConfig(await io.read(dirs.config).catch(() => '')).git
+        const out = await act(io, dirs, { req: { id, action: verb, until: tail.join(' '), scope }, sid: await $.session.id(), now, tz, by: 'user', git })
+        await refresh?.().catch(() => undefined)
+        return { text: out.text }
+      }
     }
     const fixed = verb === 'global' ? 'global' : verb === 'project' || verb === 'default' ? 'project' : null
     const request = (fixed === null ? words : rest).join(' ')
     if (request === '') return { text: `usage: /remind ${verb} <what and when>` }
-    if (!hasTools) return { text: NEEDS_TOOLS }
+    if (!hasTools) return { text: refused === '' ? NEEDS_TOOLS : refused }
     const text = handoff(request, fixed, now, tz)
     // submit is refused inside command.run: hand off from a timer; fill is the fallback.
     $.clock.after(250, () => {
@@ -354,6 +393,7 @@ export const register: Register = (on) => {
   // The model's tools: answered here, so no permission prompt for the file writes.
   on('tool.call', { tool: /^mcp__brewmod-reminders__/ }, async ($, e) => {
     const now = await $.clock.now()
+    const dirs = dirsOf(await $.session.root().catch(() => undefined), env.cfg, env.home, env.override)
     const tz = tzOf(await $.env.get('TZ'))
     const git = parseConfig(await io.read(dirs.config).catch(() => '')).git
     const input = e as unknown as Record<string, unknown>

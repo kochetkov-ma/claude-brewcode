@@ -50,7 +50,13 @@ function writeAtomic(file, text) {
 }
 
 function prune(dir, now) {
-  for (const name of fs.readdirSync(dir)) {
+  let names
+  try {
+    names = fs.readdirSync(dir)
+  } catch {
+    return
+  }
+  for (const name of names) {
     if (!STATE_NAME_RE.test(name)) continue
     try {
       const p = path.join(dir, name)
@@ -67,7 +73,7 @@ function nowOf(env) {
   return Number.isFinite(ms) ? ms : Date.now()
 }
 
-function run(e, env, now = nowOf(env)) {
+export function run(e, env, now = nowOf(env)) {
   if (!e || !validSid(e.session_id)) return {}
   const root = env.CLAUDE_PLUGIN_ROOT || path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
   const state = path.join(root, '.state')
@@ -77,6 +83,7 @@ function run(e, env, now = nowOf(env)) {
     }
     return {}
   }
+  prune(state, now)
   const session = parseSessionState(readText(path.join(state, sessionStateName(e.session_id))) ?? '')
   if (!shouldOffer(e, session)) return {}
   const project = env.CLAUDE_PROJECT_DIR || e.cwd || process.cwd()
@@ -93,21 +100,23 @@ function run(e, env, now = nowOf(env)) {
   if (due.length + bad.length === 0) return {}
   const git = parseConfig(readText(path.join(project, '.claude', 'reminders.json')) ?? '').git
   const legacy = ['settings.json', 'settings.local.json'].some((f) => (readText(path.join(project, '.claude', f)) ?? '').includes('due-checks.sh'))
-  const text = buildOffer({ due, bad, now, tz: env.REMIND_TZ || systemTz(), git, legacy })
+  const text = buildOffer({ due, bad, now, tz: systemTz(), git, legacy })
   try {
     for (const i of [...due, ...bad]) offered[itemKey(i)] = now
     writeAtomic(offeredFile, offeredJson(offered))
-    prune(state, now)
   } catch {
     // marks are best effort: the offer still goes out
   }
   return { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } }
 }
 
-let out = {}
-try {
-  out = run(JSON.parse(fs.readFileSync(0, 'utf8')), process.env)
-} catch {
-  // fail open: no offer
+// Runs only as the hook command; tests import run().
+if (path.basename(process.argv[1] ?? '') === 'remind.mjs') {
+  let out = {}
+  try {
+    out = run(JSON.parse(fs.readFileSync(0, 'utf8')), process.env)
+  } catch {
+    // fail open: no offer
+  }
+  process.stdout.write(JSON.stringify(out))
 }
-process.stdout.write(JSON.stringify(out))
