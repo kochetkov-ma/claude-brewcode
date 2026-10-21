@@ -42,10 +42,26 @@ export function parseSessionState(text) {
   const v = parseJson(text)
   return v && typeof v.isInteractive === 'boolean' ? { isInteractive: v.isInteractive } : null
 }
-export const offeredJson = (offered) => JSON.stringify({ offered })
+export const offeredJson = (offered, last) => JSON.stringify({ offered, last })
 export function parseOffered(text) {
   const o = parseJson(text)?.offered
   return isObject(o) ? o : {}
+}
+// ms of the last offer: `last`, else the newest mark of an older file, else null (never offered).
+export function parseLastOffer(text) {
+  const v = parseJson(text)
+  if (typeof v?.last === 'number') return v.last
+  const marks = Object.values(isObject(v?.offered) ? v.offered : {}).filter((x) => typeof x === 'number')
+  return marks.length > 0 ? Math.max(...marks) : null
+}
+// Plugin option from a command hook's env (a number as text); unusable -> dflt. min = lowest accepted.
+export function optNumber(raw, dflt, min = 0) {
+  const n = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN
+  return Number.isFinite(n) && n >= min ? n : dflt
+}
+// An offer goes out on the first prompt, when an item or unreadable file is new since the last offer, or when due items wait and the cooldown passed.
+export function offerNow({ last, hasNew, hasDue, now, cooldownMs }) {
+  return last === null ? hasDue || hasNew : hasNew || (hasDue && now - last >= cooldownMs)
 }
 
 // ---- header and item
@@ -357,11 +373,13 @@ export function matchId(ids, query) {
 
 // First line of the /remind hand-off prompt (register.ts builds it); the offer skips that turn.
 export const HANDOFF_MARK = 'Reminder helper. My request: <request>'
+// First words of a `**N` expansion (register.ts runPrompt): that turn already carries the reminder.
+export const RUN_MARK = 'Run reminder '
 
 // Offer only on a real typed prompt: source user, or source absent and the module saw an interactive session.
 export function shouldOffer(payload, sessionState) {
   if (!payload || !validSid(payload.session_id) || payload.agent_id !== undefined) return false
-  if (typeof payload.prompt === 'string' && (/^\/[^\s/]+(\s|$)/.test(payload.prompt.trimStart()) || payload.prompt.trimStart().startsWith(HANDOFF_MARK))) return false
+  if (typeof payload.prompt === 'string' && (/^\/[^\s/]+(\s|$)/.test(payload.prompt.trimStart()) || payload.prompt.trimStart().startsWith(HANDOFF_MARK) || payload.prompt.trimStart().startsWith(RUN_MARK))) return false
   if (payload.source === 'user') return true
   return payload.source === undefined && sessionState?.isInteractive === true
 }
@@ -373,19 +391,26 @@ export function parseConfig(text) {
 
 // ---- offer text
 
-// args: { due:[{id,global,path,due,title}], bad:[{id,global,path}], now, tz, git, legacy }
+// args: { due:[{id,global,path,due,title,kind,body}], bad:[{id,global,path}], now, tz, git, legacy }
 export function buildOffer({ due, bad, now, tz, git, legacy }) {
   const out = []
   const tag = (i) => `${i.id}${i.global ? ' (global)' : ''}`
+  const notes = due.filter((i) => i.kind === 'note')
+  const actions = due.filter((i) => i.kind !== 'note')
   if (due.length > 0) {
     out.push(`Reminders are due (${due.length}), stored as files:`)
     for (const i of [...due].sort((a, b) => a.due - b.due)) {
       const late = now - i.due > LATE_MS ? ` | OVERDUE by ${span(now - i.due)}` : ''
-      out.push(`- ${tag(i)} | due ${formatWhen(i.due, tz, now)}${late} | ${i.title} | ${i.path}`)
+      out.push(`- ${tag(i)} | due ${formatWhen(i.due, tz, now)}${late} | ${i.kind === 'note' ? '✎ note' : '▶ action'} | ${i.title} | ${i.path}`)
+      if (i.kind === 'note') out.push(...String(i.body ?? '').split('\n').map((l) => `  | ${l}`))
+    }
+    if (actions.length > 0) {
+      out.push('Actions: tell the user in one line, in their language, what fired and offer for each: run now, snooze, mark done, or cancel. Never run one unasked. Say plainly when one is more than 24 h late.')
+    }
+    if (notes.length > 0) {
+      out.push('Notes (kind note, text above after "|"): show each note\'s full text to the user now, say it was just a reminder (nothing to execute), then call update_reminder {id, action:"done"} for it without asking, then answer their prompt as usual.')
     }
     out.push(
-      'Before anything else tell the user (in their language) these are due; for each offer: run now, snooze, mark done, or cancel. Never run one unasked. Say plainly when one is more than 24 h late.',
-      'A note-style item (its body only says what to remember, nothing to execute, e.g. "renew domain"): do not offer to run it; state the note and offer done or snooze.',
       'Run accepted: update_reminder {id, action:"start"}, read the file, carry out its body, then update_reminder {id, action:"done", result}. Snooze: {id, action:"snooze", until}; cancel: {id, action:"cancel"}.',
       'update_reminder unavailable -> edit the file header: `status: done` plus `done: <UTC now, YYYY-MM-DDTHH:MM:SSZ>` (cancel: `status: cancelled` plus `cancelled: <UTC>`); never touch the body.',
     )

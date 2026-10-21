@@ -46,3 +46,8 @@ export const formatWhen: (ms: number, tz: string, now: number) => string
 export const relative: (ms: number, now: number) => string
 export const systemTz: () => string
 export const matchId: (ids: string[], query: string) => Match
+export const RUN_MARK: string
+export const offeredJson: (offered: Record<string, number>, last: number) => string
+export const parseLastOffer: (text: string) => number | null
+export const optNumber: (raw: string | undefined, dflt: number, min?: number) => number
+export const offerNow: (a: { last: number | null; hasNew: boolean; hasDue: boolean; now: number; cooldownMs: number }) => boolean

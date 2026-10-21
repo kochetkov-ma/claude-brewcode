@@ -24,6 +24,26 @@
       "title": "Reminder picker prefix",
       "description": "2-8 ASCII punctuation characters that open the reminder picker and run a fired reminder, e.g. **1 (default **)",
       "default": "**"
+    },
+    "cooldownMinutes": {
+      "type": "number",
+      "title": "Reminder cooldown (minutes)",
+      "description": "Minutes between reminder offers in one session; a newly fired reminder is offered at once (default 60)",
+      "default": 60,
+      "min": 0
+    },
+    "notify": {
+      "type": "boolean",
+      "title": "Reminder desktop alert",
+      "description": "Send a terminal/desktop notification when a reminder fires in an open session (default on)",
+      "default": true
+    },
+    "keepDays": {
+      "type": "number",
+      "title": "History kept (days)",
+      "description": "Closed reminders older than this are deleted (default 30)",
+      "default": 30,
+      "min": 1
     }
   }
 }

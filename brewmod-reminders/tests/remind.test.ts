@@ -19,7 +19,7 @@ const item = (due: string, title: string, status = 'pending', extra = ''): strin
 // Stubs beneath the mod: an in-memory file system over `tree`, fixed env and session, recorders for toasts, tools, command, submits.
 function wire(on: On, tree: Tree) {
   const live = { root: ROOT, sid: SID }
-  const ops = { vars: {} as Record<string, string>, live, writes: [] as [string, string][], toasts: [] as string[], tools: [] as string[], cmds: [] as unknown[], submits: [] as string[] }
+  const ops = { vars: {} as Record<string, string>, live, writes: [] as [string, string][], toasts: [] as string[], notifies: [] as [string, string | undefined][], tools: [] as string[], cmds: [] as unknown[], submits: [] as string[] }
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('fs.exists', (_$, e) => ({ value: e.path in tree || Object.keys(tree).some((k) => k.startsWith(`${e.path}/`)) }) as never)
   on('fs.list', (_$, e) => {
@@ -48,6 +48,7 @@ function wire(on: On, tree: Tree) {
   on('prompt.submit', (_$, e) => (ops.submits.push(e.text), { text: e.text }))
   on('turn.complete', (_$, e) => ({ text: e.answer }))
   on('prompt.fill', () => ({ isFilled: true }) as never)
+  on('ui.notify', (_$, e) => (ops.notifies.push([e.text, e.title]), { value: { isSent: true, channel: 'kitty' } }) as never)
   on('ui.render', () => ENGINE as never)
   on('prompt.autocomplete', () => ({ suggestions: [] }))
   on('prompt.edit', (_$, e) => ({ text: e.text, cursor: e.cursor }) as never)
@@ -564,16 +565,24 @@ for (const { name, tree, rows } of bands) {
   })
 }
 
-test('GIVEN an item due in 30 s WHEN the 60 s tick fires THEN one toast names it, and the next tick adds none', async ($, on) => {
-  const clock = mock.clock(on, { now: NOW })
-  const ops = wire(on, { [LATER]: item('2026-10-21T14:00:30Z', 'Rotate keys') })
-  await start($)
+const helpLine = async ($: any): Promise<string> => (await remind($, 'help')).text.split('\n').at(-1) as string
+const ticks: { name: string; options: { notify?: boolean }; notifies: [string, string | undefined][]; before: string; after: string }[] = [
+  { name: 'notify on (default)', options: {} as { notify?: boolean }, notifies: [['reminder fired: Rotate keys', 'Reminders']], before: 'Desktop alert: on, last none sent yet', after: 'Desktop alert: on, last sent via kitty' },
+  { name: 'notify off', options: { notify: false }, notifies: [], before: 'Desktop alert: off (/config -> Reminder desktop alert)', after: 'Desktop alert: off (/config -> Reminder desktop alert)' },
+]
+for (const { name, options, notifies, before, after } of ticks) {
+  test(`GIVEN ${name} and an item due in 30 s WHEN the 60 s tick fires THEN one toast and the alerts are exact, and /remind help reports the alert`, { options }, async ($, on) => {
+    const clock = mock.clock(on, { now: NOW })
+    const ops = wire(on, { [LATER]: item('2026-10-21T14:00:30Z', 'Rotate keys') })
+    await start($)
+    const helpBefore = await helpLine($)
 
-  await clock.advance(60_000)
-  await clock.advance(60_000)
+    await clock.advance(60_000)
+    await clock.advance(60_000)
 
-  expect(ops.toasts, 'toasts').toEqual(['reminder due: Rotate keys · /remind'])
-})
+    expect({ toasts: ops.toasts, notifies: ops.notifies, helpBefore, helpAfter: await helpLine($) }, name).toEqual({ toasts: ['reminder fired: Rotate keys · ** to pick'], notifies, helpBefore: before, helpAfter: after })
+  })
+}
 
 const FRESH_ID = '20261021-1359_fresh'
 const PICK_TREE = (): Tree => ({

@@ -7,8 +7,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  CLAIMS_DIR, STATE_NAME_RE, STATE_TTL_MS, buildOffer, claimName, classify, isItemName, itemKey, offeredJson, offeredStateName,
-  parseClaim, parseConfig, parseItem, parseOffered, parseSessionState, sessionStateName, shouldOffer, systemTz, validSid,
+  CLAIMS_DIR, STATE_NAME_RE, STATE_TTL_MS, bodyOf, buildOffer, claimName, classify, expiredIds, isItemName, itemKey, offerNow, offeredJson, offeredStateName,
+  optNumber, parseClaim, parseConfig, parseItem, parseLastOffer, parseOffered, parseSessionState, sessionStateName, shouldOffer, systemTz, validSid,
 } from './lib/items.mjs'
 
 const readText = (p) => {
@@ -30,7 +30,7 @@ function loadDir(dir, global, now) {
   for (const name of names.filter(isItemName)) {
     const text = readText(path.join(dir, name))
     if (text === null) continue
-    const item = { ...parseItem(name, text), global, path: path.join(dir, name) }
+    const item = { ...parseItem(name, text), global, dir, path: path.join(dir, name), body: bodyOf(text) }
     const claim = parseClaim(readText(path.join(dir, CLAIMS_DIR, claimName(item.id))) ?? '')
     items.push({ ...item, state: classify(item, claim, now) })
   }
@@ -67,6 +67,22 @@ function prune(dir, now) {
   }
 }
 
+// Closed items older than keepDays: the file and its stale claim go; pending and someday never. Fail-open per file.
+function cleanup(items, now, keepDays) {
+  for (const dir of new Set(items.map((i) => i.dir))) {
+    const mine = items.filter((i) => i.dir === dir)
+    for (const id of expiredIds(mine, now, keepDays)) {
+      for (const f of [path.join(dir, `${id}.md`), path.join(dir, CLAIMS_DIR, claimName(id))]) {
+        try {
+          fs.unlinkSync(f)
+        } catch {
+          // already gone or not removable: skip
+        }
+      }
+    }
+  }
+}
+
 function nowOf(env) {
   const raw = env.REMIND_NOW
   const ms = raw === undefined || raw === '' ? NaN : /^\d+$/.test(raw) ? Number(raw) : Date.parse(raw)
@@ -92,18 +108,21 @@ export function run(e, env, now = nowOf(env)) {
     ...loadDir(path.join(project, '.claude', 'scheduled'), false, now),
     ...loadDir(env.REMIND_GLOBAL_DIR || path.join(configDir, 'reminders'), true, now),
   ]
+  cleanup(items, now, optNumber(env.CLAUDE_PLUGIN_OPTION_KEEPDAYS, 30, 1))
   const offeredFile = path.join(state, offeredStateName(e.session_id))
-  const offered = parseOffered(readText(offeredFile) ?? '')
+  const offeredText = readText(offeredFile) ?? ''
+  const offered = parseOffered(offeredText)
   const fresh = (i) => offered[itemKey(i)] === undefined
-  const due = items.filter((i) => i.state === 'due' && fresh(i))
+  const due = items.filter((i) => i.state === 'due')
   const bad = items.filter((i) => i.state === 'unparseable' && fresh(i))
-  if (due.length + bad.length === 0) return {}
+  const cooldownMs = optNumber(env.CLAUDE_PLUGIN_OPTION_COOLDOWNMINUTES, 60) * 60000
+  if (!offerNow({ last: parseLastOffer(offeredText), hasNew: due.some(fresh) || bad.length > 0, hasDue: due.length > 0, now, cooldownMs })) return {}
   const git = parseConfig(readText(path.join(project, '.claude', 'reminders.json')) ?? '').git
   const legacy = ['settings.json', 'settings.local.json'].some((f) => (readText(path.join(project, '.claude', f)) ?? '').includes('due-checks.sh'))
   const text = buildOffer({ due, bad, now, tz: systemTz(), git, legacy })
   try {
     for (const i of [...due, ...bad]) offered[itemKey(i)] = now
-    writeAtomic(offeredFile, offeredJson(offered))
+    writeAtomic(offeredFile, offeredJson(offered, now))
   } catch {
     // marks are best effort: the offer still goes out
   }

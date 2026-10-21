@@ -302,7 +302,7 @@ const WHEN_RULE =
 const KIND_RULE =
   'kind is required: action (Claude does the work when the user runs it, e.g. "check the prod logs") or note (only tells the user, closes once shown, e.g. "reply to Ana"). Infer it from the request; ask only when it is unclear, as an extra question in the same single AskUserQuestion as the time.'
 
-const HELP = (dirs: Dirs, hasTools: boolean): string =>
+const HELP = (dirs: Dirs, hasTools: boolean, alert: string): string =>
   [
     '/remind                      = the fired reminders, numbered like the band (no Claude turn)',
     '/remind all [project|global] [today|tomorrow|week|+Nd|until YYYY-MM-DD]   Fired, Waiting and Someday; the window filters by trigger time (week = until Sunday 23:59, local)',
@@ -314,7 +314,8 @@ const HELP = (dirs: Dirs, hasTools: boolean): string =>
     '/remind <words>              add or ask in your words: /remind check prod tomorrow 9:00',
     '/remind project|global <words>   same with the folder fixed (default project)',
     `Items: ${dirs.project}/<YYYYMMDD-HHMM>_<slug>.md or someday_<slug>.md (project), ${dirs.global ?? '~/.claude/reminders'}/ (global); header due (UTC, Z, or none), status, kind (action|note), body = the task.`,
-    'A fired item is offered at your first prompt of a session; nothing runs unasked.',
+    'A fired item is offered at your first prompt of a session, then at most once per cooldown (a newly fired one at once); nothing runs unasked.',
+    `Desktop alert: ${alert}`,
     ...(hasTools ? [] : [NEEDS_TOOLS]),
   ].join('\n')
 
@@ -403,6 +404,8 @@ const TOOLS = [
 // No guards around the mod's own logic: the engine skips a failing hook and the chain goes on; `$` is never passed on.
 export const register: Register = (on, options) => {
   const prefix = typeof options.prefix === 'string' && PREFIX_RE.test(options.prefix) ? options.prefix : DEFAULT_PREFIX
+  const notifyOn = options.notify !== false // userConfig `notify`, default on
+  let lastNotify = '' // the last $.ui.notify result, one line for /remind help
   let hintTail = ''
   let somedayIds = new Set<string>() // ids the picker listed: known to the highlight (prompt.edit does no I/O)
   let hasTools = false
@@ -448,7 +451,14 @@ export const register: Register = (on, options) => {
         else {
           const fresh = due.filter((i) => !seenDue?.has(itemKey(i)))
           for (const i of fresh) seenDue.add(itemKey(i))
-          if (fresh.length > 0) $.ui.toast(fresh.length === 1 ? `reminder due: ${fresh[0]?.title || fresh[0]?.id} · /remind` : `${fresh.length} reminders due · /remind`, { timeoutMs: 8000 })
+          if (fresh.length > 0) {
+            const what = fresh.length === 1 ? `reminder fired: ${fresh[0]?.title || fresh[0]?.id}` : `${fresh.length} reminders fired`
+            $.ui.toast(`${what} · ${prefix} to pick`, { timeoutMs: 8000 })
+            if (notifyOn) {
+              const r = await $.ui.notify(what, { title: 'Reminders' })
+              lastNotify = r.isSent ? `sent via ${r.channel}${r.channel === 'terminal_bell' ? ' (bell only, no text)' : ''}` : `not sent (${r.reason})`
+            }
+          }
         }
       }
       await refresh().catch(() => undefined)
@@ -578,7 +588,7 @@ export const register: Register = (on, options) => {
     const words = e.args.trim().split(/\s+/).filter((w) => w !== '')
     const [head = '', ...rest] = words
     const verb = head.toLowerCase()
-    if (verb === 'help' && words.length === 1) return { text: HELP(dirs, hasTools) }
+    if (verb === 'help' && words.length === 1) return { text: HELP(dirs, hasTools, notifyOn ? `on, last ${lastNotify === '' ? 'none sent yet' : lastNotify}` : 'off (/config -> Reminder desktop alert)') }
     const shown =
       words.length === 0
         ? query('active')

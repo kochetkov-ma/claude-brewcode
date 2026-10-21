@@ -65,6 +65,9 @@ const rows = [
   ['absent source + no session file is silent', old, [{ source: undefined }], [NONE]],
   ['hand-off prompt is skipped and not marked offered', old, [{ prompt: 'Reminder helper. My request: <request>x</request>\nNow: y' }, {}], [NONE, IDS(A)]],
   ['slash prompt is skipped', old, [{ prompt: '/remind list' }], [NONE]],
+  ['a **N expansion prompt is skipped and not marked offered', old, [{ prompt: 'Run reminder x (y, action): z' }, {}], [NONE, IDS(A)]],
+  ['someday item is silent', (c) => sched(c, 'someday_x.md', item('none', 'pending')), [{}], [NONE]],
+  ['a note-kind due item is offered', (c) => sched(c, 'x.md', 'due: 2026-10-21T08:00:00Z\nstatus: pending\nkind: note\n\nrenew domain\n'), [{}], [IDS('x')]],
   ['invalid session id is silent', old, [{ session_id: '../x' }], [NONE]],
   ['offered once per session', old, [{}, {}], [IDS(A), NONE]],
   ['re-offered after compact', old, [{}, { hook_event_name: 'SessionStart', source: 'compact', prompt: undefined }, {}], [IDS(A), NONE, IDS(A)]],
@@ -110,9 +113,8 @@ test('GIVEN the prototype file verbatim WHEN remind.mjs runs THEN the offer text
   const first = await call(ctx, {}, {})
   const expected = [
     'Reminders are due (1), stored as files:',
-    `- ${PROTO.replace('.md', '')} | due Thu 22 Oct 09:03 Lisbon (08:03 UTC), 57 min ago | Post-hotfix prod check for v1.115.1 (main 24e2f198, deployed 2026-10-21 ~13:30Z) | ${PROTO_PATH(ctx)}`,
-    'Before anything else tell the user (in their language) these are due; for each offer: run now, snooze, mark done, or cancel. Never run one unasked. Say plainly when one is more than 24 h late.',
-    'A note-style item (its body only says what to remember, nothing to execute, e.g. "renew domain"): do not offer to run it; state the note and offer done or snooze.',
+    `- ${PROTO.replace('.md', '')} | due Thu 22 Oct 09:03 Lisbon (08:03 UTC), 57 min ago | ▶ action | Post-hotfix prod check for v1.115.1 (main 24e2f198, deployed 2026-10-21 ~13:30Z) | ${PROTO_PATH(ctx)}`,
+    'Actions: tell the user in one line, in their language, what fired and offer for each: run now, snooze, mark done, or cancel. Never run one unasked. Say plainly when one is more than 24 h late.',
     'Run accepted: update_reminder {id, action:"start"}, read the file, carry out its body, then update_reminder {id, action:"done", result}. Snooze: {id, action:"snooze", until}; cancel: {id, action:"cancel"}.',
     'update_reminder unavailable -> edit the file header: `status: done` plus `done: <UTC now, YYYY-MM-DDTHH:MM:SSZ>` (cancel: `status: cancelled` plus `cancelled: <UTC>`); never touch the body.',
     "Git: after changing an item file, commit only that file and push following the repo's conventions; never stage anything else.",
@@ -320,3 +322,67 @@ const bodies = [
 test('GIVEN plain, fenced and header-less files WHEN bodyOf runs THEN the trimmed body is exact', () => {
   assert.deepEqual(bodies.map(([, t]) => bodyOf(t)), bodies.map((r) => r[2]), 'body rows')
 })
+
+const T0Z = Date.parse(NOW)
+const min = (n) => new Date(T0Z + n * 60000).toISOString()
+const cooldownRows = [
+  ['default 60 min: silent at +30, nudge at +61', {}, [[0, 'A'], [30, 'none'], [61, 'A']]],
+  ['5 min cooldown: nudge at +30', { CLAUDE_PLUGIN_OPTION_COOLDOWNMINUTES: '5' }, [[0, 'A'], [3, 'none'], [30, 'A']]],
+  ['0 min cooldown: every prompt', { CLAUDE_PLUGIN_OPTION_COOLDOWNMINUTES: '0' }, [[0, 'A'], [1, 'A']]],
+  ['an unusable option falls back to 60', { CLAUDE_PLUGIN_OPTION_COOLDOWNMINUTES: 'abc' }, [[0, 'A'], [30, 'none'], [61, 'A']]],
+  ['a newly fired item skips the cooldown and lists both', {}, [[0, 'A'], [10, 'AB']]],
+]
+for (const [name, env, steps] of cooldownRows) {
+  test(`GIVEN ${name} WHEN prompts arrive at those minutes THEN each offers exactly the listed items`, async (t) => {
+    const ctx = newCtx(t)
+    old(ctx)
+    const got = []
+    for (const [m] of steps) {
+      if (m === 10) sched(ctx, '20261022-0905_b.md', item('2026-10-22T09:05:00Z', 'pending'))
+      const r = await call(ctx, { ...env, REMIND_NOW: min(m) }, {})
+      got.push([m, r.ids === null ? 'none' : r.ids.map((x) => (x === A ? 'A' : 'B')).join('')])
+    }
+    assert.deepEqual(got, steps, name)
+  })
+}
+
+test('GIVEN a fired note and a fired action WHEN remind.mjs runs THEN the note text is in full and the model is told to close it', async (t) => {
+  const ctx = newCtx(t)
+  sched(ctx, '20261021-0900_csv.md', 'due: 2026-10-21T09:00:00Z\nstatus: pending\nkind: note\n\nFinish the CSV export.\nEndpoint first.\n')
+  sched(ctx, '20261021-0800_prod.md', item('2026-10-21T08:00:00Z', 'pending', 'Check prod.'))
+  const r = await call(ctx, {}, {})
+  const p = (n) => join(ctx.proj, '.claude', 'scheduled', n)
+  assert.deepEqual(r.text.split('\n'), [
+    'Reminders are due (2), stored as files:',
+    `- 20261021-0800_prod | due Wed 21 Oct 09:00 Lisbon (08:00 UTC), 25 h ago | OVERDUE by 25 h | ▶ action | Check prod. | ${p('20261021-0800_prod.md')}`,
+    `- 20261021-0900_csv | due Wed 21 Oct 10:00 Lisbon (09:00 UTC), 24 h ago | ✎ note | Finish the CSV export. | ${p('20261021-0900_csv.md')}`,
+    '  | Finish the CSV export.',
+    '  | Endpoint first.',
+    'Actions: tell the user in one line, in their language, what fired and offer for each: run now, snooze, mark done, or cancel. Never run one unasked. Say plainly when one is more than 24 h late.',
+    'Notes (kind note, text above after "|"): show each note\'s full text to the user now, say it was just a reminder (nothing to execute), then call update_reminder {id, action:"done"} for it without asking, then answer their prompt as usual.',
+    'Run accepted: update_reminder {id, action:"start"}, read the file, carry out its body, then update_reminder {id, action:"done", result}. Snooze: {id, action:"snooze", until}; cancel: {id, action:"cancel"}.',
+    'update_reminder unavailable -> edit the file header: `status: done` plus `done: <UTC now, YYYY-MM-DDTHH:MM:SSZ>` (cancel: `status: cancelled` plus `cancelled: <UTC>`); never touch the body.',
+  ], 'exact offer lines')
+})
+
+const cleanRows = [
+  ['default 30 days', {}, ['20260901-0800_new-done.md', '20261020-0800_pending.md', 'someday_s.md', '.claims']],
+  ['keepDays 90', { CLAUDE_PLUGIN_OPTION_KEEPDAYS: '90' }, ['20260801-0800_old-done.md', '20260901-0800_new-done.md', '20261020-0800_pending.md', 'someday_s.md', '.claims']],
+  ['an unusable keepDays falls back to 30', { CLAUDE_PLUGIN_OPTION_KEEPDAYS: '0' }, ['20260901-0800_new-done.md', '20261020-0800_pending.md', 'someday_s.md', '.claims']],
+]
+for (const [name, env, left] of cleanRows) {
+  test(`GIVEN old and recent closed, pending, someday items and a stale claim WHEN a prompt arrives with ${name} THEN only old closed items and their claims are deleted`, async (t) => {
+    const ctx = newCtx(t)
+    const dir = join(ctx.proj, '.claude', 'scheduled')
+    sched(ctx, '20260801-0800_old-done.md', item('2026-08-01T08:00:00Z', 'done', 'x').replace('status: done', 'status: done\ndone: 2026-08-01T09:00:00Z'))
+    sched(ctx, '20260901-0800_new-done.md', item('2026-09-01T08:00:00Z', 'done', 'x').replace('status: done', 'status: done\ndone: 2026-10-10T09:00:00Z'))
+    sched(ctx, '20260702-0800_old-cancelled.md', item('2026-07-02T08:00:00Z', 'cancelled', 'x').replace('status: cancelled', 'status: cancelled\ncancelled: 2026-07-02T09:00:00Z'))
+    sched(ctx, '20261020-0800_pending.md', item('2025-01-01T08:00:00Z', 'pending'))
+    sched(ctx, 'someday_s.md', item('none', 'pending'))
+    put(join(dir, '.claims'), '20260801-0800_old-done.json', JSON.stringify({ session: 'o', at: 1 }))
+    await call(ctx, env, {})
+    const left0 = readdirSync(dir).filter((n) => n !== '.claims')
+    const claims = readdirSync(join(dir, '.claims'))
+    assert.deepEqual({ files: left0.sort(), claims }, { files: left.filter((n) => n !== '.claims').sort(), claims: env.CLAUDE_PLUGIN_OPTION_KEEPDAYS === '90' ? ['20260801-0800_old-done.json'] : [] }, name)
+  })
+}
