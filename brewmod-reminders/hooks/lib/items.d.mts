@@ -9,6 +9,7 @@ export type When = { ok: true; ms: number; iso: string } | { ok: false; error: s
 export type Match = { id: string } | { error: 'none' | 'ambiguous'; candidates: string[] }
 
 export const CLAIMS_DIR: string
+export const HANDOFF_MARK: string
 export const validSid: (sid: unknown) => boolean
 export const sessionStateName: (sid: string) => string
 export const claimName: (id: string) => string

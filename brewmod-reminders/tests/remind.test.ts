@@ -176,11 +176,25 @@ test('GIVEN an owned claim WHEN done is called with a result THEN the header is 
   const out = await tool($, 'update_reminder', { id: 'hotfix', action: 'done', result: 'prod ok\nno errors' })
 
   expect({ text: out.text, writes: ops.writes.slice(before) }, 'done').toEqual({
-    text: `20261021-0803_hotfix: done | ${HOTFIX}`,
+    text: 'done: Hotfix (20261021-0803_hotfix)',
     writes: [
       [HOTFIX, 'due: 2026-10-21T08:03:00Z\nstatus: done\ndone: 2026-10-21T14:00:00Z\nresult: prod ok no errors\n\nHotfix\n'],
       [CLAIM, ''],
     ],
+  })
+})
+
+test('GIVEN /remind cancel WHEN it runs THEN the answer names the title and id and the header says cancelled', async ($, on) => {
+  mock.clock(on, { now: NOW })
+  const ops = wire(on, { [HOTFIX]: item('2026-10-21T08:03:00Z', 'Hotfix') })
+  await start($)
+  const before = ops.writes.length
+
+  const out = await remind($, 'cancel hotfix')
+
+  expect({ text: out.text, writes: ops.writes.slice(before) }, 'cancel').toEqual({
+    text: 'cancelled: Hotfix (20261021-0803_hotfix)',
+    writes: [[HOTFIX, 'due: 2026-10-21T08:03:00Z\nstatus: cancelled\ncancelled: 2026-10-21T14:00:00Z\n\nHotfix\n']],
   })
 })
 
@@ -194,7 +208,7 @@ test('GIVEN /remind snooze with tomorrow 9:00 WHEN it runs THEN the due line mov
   await clock.advance(1000)
 
   expect({ text: out.text, writes: ops.writes.slice(before), submits: ops.submits }, 'snooze').toEqual({
-    text: `20261021-0803_hotfix: snoozed until 2026-10-22T08:00:00Z | ${HOTFIX}`,
+    text: 'snoozed: Hotfix (20261021-0803_hotfix) until 2026-10-22T08:00:00Z',
     writes: [[HOTFIX, 'due: 2026-10-22T08:00:00Z\nstatus: pending\n\nHotfix\n']],
     submits: [],
   })
@@ -245,6 +259,27 @@ test('GIVEN one due and four upcoming items WHEN the band is drawn THEN it shows
     '  Global thing  in 18 h (global)',
     '  Task 24  in 3 d',
     '+2 more · /remind  list · done · snooze · or say what to add',
+  ])
+  await ui.unmount()
+})
+
+test('GIVEN an item due in 30 s and one due 30 s ago WHEN the band is drawn THEN the upcoming one reads in <1 min and the due one now', async ($, on) => {
+  mock.clock(on, { now: NOW })
+  wire(on, { [LATER]: item('2026-10-21T14:00:30Z', 'Rotate keys'), [HOTFIX]: item('2026-10-21T13:59:30Z', 'Hotfix') })
+  await start($)
+
+  const ui = await $.ui.mount({
+    plugin: 'brewmod-reminders',
+    component: 'AbovePrompt',
+    surface: 'terminal',
+    props: { hasSurvey: false, isWorking: false, maxRows: 24, bodyColumns: 100, scroll: { bodyRows: 23, offset: 0 }, view: {} },
+  })
+
+  expect(flat(await ui.drawn()), 'band rows').toEqual([
+    'reminders · 1 due · 1 upcoming',
+    '  Hotfix  now',
+    '  Rotate keys  in <1 min',
+    '/remind  list · done · snooze · or say what to add',
   ])
   await ui.unmount()
 })

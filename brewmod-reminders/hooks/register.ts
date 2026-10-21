@@ -4,7 +4,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 import {
-  CLAIMS_DIR, buildItem, claimJson, claimLive, claimName, classify, formatWhen, isItemName, isoZ, itemKey, itemName, matchId, parseClaim, parseConfig,
+  CLAIMS_DIR, HANDOFF_MARK, buildItem, claimJson, claimLive, claimName, classify, formatWhen, isItemName, isoZ, itemKey, itemName, matchId, parseClaim, parseConfig,
   parseItem, parseWhenNatural, patchHeader, relative, sessionStateJson, sessionStateName, slugify, systemTz, validSid,
   type Claim, type Item, type State,
 } from './lib/items.mjs'
@@ -153,8 +153,10 @@ async function act(io: Io, dirs: Dirs, a: { req: Act; sid: string; now: number; 
   }
   await io.write(e.path, patchHeader(text, patch))
   if (e.claim !== null) await io.write(`${e.dir}/${CLAIMS_DIR}/${claimName(e.id)}`, '')
-  const verb = req.action === 'snooze' ? `snoozed until ${patch.due}` : req.action
-  return { text: `${tag(e)}: ${verb} | ${e.path}${gitNote(a.git, e)}` }
+  const label = e.title === '' ? e.id : e.title
+  const said =
+    req.action === 'snooze' ? `snoozed: ${label} (${tag(e)}) until ${patch.due}` : `${req.action === 'done' ? 'done' : 'cancelled'}: ${label} (${tag(e)})`
+  return { text: `${said}${gitNote(a.git, e)}` }
 }
 
 type Add = { scope?: string; when?: string; text?: string; slug?: string; tz?: string; confirm?: boolean }
@@ -197,7 +199,7 @@ const HELP = (dirs: Dirs, hasTools: boolean): string =>
 
 const handoff = (request: string, scope: string | null, now: number, tz: string): string =>
   [
-    `Reminder helper. My request: <request>${request}</request>`,
+    `${HANDOFF_MARK}${request}</request>`,
     `Now: ${formatWhen(now, tz, now).replace(/, now$/, '')}, time zone ${tz}, UTC ${isoZ(now)}. Times I give without a zone are in ${tz}.`,
     `Scope: ${scope ?? 'not given; ask "Where to save?" in the same dialog, Project (Recommended) / Global'}.`,
     `Use the ${TOOL}* tools. To add: add_reminder without confirm first (preview, writes nothing), show me its time line, ONE AskUserQuestion confirming the time (plus the scope when not given), then add_reminder with confirm:true. To look or change: list_reminders, update_reminder.`,

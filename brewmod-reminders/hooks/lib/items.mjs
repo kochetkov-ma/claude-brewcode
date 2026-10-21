@@ -213,7 +213,9 @@ export function span(ms) {
   if (a < 48 * 3600000) return `${Math.round(a / 3600000)} h`
   return `${Math.round(a / 86400000)} d`
 }
-export const relative = (ms, now) => (Math.abs(ms - now) < 60000 ? 'now' : ms > now ? `in ${span(ms - now)}` : `${span(now - ms)} ago`)
+// 'now' only for due (past or equal); an upcoming item under a minute away reads 'in <1 min'.
+export const relative = (ms, now) =>
+  ms > now ? (ms - now < 60000 ? 'in <1 min' : `in ${span(ms - now)}`) : now - ms < 60000 ? 'now' : `${span(now - ms)} ago`
 
 // "Thu 22 Oct 09:00 Lisbon (08:00 UTC), in 18 h"; UTC date added when it differs from the local date.
 export function formatWhen(ms, tz, now) {
@@ -244,10 +246,13 @@ export function matchId(ids, query) {
   return pick(ids.filter((id) => id.toLowerCase().startsWith(q) || slug(id).startsWith(q)))
 }
 
+// First line of the /remind hand-off prompt (register.ts builds it); the offer skips that turn.
+export const HANDOFF_MARK = 'Reminder helper. My request: <request>'
+
 // Offer only on a real typed prompt: source user, or source absent and the module saw an interactive session.
 export function shouldOffer(payload, sessionState) {
   if (!payload || !validSid(payload.session_id) || payload.agent_id !== undefined) return false
-  if (typeof payload.prompt === 'string' && payload.prompt.trim().startsWith('/')) return false
+  if (typeof payload.prompt === 'string' && (payload.prompt.trim().startsWith('/') || payload.prompt.trimStart().startsWith(HANDOFF_MARK))) return false
   if (payload.source === 'user') return true
   return payload.source === undefined && sessionState?.isInteractive === true
 }

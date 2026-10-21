@@ -6,7 +6,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, utimesSy
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { formatWhen, parseWhen, parseWhenNatural } from '../hooks/lib/items.mjs'
+import { formatWhen, parseWhen, parseWhenNatural, relative } from '../hooks/lib/items.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SCRIPT = join(HERE, '..', 'hooks', 'remind.mjs')
@@ -55,6 +55,7 @@ const rows = [
   ['absent source + interactive session is offered', (c) => (old(c), session(c, true)), [{ source: undefined }], [IDS(A)]],
   ['absent source + non-interactive session is silent', (c) => (old(c), session(c, false)), [{ source: undefined }], [NONE]],
   ['absent source + no session file is silent', old, [{ source: undefined }], [NONE]],
+  ['hand-off prompt is skipped and not marked offered', old, [{ prompt: 'Reminder helper. My request: <request>x</request>\nNow: y' }, {}], [NONE, IDS(A)]],
   ['slash prompt is skipped', old, [{ prompt: '/remind list' }], [NONE]],
   ['invalid session id is silent', old, [{ session_id: '../x' }], [NONE]],
   ['offered once per session', old, [{}, {}], [IDS(A), NONE]],
@@ -157,4 +158,13 @@ test('GIVEN an offered item whose due line was snoozed WHEN the next prompt arri
   sched(ctx, `${A}.md`, item('2026-10-22T08:30:00Z', 'pending'))
   const later = call(ctx, {}, {}).ids
   assert.deepEqual({ first, later }, { first: [A], later: [A] }, 'offered before and after the snooze moved due into the past')
+})
+
+test('GIVEN due times around now WHEN relative runs THEN now is only for due and an upcoming one under a minute reads in <1 min', () => {
+  const N = 1_000_000
+  assert.deepEqual(
+    [N + 30000, N, N - 30000, N + 59999, N + 60000, N - 60000].map((ms) => relative(ms, N)),
+    ['in <1 min', 'now', 'now', 'in <1 min', 'in 1 min', '1 min ago'],
+    'relative labels',
+  )
 })
