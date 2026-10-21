@@ -332,34 +332,41 @@ async function band($: any): Promise<string[]> {
   return rows
 }
 
-test('GIVEN one due and four upcoming items WHEN the band is drawn THEN it shows the counts, 3 rows, +2 more and the /remind hint', async ($, on) => {
-  mock.clock(on, { now: NOW })
-  const tree: Tree = { [HOTFIX]: item('2026-10-21T08:03:00Z', 'Hotfix'), [GLOBAL]: item('2026-10-22T08:00:00Z', 'Global thing') }
-  for (const d of [24, 25, 26]) tree[`${P_DIR}/202610${d}-0800_x${d}.md`] = item(`2026-10-${d}T08:00:00Z`, `Task ${d}`)
-  wire(on, tree)
-  await start($)
+const FOOT = '/remind  list · done · snooze'
+const FRESH = `${P_DIR}/20261021-1359_fresh.md`
+const RUN = `${P_DIR}/20261021-0800_run.md`
+const bands: { name: string; tree: Tree; rows: string[] }[] = [
+  { name: 'only upcoming items', tree: { [LATER]: item('2026-10-23T08:00:00Z', 'Rotate keys'), [GLOBAL]: item('2026-10-22T08:00:00Z', 'Global thing') }, rows: [] },
+  {
+    name: 'only a due item claimed by a live session',
+    tree: { [RUN]: item('2026-10-21T08:00:00Z', 'Run task'), [`${P_DIR}/.claims/20261021-0800_run.json`]: gclaim('other', NOW - 1000) },
+    rows: [],
+  },
+  {
+    name: '2 due and 1 upcoming',
+    tree: { [HOTFIX]: item('2026-10-21T08:03:00Z', 'Hotfix'), [FRESH]: item('2026-10-21T13:59:30Z', 'Fresh'), [LATER]: item('2026-10-23T08:00:00Z', 'Rotate keys') },
+    rows: ['reminders · 2 due', '  Hotfix  6 h ago', '  Fresh  now', FOOT],
+  },
+  {
+    name: '4 due',
+    tree: {
+      [HOTFIX]: item('2026-10-21T08:03:00Z', 'Hotfix'),
+      [GLOBAL.replace('20261022', '20261020')]: item('2026-10-20T08:00:00Z', 'Global thing'),
+      [`${P_DIR}/20261019-0800_x19.md`]: item('2026-10-19T08:00:00Z', 'Task 19'),
+      [`${P_DIR}/20261018-0800_x18.md`]: item('2026-10-18T08:00:00Z', 'Task 18'),
+    },
+    rows: ['reminders · 4 due', '  Task 18  3 d ago', '  Task 19  2 d ago', '  Global thing  30 h ago (global)', `+1 more · ${FOOT}`],
+  },
+]
+for (const { name, tree, rows } of bands) {
+  test(`GIVEN ${name} WHEN the band is drawn THEN it shows exactly ${JSON.stringify(rows)}`, async ($, on) => {
+    mock.clock(on, { now: NOW })
+    wire(on, tree)
+    await start($)
 
-  expect(await band($), 'band rows').toEqual([
-    'reminders · 1 due · 4 upcoming',
-    '  Hotfix  6 h ago',
-    '  Global thing  in 18 h (global)',
-    '  Task 24  in 3 d',
-    '+2 more · /remind  list · done · snooze · or say what to add',
-  ])
-})
-
-test('GIVEN an item due in 30 s and one due 30 s ago WHEN the band is drawn THEN the upcoming one reads in <1 min and the due one now', async ($, on) => {
-  mock.clock(on, { now: NOW })
-  wire(on, { [LATER]: item('2026-10-21T14:00:30Z', 'Rotate keys'), [HOTFIX]: item('2026-10-21T13:59:30Z', 'Hotfix') })
-  await start($)
-
-  expect(await band($), 'band rows').toEqual([
-    'reminders · 1 due · 1 upcoming',
-    '  Hotfix  now',
-    '  Rotate keys  in <1 min',
-    '/remind  list · done · snooze · or say what to add',
-  ])
-})
+    expect(await band($), 'band rows').toEqual(rows)
+  })
+}
 
 test('GIVEN an item due in 30 s WHEN the 60 s tick fires THEN one toast names it, and the next tick adds none', async ($, on) => {
   const clock = mock.clock(on, { now: NOW })
@@ -370,19 +377,4 @@ test('GIVEN an item due in 30 s WHEN the 60 s tick fires THEN one toast names it
   await clock.advance(60_000)
 
   expect(ops.toasts, 'toasts').toEqual(['reminder due: Rotate keys · /remind'])
-})
-
-test('GIVEN one due, one running and one upcoming item WHEN the band is drawn THEN running is not counted as upcoming', async ($, on) => {
-  mock.clock(on, { now: NOW })
-  const RUN = `${P_DIR}/20261022-0800_run.md`
-  wire(on, { [HOTFIX]: item('2026-10-21T08:03:00Z', 'Hotfix'), [RUN]: item('2026-10-22T08:00:00Z', 'Run task'), [`${P_DIR}/.claims/20261022-0800_run.json`]: gclaim('other', NOW - 1000), [LATER]: item('2026-10-23T08:00:00Z', 'Rotate keys') })
-  await start($)
-
-  expect(await band($), 'band rows').toEqual([
-    'reminders · 1 due · 1 upcoming · 1 running',
-    '  Hotfix  6 h ago',
-    '  Run task  in 18 h · running',
-    '  Rotate keys  in 42 h',
-    '/remind  list · done · snooze · or say what to add',
-  ])
 })

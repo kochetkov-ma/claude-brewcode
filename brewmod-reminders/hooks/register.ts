@@ -11,7 +11,7 @@ import {
 import type { ReminderView } from '../types'
 
 // The band reads this view; the atom is declared in this file only (the scan reads it).
-const viewAtom = atom({ plugin: 'brewmod-reminders', key: 'view' } as const, { due: 0, open: 0, running: 0, rows: [] })
+const viewAtom = atom({ plugin: 'brewmod-reminders', key: 'view' } as const, { due: 0, rows: [] })
 
 const TICK_MS = 60_000
 const BAND_ROWS = 3
@@ -76,13 +76,10 @@ const loadAll = async (io: Io, dirs: Dirs, now: number): Promise<Entry[]> => [
 const byDue = (a: Entry, b: Entry): number => (a.due ?? 0) - (b.due ?? 0) || a.id.localeCompare(b.id)
 const tag = (i: Entry): string => `${i.id}${i.global ? ' (global)' : ''}`
 
+// The band lists due items only: pending (upcoming) and running (claimed by a live session) never show.
 function viewOf(items: Entry[], now: number): ReminderView {
-  const open = items.filter((i) => i.state === 'due' || i.state === 'pending' || i.state === 'running').sort(byDue)
-  const rows = open.slice(0, BAND_ROWS).map((i) => ({
-    text: `${i.title === '' ? i.id : i.title}  ${relative(i.due ?? now, now)}${i.state === 'running' ? ' · running' : ''}${i.global ? ' (global)' : ''}`,
-    isDue: i.state === 'due',
-  }))
-  return { due: open.filter((i) => i.state === 'due').length, open: open.length, running: open.filter((i) => i.state === 'running').length, rows }
+  const due = items.filter((i) => i.state === 'due').sort(byDue)
+  return { due: due.length, rows: due.map((i) => `${i.title === '' ? i.id : i.title}  ${relative(i.due ?? now, now)}${i.global ? ' (global)' : ''}`).slice(0, BAND_ROWS) }
 }
 
 function listText(items: Entry[], now: number, tz: string, dirs: Dirs): string {
@@ -325,18 +322,18 @@ export const register: Register = (on) => {
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const view = await read($, viewAtom)
-    if (e.props.hasSurvey || view.open === 0 || e.props.maxRows < 3) return next(e)
+    if (e.props.hasSurvey || view.due === 0 || e.props.maxRows < 3) return next(e)
     const below = await next(e)
     const { Box, Text } = $.ui.resolve(e)
     const rows = view.rows.slice(0, Math.max(1, e.props.maxRows - 2))
-    const more = view.open - rows.length
+    const more = view.due - rows.length
     const band = Box({
       key: 'band',
       flexDirection: 'column',
       children: [
-        Text({ color: view.due > 0 ? 'warning' : 'text', bold: true, children: `reminders · ${view.due} due · ${view.open - view.due - view.running} upcoming${view.running > 0 ? ` · ${view.running} running` : ''}` }),
-        ...rows.map((r) => Text({ color: r.isDue ? 'warning' : 'text', wrap: 'truncate-end', children: `  ${r.text}` })),
-        Text({ dimColor: true, wrap: 'truncate-end', children: `${more > 0 ? `+${more} more · ` : ''}/remind  list · done · snooze · or say what to add` }),
+        Text({ color: 'warning', bold: true, children: `reminders · ${view.due} due` }),
+        ...rows.map((r) => Text({ color: 'warning', wrap: 'truncate-end', children: `  ${r}` })),
+        Text({ dimColor: true, wrap: 'truncate-end', children: `${more > 0 ? `+${more} more · ` : ''}/remind  list · done · snooze` }),
       ],
     })
     return below.type === 'engine' ? band : Box({ flexDirection: 'column', children: [below, band] })
