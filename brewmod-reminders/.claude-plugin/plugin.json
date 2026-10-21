@@ -17,5 +17,13 @@
     "scheduled",
     "durable"
   ],
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "prefix": {
+      "type": "string",
+      "title": "Reminder picker prefix",
+      "description": "2-8 ASCII punctuation characters that open the reminder picker and run a fired reminder, e.g. **1 (default **)",
+      "default": "**"
+    }
+  }
 }

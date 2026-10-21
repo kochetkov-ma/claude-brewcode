@@ -11,8 +11,13 @@ import {
 import type { ReminderView } from '../types'
 
 // The band reads this view; the atom is declared in this file only (the scan reads it).
-const viewAtom = atom({ plugin: 'brewmod-reminders', key: 'view' } as const, { due: 0, rows: [] })
+const viewAtom = atom({ plugin: 'brewmod-reminders', key: 'view' } as const, { due: 0, rows: [], fired: [] })
 
+const DEFAULT_PREFIX = '**'
+const PREFIX_RE = /^[!-/:-@[-^`{-~]{2,8}$/
+const escRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+// Origins whose text is the person's own typed prompt (same rule as brewmod-placeholders).
+const TYPED_ORIGINS: ReadonlySet<string> = new Set(['composer', 'bridge', 'sdk'])
 const TICK_MS = 60_000
 const BAND_ROWS = 3
 const HISTORY_SHOWN = 20
@@ -83,7 +88,11 @@ const firedList = (items: Entry[]): Entry[] => items.filter((i) => i.state === '
 // The band lists due items only: pending (upcoming) and running (claimed by a live session) never show.
 function viewOf(items: Entry[], now: number): ReminderView {
   const due = firedList(items)
-  return { due: due.length, rows: due.map((i) => `${i.title === '' ? i.id : i.title}  ${relative(i.due ?? now, now)}${i.global ? ' (global)' : ''}`).slice(0, BAND_ROWS) }
+  return {
+    due: due.length,
+    rows: due.map((i) => `${mark(i)} ${i.title === '' ? i.id : i.title}  ${relative(i.due ?? now, now)}${i.global ? ' (global)' : ''}`).slice(0, BAND_ROWS),
+    fired: due.map((i) => ({ id: i.id, global: i.global })),
+  }
 }
 
 type QState = 'active' | 'all' | 'someday' | 'history'
@@ -392,7 +401,10 @@ const TOOLS = [
 ] as const
 
 // No guards around the mod's own logic: the engine skips a failing hook and the chain goes on; `$` is never passed on.
-export const register: Register = (on) => {
+export const register: Register = (on, options) => {
+  const prefix = typeof options.prefix === 'string' && PREFIX_RE.test(options.prefix) ? options.prefix : DEFAULT_PREFIX
+  let hintTail = ''
+  let somedayIds = new Set<string>() // ids the picker listed: known to the highlight (prompt.edit does no I/O)
   let hasTools = false
   let refresh: (() => Promise<void>) | null = null // the band/toast refresh of this session, set at session.start
   let shownKey = ''
@@ -457,20 +469,103 @@ export const register: Register = (on) => {
     return next(e)
   })
 
+  // Picker: only a standalone `<prefix>` / `<prefix><digits|name>` token (line start or after whitespace). Fired rows first, a divider, then someday rows.
+  on('prompt.autocomplete', { token: /^[^\w\s]{2}/ }, async ($, e, next) => {
+    const r = await next(e)
+    const want = e.token.startsWith(prefix) ? e.token.slice(prefix.length) : null
+    if (want === null || !/^[\w-]*$/.test(want) || !(e.start === 0 || /\s/.test(e.text.charAt(e.start - 1)))) return r
+    const now = await $.clock.now()
+    const dirs = dirsOf(await $.session.root().catch(() => undefined), env.cfg, env.home, env.override)
+    const all = await loadAll(io, dirs, now)
+    const hit = (i: Entry, n?: number): boolean => (/^\d+$/.test(want) ? n !== undefined && String(n).startsWith(want) : want === '' || `${i.id} ${i.title}`.toLowerCase().includes(want.toLowerCase()))
+    const fired = firedList(all).flatMap((i, k) => (hit(i, k + 1) ? [{ i, n: k + 1 }] : []))
+    const someday = /^\d+$/.test(want) ? [] : sections(all.map((item) => ({ item, state: item.state }))).someday.map((x) => x.item).filter((i) => hit(i))
+    somedayIds = new Set(all.filter((i) => i.state === 'someday').map((i) => i.id))
+    const rows = [
+      ...fired.map(({ i, n }) => ({ text: `${prefix}${n}`, label: `${prefix}${n}  ${mark(i)} ${i.title === '' ? i.id : i.title}`, description: relative(i.due ?? now, now) })),
+      ...(fired.length > 0 && someday.length > 0 ? [{ text: e.token, label: '── someday ──' }] : []),
+      ...someday.map((i) => ({ text: `${prefix}${i.id}`, label: `${mark(i)} ${i.title === '' ? i.id : i.title}`, description: 'someday' })),
+    ]
+    return rows.length === 0 ? r : { suggestions: [...r.suggestions, ...rows] }
+  })
+
+  // Highlight standalone tokens that would expand (a fired number or a known someday id); no I/O. `**bold**`, `**2**` never match.
+  on('prompt.edit', async ($, e, next) => {
+    const r = await next(e)
+    const fired = (await read($, viewAtom)).fired
+    const re = new RegExp(`(^|\\s)(${escRe(prefix)}([\\w-]+))(?=\\s|$)`, 'g')
+    const deco: { start: number; end: number; bold: boolean; color: 'warning' }[] = []
+    for (const m of r.text.matchAll(re)) {
+      const name = m[3] ?? ''
+      if (!(/^\d+$/.test(name) ? Number(name) >= 1 && Number(name) <= fired.length : somedayIds.has(name) || fired.some((f) => f.id === name))) continue
+      const start = (m.index ?? 0) + (m[1] ?? '').length
+      deco.push({ start, end: start + (m[2] ?? '').length, bold: true, color: 'warning' })
+    }
+    hintTail = deco.length > 0 ? `${prefix}N expands on Enter to "Run reminder ..."` : ''
+    return deco.length === 0 ? r : { ...r, decorations: [...(r.decorations ?? []), ...deco] }
+  })
+
+  on('ui.render', { component: 'PromptHint' }, ($, e, next) => (hintTail === '' ? next(e) : next({ ...e, props: { ...e.props, tail: hintTail } })))
+
+  // `<prefix>N` / `<prefix><id>` standalone tokens -> runPrompt blocks (the /remind run text), the other words follow as extra words; `**bold**` untouched.
+  on('prompt.submit', async ($, e, next) => {
+    if (!TYPED_ORIGINS.has(e.origin.kind) || e.command !== undefined || e.isMeta !== undefined || !e.text.includes(prefix)) return next(e)
+    const re = new RegExp(`(^|\\s)${escRe(prefix)}([\\w-]+)(?=\\s|$)`, 'g')
+    const tokens = [...e.text.matchAll(re)]
+    if (tokens.length === 0) return next(e)
+    const now = await $.clock.now()
+    const sid = await $.session.id()
+    const tz = tzOf(await $.env.get('TZ'))
+    const dirs = dirsOf(await $.session.root().catch(() => undefined), env.cfg, env.home, env.override)
+    const all = await loadAll(io, dirs, now)
+    const band = (await read($, viewAtom)).fired
+    const blocks: string[] = []
+    let rest = e.text
+    for (const m of tokens) {
+      const name = m[2] ?? ''
+      const ref = /^\d+$/.test(name) ? (band.length > 0 ? band[Number(name) - 1] : undefined) : undefined
+      const hit = /^\d+$/.test(name)
+        ? ref === undefined
+          ? firedList(all)[Number(name) - 1]
+          : all.find((i) => i.id === ref.id && i.global === ref.global)
+        : all.find((i) => i.id === name)
+      if (hit === undefined || hit.state === 'done' || hit.state === 'cancelled' || hit.state === 'unparseable' || hit.state === 'ignored') continue
+      if (claimLive(hit.claim, now) && hit.claim !== null && hit.claim.session !== sid) {
+        $.ui.toast(`${hit.id} is already running in another session since ${formatWhen(hit.claim.at, tz, now)}`, { timeoutMs: 8000 })
+        continue
+      }
+      blocks.push(runPrompt(hit, bodyOf(await io.read(hit.path)), ''))
+      rest = rest.replace(m[0], m[1] ?? '')
+    }
+    if (blocks.length === 0) return next(e)
+    const extra = rest.replace(/\s+/g, ' ').trim()
+    return next({ ...e, text: `${blocks.join('\n\n')}${extra === '' ? '' : `\nMy extra words: ${extra}`}` })
+  })
+
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const view = await read($, viewAtom)
     if (e.props.hasSurvey || view.due === 0 || e.props.maxRows < 3) return next(e)
     const below = await next(e)
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
     const rows = view.rows.slice(0, Math.max(1, e.props.maxRows - 2))
     const more = view.due - rows.length
     const band = Box({
       key: 'band',
       flexDirection: 'column',
       children: [
-        Text({ color: 'warning', bold: true, children: `reminders · ${view.due} due` }),
-        ...rows.map((r) => Text({ color: 'warning', wrap: 'truncate-end', children: `  ${r}` })),
-        Text({ dimColor: true, wrap: 'truncate-end', children: `${more > 0 ? `+${more} more · ` : ''}/remind  list · done · snooze` }),
+        Text({ color: 'warning', bold: true, children: `reminders · ${view.due} fired` }),
+        ...rows.map((r, k) =>
+          Button({
+            key: `r${k + 1}`,
+            hotkey: String(k + 1),
+            plain: true,
+            onPress: () => {
+              void $.prompt.fill({ text: `${prefix}${k + 1}`, mode: 'replace' }).catch(() => undefined)
+            },
+            label: r,
+          }),
+        ),
+        Text({ dimColor: true, wrap: 'truncate-end', children: `press ${rows.length > 1 ? `1-${rows.length}` : '1'} then Enter to run · ${more > 0 ? `+${more} more · ` : ''}${prefix} to pick · /remind all · snooze · done` }),
       ],
     })
     return below.type === 'engine' ? band : Box({ flexDirection: 'column', children: [below, band] })

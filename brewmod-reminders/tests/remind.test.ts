@@ -49,6 +49,8 @@ function wire(on: On, tree: Tree) {
   on('turn.complete', (_$, e) => ({ text: e.answer }))
   on('prompt.fill', () => ({ isFilled: true }) as never)
   on('ui.render', () => ENGINE as never)
+  on('prompt.autocomplete', () => ({ suggestions: [] }))
+  on('prompt.edit', (_$, e) => ({ text: e.text, cursor: e.cursor }) as never)
   return ops
 }
 
@@ -502,7 +504,17 @@ test('GIVEN a free-text /remind WHEN it runs THEN the ack returns at once and th
   })
 })
 
-const flat = (n: any): string[] => (n === null || typeof n !== 'object' ? (typeof n === 'string' ? [n] : []) : n.type === 'Text' ? [(n.children ?? []).flatMap(flat).join('')] : (n.children ?? []).flatMap(flat))
+const kids = (n: any): any[] => n.children ?? n.props?.children ?? []
+const flat = (n: any): string[] =>
+  n === null || typeof n !== 'object'
+    ? typeof n === 'string'
+      ? [n]
+      : []
+    : n.type === 'Text'
+      ? [kids(n).flatMap(flat).join('')]
+      : n.type === 'Button'
+        ? [`${n.props.hotkey}: ${n.props.label}`]
+        : kids(n).flatMap(flat)
 
 async function band($: any): Promise<string[]> {
   const ui = await $.ui.mount({
@@ -516,7 +528,7 @@ async function band($: any): Promise<string[]> {
   return rows
 }
 
-const FOOT = '/remind  list · done · snooze'
+const FOOT = (n: number, more = ''): string => `press ${n > 1 ? `1-${n}` : '1'} then Enter to run · ${more}** to pick · /remind all · snooze · done`
 const FRESH = `${P_DIR}/20261021-1359_fresh.md`
 const RUN = `${P_DIR}/20261021-0800_run.md`
 const bands: { name: string; tree: Tree; rows: string[] }[] = [
@@ -529,7 +541,7 @@ const bands: { name: string; tree: Tree; rows: string[] }[] = [
   {
     name: '2 due and 1 upcoming',
     tree: { [HOTFIX]: item('2026-10-21T08:03:00Z', 'Hotfix'), [FRESH]: item('2026-10-21T13:59:30Z', 'Fresh'), [LATER]: item('2026-10-23T08:00:00Z', 'Rotate keys') },
-    rows: ['reminders · 2 due', '  Hotfix  6 h ago', '  Fresh  now', FOOT],
+    rows: ['reminders · 2 fired', '1: ▶ Hotfix  6 h ago', '2: ▶ Fresh  now', FOOT(2)],
   },
   {
     name: '4 due',
@@ -539,7 +551,7 @@ const bands: { name: string; tree: Tree; rows: string[] }[] = [
       [`${P_DIR}/20261019-0800_x19.md`]: item('2026-10-19T08:00:00Z', 'Task 19'),
       [`${P_DIR}/20261018-0800_x18.md`]: item('2026-10-18T08:00:00Z', 'Task 18'),
     },
-    rows: ['reminders · 4 due', '  Task 18  3 d ago', '  Task 19  2 d ago', '  Global thing  30 h ago (global)', `+1 more · ${FOOT}`],
+    rows: ['reminders · 4 fired', '1: ▶ Task 18  3 d ago', '2: ▶ Task 19  2 d ago', '3: ▶ Global thing  30 h ago (global)', FOOT(3, '+1 more · ')],
   },
 ]
 for (const { name, tree, rows } of bands) {
@@ -561,4 +573,84 @@ test('GIVEN an item due in 30 s WHEN the 60 s tick fires THEN one toast names it
   await clock.advance(60_000)
 
   expect(ops.toasts, 'toasts').toEqual(['reminder due: Rotate keys · /remind'])
+})
+
+const FRESH_ID = '20261021-1359_fresh'
+const PICK_TREE = (): Tree => ({
+  [HOTFIX]: item('2026-10-21T08:03:00Z', 'Post-hotfix prod check'),
+  [FRESH]: item('2026-10-21T13:59:30Z', 'Fresh', 'pending', 'kind: note\n'),
+  [SOMEDAY]: item('none', 'Try semble', 'pending', 'kind: note\n'),
+  [LATER]: item('2026-10-23T08:00:00Z', 'Rotate keys'),
+})
+const R1 = { text: '**1', label: '**1  ▶ Post-hotfix prod check', description: '6 h ago' }
+const R2 = { text: '**2', label: '**2  ✎ Fresh', description: 'now' }
+const RDIV = { text: '**', label: '── someday ──' }
+const RSD = { text: '**someday_semble', label: '✎ Try semble', description: 'someday' }
+const picks: [string, string, { suggestions: unknown[] }][] = [
+  ['the bare prefix', '**', { suggestions: [R1, R2, RDIV, RSD] }],
+  ['a digit filter', '**2', { suggestions: [R2] }],
+  ['a name filter', '**sem', { suggestions: [RSD] }],
+  ['a token after a space', 'run **', { suggestions: [R1, R2, RDIV, RSD].map((r) => (r === RDIV ? { ...r, text: '**' } : r)) }],
+  ['a token glued to a word', 'x**', { suggestions: [] }],
+  ['a markdown bold opener', '**bold', { suggestions: [] }],
+  ['a triple star', '***', { suggestions: [] }],
+]
+for (const [name, text, expected] of picks) {
+  test(`GIVEN 2 fired and 1 someday WHEN the box holds ${name} (${JSON.stringify(text)}) THEN the picker rows are exact`, async ($, on) => {
+    mock.clock(on, { now: NOW })
+    wire(on, PICK_TREE())
+    await start($)
+    const token = text.split(' ').pop() as string
+
+    const r = await ($ as any).prompt.autocomplete({ text, cursor: text.length, token, start: text.length - token.length } as never)
+
+    expect(r, name).toEqual(expected)
+  })
+}
+
+const RUN_HOT = [
+  `Run reminder ${ID} (Post-hotfix prod check, action): Post-hotfix prod check`,
+  `This is an action: call update_reminder {id:"${ID}", action:"start"}, carry out its text above, then update_reminder {id:"${ID}", action:"done", result:<one line>}.`,
+].join('\n')
+const noteBlock = (id: string, title: string): string =>
+  [`Run reminder ${id} (${title}, note): ${title}`, `This is a note: show me its full text above, say it was just a reminder (nothing to execute), then call update_reminder {id:"${id}", action:"done"}.`].join('\n')
+const RUN_FRESH = noteBlock(FRESH_ID, 'Fresh')
+const submitRows: [string, string, string, string][] = [
+  ['one number', '**1', 'composer', RUN_HOT],
+  ['a note number', '**2', 'composer', RUN_FRESH],
+  ['two numbers with extra words', '**1 **2 only now', 'composer', `${RUN_HOT}\n\n${RUN_FRESH}\nMy extra words: only now`],
+  ['a number with extra words', '**1 only the last hour', 'composer', `${RUN_HOT}\nMy extra words: only the last hour`],
+  ['a token mid-text', 'please **2 thanks', 'composer', `${RUN_FRESH}\nMy extra words: please thanks`],
+  ['a someday id', '**someday_semble', 'composer', noteBlock('someday_semble', 'Try semble')],
+  ['bold markdown', 'a **bold** word', 'composer', 'a **bold** word'],
+  ['a starred number', '**2**', 'composer', '**2**'],
+  ['a number glued to text', '**1**x', 'composer', '**1**x'],
+  ['an unknown number', 'use **9 now', 'composer', 'use **9 now'],
+  ['a glued prefix', 'x**1', 'composer', 'x**1'],
+  ['a non-typed origin', '**1', 'plugin', '**1'],
+]
+for (const [name, text, kind, expected] of submitRows) {
+  test(`GIVEN 2 fired and 1 someday WHEN ${name} (${JSON.stringify(text)}, origin ${kind}) is submitted THEN the text sent is exact`, async ($, on) => {
+    mock.clock(on, { now: NOW })
+    const ops = wire(on, PICK_TREE())
+    await start($)
+
+    await $.prompt.submit({ text, origin: { kind }, wait: false } as never)
+
+    expect(ops.submits, name).toEqual([expected])
+  })
+}
+
+test('GIVEN a draft with a fired number, a bold word and an unknown number WHEN the box is edited THEN only the fired number is decorated', async ($, on) => {
+  mock.clock(on, { now: NOW })
+  wire(on, PICK_TREE())
+  await start($)
+  const text = 'run **1 and **bold** and **7 and **2'
+
+  const r = await ($ as any).prompt.edit({ origin: { kind: 'composer' }, text, cursor: text.length, start: text.length, end: text.length, inputText: '2' } as never)
+
+  expect((r as { decorations?: unknown }).decorations, 'decorations').toEqual([
+    { start: 4, end: 7, bold: true, color: 'warning' },
+    { start: 33, end: 36, bold: true, color: 'warning' },
+  ])
 })
