@@ -1,15 +1,15 @@
  ▐▛███▛█   Claude Code v2.1.306
-▝▜██████▀  Sonnet 5.5 with medium effort · Claude Max
+▝▜██████▀  Haiku 5.5 with medium effort · Claude Max
  ▝▝   ▝▝   /Volumes/brewery
 
-reminders · 1 due · 0 upcoming                                                      [-]
-  Run the test suite for this project and report the results.  now
-/remind  list · done · snooze · or say what to add
+reminders · 1 fired                                                                 [-]
+1: ▶ Run npm test  now
+press 1 then Enter to run · ** to pick · /remind all · snooze · done
 
 ────────────────────────────────────────────────────────────────────────────────────────
 ❯ 
 ────────────────────────────────────────────────────────────────────────────────────────
-  ⏸ manual mode on · ? for shortcuts · ← for agents                 ◐ medium · /effort
+  ⏸ manual mode on · ? for shortcuts
 
 
 
