@@ -6,10 +6,10 @@ maxTurns: 80
 color: cyan
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch
 doc_type: llm
-version: "6.10.0"
-content_version: "6.9.6"
+version: "6.11.0"
+content_version: "6.11.0"
 generated_by: "brewcode"
-last_updated: "2026-10-17"
+last_updated: "2026-10-21"
 ---
 
 [DICT: AG=agent, CC=Claude Code, FM=frontmatter, SA=subagent, SP=system prompt]
