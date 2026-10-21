@@ -63,7 +63,7 @@ Run in order, show full output; stop if `claude --version` < 2.1.301; end with `
 |-----|---------------------|---------|
 | [brewmod-placeholders](brewmod-placeholders/README.md) | `++r` in a prompt: a whole review block. `/placeholders <what you want>`: Claude drafts your own | `claude plugin install brewmod-placeholders@claude-brewcode` |
 | [brewmod-plan-effort](brewmod-plan-effort/README.md) | Enter plan mode: effort goes to `xhigh` while Claude plans. `/plan-effort max` sets the level | `claude plugin install brewmod-plan-effort@claude-brewcode` |
-| [brewmod-reminders](brewmod-reminders/README.md) | Say "remind me tomorrow 9:00 to check prod": a Markdown file in the repo, shown above the prompt in any later session and offered at your first prompt once due. `/remind` lists, snoozes, marks done | `claude plugin install brewmod-reminders@claude-brewcode` |
+| [brewmod-reminders](brewmod-reminders/README.md) | Say "remind me tomorrow 9:00 to check prod": a Markdown file in the repo, shown above the prompt once it fires (action, note or someday); run it with `**1`. `/remind` shows, snoozes, edits, closes | `claude plugin install brewmod-reminders@claude-brewcode` |
 
 First time: `claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode`, then `/reload-plugins` after installing.
 
@@ -142,7 +142,7 @@ A private slug is unlisted, not locked: anyone with the link can open the page u
 | [`/brewtools:task-board-setup`](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | A file-based task board for any repo with a derived task graph and session anti-drift timers |
 | [compact-recall](https://doc-claude.brewcode.app/brewcode/hooks/) (hook, automatic) | After a compaction, re-injects the plan or intent and the task graph |
 | [brewmod-plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | Plan mode raises effort to `xhigh`; `/plan-effort max` sets the level; your session effort is untouched elsewhere |
-| [brewmod-reminders](https://doc-claude.brewcode.app/mods/reminders/) | Durable reminders and checks as files (`.claude/scheduled/` or `~/.claude/reminders/`) that outlive the session, unlike a cron or `/loop`; `/remind` lists, snoozes, marks done or cancels |
+| [brewmod-reminders](https://doc-claude.brewcode.app/mods/reminders/) | Durable reminders and checks as files (`.claude/scheduled/` or `~/.claude/reminders/`) that outlive the session, unlike a cron or `/loop`; the band shows only fired reminders, `**` picks and runs one; kinds action, note, someday |
 | [`/brewtools:secrets-scan`](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) | Scans git-tracked files for leaked secrets; `--fix` walks through remediation |
 | [`/brewtools:text-optimize`](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/), [`/brewtools:text-human`](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | Cut tokens from prompts and docs in place (`-l`, `-s`, `-d`, `-x`); strip AI artifacts from code, docs and commits |
 

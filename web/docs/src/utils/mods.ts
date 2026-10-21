@@ -28,8 +28,8 @@ export const mods: ModInfo[] = [
   {
     name: 'Reminders',
     slug: 'reminders',
-    pitch: 'Remind me tomorrow 9:00: a file in your repo, offered next session.',
-    try: '/remind tomorrow 9:00 check prod',
+    pitch: 'Say it once: a file in your repo, shown above the prompt when due, run with **1.',
+    try: 'remind me tomorrow at 9 to check prod',
     requires: 'Claude Code 2.1.301+',
     icon: 'clock',
   },

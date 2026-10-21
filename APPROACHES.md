@@ -45,7 +45,7 @@ here. They install from the same marketplace as the four plugins and run without
 |---|---|---|
 | `brewmod-placeholders` (flagship) | Type `++r` in a prompt and Claude receives a saved instruction block with it, as hidden context. The prompt box underlines the token, completes names and previews the exact lines before you send; `/placeholders` adds your own | `++r check the diff` |
 | `brewmod-plan-effort` | Claude plans at `xhigh` (the `planEffort` setting) and your session effort applies everywhere else; a row above the prompt shows it | `/plan-effort max` |
-| `brewmod-reminders` | Durable reminders and checks as Markdown files: a band above the prompt lists them in any later session, and Claude offers the due ones at your first prompt; `/remind` lists, snoozes, finishes | `remind me tomorrow 9:00 to check prod` |
+| `brewmod-reminders` | Durable reminders and checks as Markdown files: the band above the prompt shows only fired reminders; `**1` runs one; kinds action, note, someday; `/remind` lists, snoozes, edits, closes | `remind me tomorrow 9:00 to check prod` |
 
 ❗ **Update Claude Code first:** mods need Claude Code 2.1.301 or newer (`claude --version`; `claude update`,
 then restart Claude Code: exit, run `claude`).
@@ -139,28 +139,32 @@ session effort setting is never written.
 
 A reminder is a Markdown file in the repo (project scope) or in the Claude config dir (global scope), so it
 outlives the session: a cron or `/loop` job dies with its session, and the cloud `/schedule` has no local SSH
-keys, scripts or VPS access. While open items exist, a band above the prompt lists them; the first real prompt
-of a session makes Claude tell you about the due ones and offer to run, snooze, finish or cancel each. Nothing
-runs unasked.
+keys, scripts or VPS access. While reminders have fired, a band above the prompt lists only those; the next real
+prompt makes Claude open its reply with one line about them. A `**` picker runs one. Nothing runs unasked.
 
 | Piece | Engine hook | What it does |
 |---|---|---|
-| Band | module `ui.render` (`AbovePrompt`), `session.start` | While open items exist: header `reminders · 1 due · 2 upcoming`, up to 3 rows (`<title>  <relative time>`: `now`, `in <1 min`, `2 d ago`, `(global)`, `· running`), `+N more`, footer `/remind  list · done · snooze · or say what to add`. Nothing goes to Claude at session start |
-| Tick and toast | module `session.start` (60 s timer) | Refreshes the band; one toast `reminder due: <title> · /remind` (or `N reminders due · /remind`) when an item becomes due mid-session. No automatic turn |
-| Offer | command hook `remind.mjs`, `UserPromptSubmit`, and `SessionStart` matcher `compact`, timeout 5 s | On the first real interactive prompt, adds the due items to Claude's context: tell the user first, offer run now, snooze, done or cancel, never run unasked, call out an item more than 24 h late. Once per session per item; re-offered after `/compact`. No offer for a `/`-prefixed prompt, a `/remind <text>` hand-off turn, `claude -p`, CI, the SDK or a subagent |
-| Model tools | registered at `session.start`, handled in `tool.call` | `list_reminders`, `add_reminder`, `update_reminder`; no permission prompt. `add_reminder` without `confirm` returns only a preview (`Preview, nothing written: ...`) and writes nothing; Claude asks once (time, and Project (Recommended) or Global when the request named no scope), then calls it again with `confirm: true`. `update_reminder start` claims an item, `done` records a `result:` |
-| `/remind` | module `command.run`, `session.start` | `/remind` or `list` prints due, running, pending, unreadable, done (last 10) and cancelled (last 10) in local time; `help`; `done <id>`, `cancel <id>`, `snooze <id> <+2h\|tomorrow 9:00>` print locally, no Claude turn. Any other text is handed to Claude (`Handing this to Claude: <request>`). An id is the file basename; a unique slug prefix matches |
+| Band | module `ui.render` (`AbovePrompt`), `session.start` | Fired items only (pending and someday never show; none fired = no band): header `reminders · N fired`, up to 3 rows (`<▶ action or ✎ note> <title>  <relative time>`, ` (global)` suffix), keys 1-3, footer `press 1-3 then Enter to run · [+N more · ]** to pick · /remind all · snooze · done`. A digit key fills `**N` into an empty prompt (not sent); Enter runs it. Nothing goes to Claude at session start |
+| Tick, toast, alert | module `session.start` (`$.clock.every`, 60 s) | Refreshes the band and, when an item becomes due in an open interactive session, shows one toast `reminder fired: <title> · ** to pick` (or `N reminders fired · ** to pick`) and, when `notify` is on, a best-effort `$.ui.notify` desktop alert; `/remind help` prints the last result (`sent via <channel>`, `not sent (<reason>)` or `off`). No automatic turn |
+| Kinds | item header `kind:`, `due:` | `action` (missing `kind:` reads as action): Claude claims it, runs the text, closes it with a one-line `result:`. `note`: Claude shows the full text, says it was only a reminder, closes it. Someday: file `someday_<slug>.md`, `due: none`; never fires, so no band, toast, alert or offer line; listed by `/remind all`, `/remind someday`, the `**` picker and `list_reminders`; a date (`snooze`, `edit`, `reopen`) makes it a normal item |
+| Picker and run tokens | module `prompt.autocomplete` (`^[^\w\s]{2}` token), `prompt.edit` highlight, `prompt.submit` | A standalone `**` opens a picker: fired rows (`**1`), a `── someday ──` divider, someday rows (`**<id>`). `prompt.submit` expands each standalone `**N` / `**<id>` (typed origins, not commands) into a run prompt (action: `update_reminder start`, run, `done`; note: show, `done`), keeps extra words as `My extra words:`; `**bold**` never expands; an item claimed by another session toasts `<id> is already running in another session since <time>`. The prefix is the `prefix` option |
+| Offer | command hook `remind.mjs`, `UserPromptSubmit`, and `SessionStart` matcher `compact`, timeout 5 s | On a real interactive prompt, adds the fired items to Claude's context: open the reply with one line about them, show notes in full and close them, offer run, snooze, done or cancel for actions, never run unasked, call out an item more than 24 h late. Cooldown: repeats at most once per `cooldownMinutes` (read from `CLAUDE_PLUGIN_OPTION_COOLDOWNMINUTES`, default 60), at once for a newly fired item; someday never. `compact` clears the offered marks. No offer for a `/`-prefixed prompt, a `/remind <text>` hand-off turn, `claude -p`, CI, the SDK or a subagent |
+| Cleanup | command hook `remind.mjs` | Before each offer, deletes done and cancelled items (and stale claims) closed more than `keepDays` ago (`CLAUDE_PLUGIN_OPTION_KEEPDAYS`, default 30); pending and someday items are never deleted; per-file fail-open |
+| Model tools | registered at `session.start`, handled in `tool.call` | `list_reminders {scope, state: active\|all\|someday\|done, from, to}`, `add_reminder`, `update_reminder {action: start\|done\|snooze\|cancel\|edit\|reopen}`; no permission prompt. `add_reminder` saves at once, no preview and no confirm; `when` is a time or `someday`. With no time Claude asks one question (`When should it fire?`: options derived from the request, plus no date and Other), and the scope (project default, or global when you say so). `update_reminder start` claims an item, `done` records a `result:` |
+| `/remind` | module `command.run`, `session.start` | `/remind` prints the fired items numbered like the band; `all [project\|global] [today\|tomorrow\|week\|+Nd\|+Nw\|until <date>]` prints Fired / Waiting / Someday (fired always listed; the window filters Waiting); `history`, `someday`, `help`; `done`, `cancel`, `reopen <id> [when]`, `snooze <N\|id> <+2h\|tomorrow 9:00>` run locally, no Claude turn. `run <N\|id>` hands the run prompt to Claude (`Running <title> (<kind>): handing it to Claude`), `edit` hands the change (`Handing this edit to Claude: <id>`), other text goes to Claude (`Handing this to Claude: <request>`). An id is the file basename; a unique slug prefix matches |
+| userConfig | `plugin.json` `userConfig`, /config | `prefix` (`**`, 2-8 ASCII punctuation characters), `cooldownMinutes` (60, min 0), `notify` (on), `keepDays` (30, min 1). The module reads them as `options`; `remind.mjs` reads `CLAUDE_PLUGIN_OPTION_COOLDOWNMINUTES` and `CLAUDE_PLUGIN_OPTION_KEEPDAYS` |
 | Git option | `.claude/reminders.json` | `{"git": "off" \| "commit" \| "commit-push"}`, default `off`. The mod never runs git: the offer tells Claude to commit (and push) only that item file, under your permission mode and repo rules. Global items never get a git line; `.gitignore` is untouched |
 
-Item file `<YYYYMMDD-HHMM>_<slug>.md` (the prefix is the due time in UTC): header lines at the top, up to the first
+Item file `<YYYYMMDD-HHMM>_<slug>.md` (the prefix is the due time in UTC) or `someday_<slug>.md`: header lines at the top, up to the first
 blank line, optional `---` fences:
 
 ```
 due: 2026-10-22T08:00:00Z
 status: pending
+kind: action
 ```
 
-`status` is `pending`, `done` or `cancelled`; `done:` or `cancelled:` hold a UTC time, `created:` and `result:` are
+`due:` is a UTC `Z` time, or `none` for someday; `kind:` is `action` or `note` (missing = action); `status` is `pending`, `done` or `cancelled`; `done:` or `cancelled:` hold a UTC time, `created:` and `result:` are
 optional. The body is the text Claude runs. Times are stored as UTC `Z` and shown in the system time zone; a
 naive time without `Z` is listed as unreadable. `README.md` in the directory is skipped.
 
@@ -744,10 +748,11 @@ in one message send only `++rr`: both defs carry `group: review`, and the higher
 | `register.ts` and `hooks/mode.mjs` of `brewmod-plan-effort` | ships with the mod | `brewmod-plan-effort/hooks/` (the `modules` list and both command hooks in its `hooks/hooks.json`) | uninstall the mod |
 | `.state/mode-<session_id>.json` of `brewmod-plan-effort` | `hooks/mode.mjs` at runtime, on `UserPromptSubmit` and `PostToolBatch` | `<plugin root>/.state/`, gitignored; files older than 7 days are pruned | delete the file; a missing or corrupt file means not in plan mode, so no raise |
 | `register.ts` and `hooks/remind.mjs` of `brewmod-reminders` | ships with the mod | `brewmod-reminders/hooks/` (the `modules` list and both command hooks in its `hooks/hooks.json`) | uninstall the mod; your reminder files stay |
-| Reminder item files `<YYYYMMDD-HHMM>_<slug>.md` | the mod tool `add_reminder` (after one confirmation) or `/remind <text>`; by hand works too | `<repo>/.claude/scheduled/` (project, default) or `<config dir>/reminders/` (global, per Claude profile) | `/remind cancel <id>`, or delete the file; the files live outside the mod directory, so uninstalling the mod leaves them |
+| Reminder item files `<YYYYMMDD-HHMM>_<slug>.md`, or `someday_<slug>.md` with `due: none` | the mod tool `add_reminder` (saves at once, no preview) or `/remind <text>`; by hand works too | `<repo>/.claude/scheduled/` (project, default) or `<config dir>/reminders/` (global, per Claude profile) | `/remind cancel <N\|id>`, or delete the file; closed items are deleted after `keepDays` (default 30) by `hooks/remind.mjs`; the files live outside the mod directory, so uninstalling the mod leaves them |
 | `.claims/<id>.json` of `brewmod-reminders` | `update_reminder start` | `.claims/` inside the item directory, with its own `.gitignore` (`*`) | expires after 6 h, or delete the file |
-| `.state/session-<sid>.json` and `.state/offered-<sid>.json` of `brewmod-reminders` | module `session.start` and `hooks/remind.mjs` at runtime | `<plugin root>/.state/`, gitignored; files older than 7 days are pruned | delete the files; the due items are offered again once |
+| `.state/session-<sid>.json` and `.state/offered-<sid>.json` of `brewmod-reminders` | module `session.start` and `hooks/remind.mjs` at runtime | `<plugin root>/.state/`, gitignored; files older than 7 days are pruned | delete the files; the fired items are offered again once |
 | `.claude/reminders.json` | by hand | `<repo>/.claude/reminders.json`; absent = defaults | delete the file; `{"git": "off"}` is the default (`commit`, `commit-push` are the other values) |
+| `prefix`, `cooldownMinutes`, `notify`, `keepDays` of `brewmod-reminders` | the mod's `userConfig` in `plugin.json` | the /config plugin options (defaults `**`, 60, on, 30) | reset the row in /config; `remind.mjs` gets `CLAUDE_PLUGIN_OPTION_COOLDOWNMINUTES` and `CLAUDE_PLUGIN_OPTION_KEEPDAYS` |
 | brewcode `session-start.mjs` | ships with brewcode | `brewcode/hooks/`, unmatched `SessionStart` group of `brewcode/hooks/hooks.json` | uninstall the plugin |
 | `compact-recall.mjs` | ships with brewcode | `brewcode/hooks/`, `SessionStart` group with `"matcher": "compact"` | uninstall the plugin; no flag, no config file |
 | `.claude/plans/LATEST.md` + `_planLink` | brewcode `session-start.mjs` at runtime | `<repo>/.claude/plans/`, `<repo>/.claude/tasks/cfg/brewcode.state.json` | delete the link; it is recreated on the next fresh plan |

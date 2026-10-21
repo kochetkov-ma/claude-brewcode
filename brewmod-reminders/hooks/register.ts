@@ -4,18 +4,46 @@
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 import {
-  CLAIMS_DIR, HANDOFF_MARK, buildItem, claimJson, claimLive, claimName, classify, formatWhen, isItemName, isoZ, itemKey, itemName, matchId, parseClaim, parseConfig,
-  parseItem, parseWhenNatural, patchHeader, relative, sessionStateJson, sessionStateName, slugify, systemTz, validSid,
+  CLAIMS_DIR, HANDOFF_MARK, RUN_MARK, bodyOf, buildItem, calendar, claimJson, claimLive, claimName, classify, closedAt, closedLabel, datePatch, editText, formatWhen, isItemName, isoZ, itemKey, itemName, matchId,
+  parseClaim, parseConfig, parseItem, parseWhenNatural, patchHeader, rangeOf, relative, reopenPatch, sections, sessionStateJson, sessionStateName, slugOf, slugify, systemTz, tagOf, validSid, windowOf,
   type Claim, type Item, type State,
 } from './lib/items.mjs'
 import type { ReminderView } from '../types'
 
 // The band reads this view; the atom is declared in this file only (the scan reads it).
-const viewAtom = atom({ plugin: 'brewmod-reminders', key: 'view' } as const, { due: 0, open: 0, running: 0, rows: [] })
+const viewAtom = atom({ plugin: 'brewmod-reminders', key: 'view' } as const, { due: 0, rows: [] })
 
+const DEFAULT_PREFIX = '**'
+const PREFIX_RE = /^[!-/:-@[-^`{-~]{2,8}$/
+const PREFIX_FIX = '/config -> Reminder picker prefix'
+// Local copy of brewmod-placeholders validatePrefix (hooks/lib/match.ts); here a `/`-leading prefix is refused, not only warned.
+const validatePrefix = (raw: unknown): { prefix: string; warning: string | null } =>
+  raw === undefined
+    ? { prefix: DEFAULT_PREFIX, warning: null }
+    : typeof raw !== 'string' || !PREFIX_RE.test(raw)
+      ? { prefix: DEFAULT_PREFIX, warning: `reminder prefix must be 2-8 ASCII punctuation characters (not _), using ${DEFAULT_PREFIX} · change: ${PREFIX_FIX}` }
+      : raw.startsWith('/')
+        ? { prefix: DEFAULT_PREFIX, warning: `reminder prefix starting with / clashes with slash commands, using ${DEFAULT_PREFIX} · change: ${PREFIX_FIX}` }
+        : { prefix: raw, warning: null }
+const escRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+type Tok = { start: number; end: number; name: string }
+// Standalone `<prefix><name>` tokens; `**1 thing**` is bold: skipped when the next prefix on its line follows a non-space (a closer).
+// An opener (` **x`) or no further prefix keeps it, so `**1 and **bold** x` expands **1.
+function tokensOf(text: string, prefix: string): Tok[] {
+  const re = new RegExp(`(^|\\s)${escRe(prefix)}([\\w-]+)(?=\\s|$)`, 'g')
+  return [...text.matchAll(re)].flatMap((m) => {
+    const start = (m.index ?? 0) + (m[1] ?? '').length
+    const end = start + prefix.length + (m[2] ?? '').length
+    const eol = text.indexOf('\n', end)
+    const at = text.slice(end, eol === -1 ? undefined : eol).indexOf(prefix)
+    return at !== -1 && !/\s/.test(text.charAt(end + at - 1)) ? [] : [{ start, end, name: m[2] ?? '' }]
+  })
+}
+// Origins whose text is the person's own typed prompt (same rule as brewmod-placeholders).
+const TYPED_ORIGINS: ReadonlySet<string> = new Set(['composer', 'bridge', 'sdk'])
 const TICK_MS = 60_000
 const BAND_ROWS = 3
-const DONE_SHOWN = 10
+const HISTORY_SHOWN = 20
 const TOOL = 'mcp__brewmod-reminders__'
 const NEEDS_TOOLS = 'Claude tools for reminders are unavailable on this build; edit the files in .claude/scheduled by hand (see /remind help).'
 
@@ -27,10 +55,11 @@ type Io = {
   write: (p: string, t: string) => Promise<void>
 }
 type Dirs = { project: string; global: string | null; config: string }
+type Env = { cfg: string | undefined; home: string | undefined; override: string | undefined }
 type Out = { text: string; isError?: true }
 
 // override = REMIND_GLOBAL_DIR: the global folder itself (live tests; unset in normal use).
-const dirsOf = (root: string | undefined, cfg: string | undefined, home: string | undefined, override?: string): Dirs => ({
+const dirsOf = (root: string | undefined, { cfg, home, override }: Env): Dirs => ({
   project: `${root ?? '.'}/.claude/scheduled`,
   global: override !== undefined && override !== '' ? override : cfg !== undefined && cfg !== '' ? `${cfg}/reminders` : home !== undefined && home !== '' ? `${home}/.claude/reminders` : null,
   config: `${root ?? '.'}/.claude/reminders.json`,
@@ -73,184 +102,349 @@ const loadAll = async (io: Io, dirs: Dirs, now: number): Promise<Entry[]> => [
   ...(dirs.global === null ? [] : await loadDir(io, dirs.global, true, now)),
 ]
 
-const byDue = (a: Entry, b: Entry): number => (a.due ?? 0) - (b.due ?? 0) || a.id.localeCompare(b.id)
-const tag = (i: Entry): string => `${i.id}${i.global ? ' (global)' : ''}`
+const byDue = (a: Entry, b: Entry): number => (a.due ?? 0) - (b.due ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+const isNum = (s: string): boolean => /^\d+$/.test(s)
+const nameOf = (i: Item): string => (i.title === '' ? i.id : i.title)
+// A live claim of another session, else null.
+const foreignClaim = (e: Entry, sid: string, now: number): Claim | null => (e.claim !== null && claimLive(e.claim, now) && e.claim.session !== sid ? e.claim : null)
+const claimFile = (e: Entry): string => `${e.dir}/${CLAIMS_DIR}/${claimName(e.id)}`
+const whenLine = (i: Item, tz: string, now: number, bad: string = i.dueRaw): string => (i.due !== null ? formatWhen(i.due, tz, now) : i.someday ? 'no date (someday)' : bad)
+const MARK = { action: '▶', note: '✎' } as const
+const mark = (i: Item): string => MARK[i.kind]
+// N in /remind run 1 and **1 = position in this list, the same order as the band.
+const firedList = (items: Entry[]): Entry[] => items.filter((i) => i.state === 'due').sort(byDue)
 
+// The band lists due items only: pending (upcoming) and running (claimed by a live session) never show.
 function viewOf(items: Entry[], now: number): ReminderView {
-  const open = items.filter((i) => i.state === 'due' || i.state === 'pending' || i.state === 'running').sort(byDue)
-  const rows = open.slice(0, BAND_ROWS).map((i) => ({
-    text: `${i.title === '' ? i.id : i.title}  ${relative(i.due ?? now, now)}${i.state === 'running' ? ' · running' : ''}${i.global ? ' (global)' : ''}`,
-    isDue: i.state === 'due',
-  }))
-  return { due: open.filter((i) => i.state === 'due').length, open: open.length, running: open.filter((i) => i.state === 'running').length, rows }
+  const due = firedList(items)
+  return {
+    due: due.length,
+    rows: due.map((i) => `${mark(i)} ${nameOf(i)}  ${relative(i.due ?? now, now)}${i.global ? ' (global)' : ''}`).slice(0, BAND_ROWS),
+  }
 }
 
-function listText(items: Entry[], now: number, tz: string, dirs: Dirs): string {
-  const line = (i: Entry, tail: string): string => `${tag(i)} | ${i.due === null ? `bad due "${i.dueRaw}" (UTC with Z needed)` : formatWhen(i.due, tz, now)} | ${i.title}${tail}`
-  const part = (state: State, label: string, tail: (i: Entry) => string = () => '', rows: Entry[] = items.filter((i) => i.state === state).sort(byDue)): string[] =>
-    rows.length === 0 ? [] : [`${label} (${rows.length}):`, ...rows.map((i) => `- ${line(i, tail(i))}`)]
-  const finished = (state: State): Entry[] =>
-    items.filter((i) => i.state === state).sort((a, b) => (state === 'done' ? b.done : b.cancelled).localeCompare(state === 'done' ? a.done : a.cancelled)).slice(0, DONE_SHOWN)
-  const out = [
-    ...part('due', 'Due'),
-    ...part('running', 'Running', (i) => ` | running in session ${i.claim?.session ?? '?'} since ${i.claim === null ? '?' : formatWhen(i.claim.at, tz, now)}`),
-    ...part('pending', 'Pending'),
-    ...part('unparseable', 'Unreadable'),
-    ...part('done', `Done (last ${DONE_SHOWN})`, (i) => ` | done ${i.done}${i.result === '' ? '' : ` | ${i.result}`}`, finished('done')),
-    ...part('cancelled', `Cancelled (last ${DONE_SHOWN})`, () => '', finished('cancelled')),
-  ]
+type QState = 'active' | 'all' | 'someday' | 'history'
+type Query = { state: QState; scope?: 'project' | 'global'; from: number; to: number }
+const STATE_WORDS = new Map<string, QState>([['active', 'active'], ['all', 'all'], ['someday', 'someday'], ['history', 'history'], ['done', 'history']])
+const query = (state: QState, rest: Partial<Query> = {}): Query => ({ state, from: -Infinity, to: Infinity, ...rest })
+
+// `show` words after the verb: [active|all|someday|history|done] [project|global] [window]; null when anything is left over (-> free text).
+function parseShow(words: string[], now: number, tz: string): Query | null {
+  const w = words.map((x) => x.toLowerCase())
+  const state = STATE_WORDS.get(w[0] ?? '')
+  const at = state === undefined ? 0 : 1
+  const scope = w[at] === 'project' || w[at] === 'global' ? w[at] : undefined
+  const rest = w.slice(at + (scope === undefined ? 0 : 1)).join(' ')
+  const win = rest === '' ? { from: -Infinity, to: Infinity } : windowOf(rest, now, tz)
+  return win === null ? null : query(state ?? 'active', { scope: scope as Query['scope'], ...win })
+}
+
+function listText(all: Entry[], now: number, tz: string, dirs: Dirs, q: Query): string {
+  const windowed = q.from > -Infinity || q.to < Infinity
+  const inScope = (i: Entry): boolean => q.scope === undefined || i.global === (q.scope === 'global')
+  const items = all.filter((i) => {
+    const t = q.state === 'history' ? closedAt(i) : i.due
+    const firedAlways = i.state === 'due' && (q.state === 'all' || q.state === 'active')
+    return inScope(i) && (!windowed || firedAlways || (t !== null && t >= q.from && t < q.to))
+  })
+  const num = new Map(firedList(all).map((i, k) => [i.path, k + 1]))
+  const whenOf = (i: Entry): string => whenLine(i, tz, now, `bad due "${i.dueRaw}" (UTC with Z needed)`)
+  const running = (i: Entry): string => (i.state === 'running' ? ` | running in session ${i.claim?.session ?? '?'} since ${i.claim === null ? '?' : formatWhen(i.claim.at, tz, now)}` : '')
+  const row = (i: Entry): string => `- ${num.has(i.path) ? `${num.get(i.path)} ` : ''}${mark(i)} ${tagOf(i)} | ${whenOf(i)} | ${i.title}${running(i)}`
+  const histRow = (i: Entry): string => {
+    const ms = closedAt(i)
+    return `- ${i.status === 'cancelled' ? '✗' : '✓'} ${mark(i)} ${tagOf(i)} | ${closedLabel(i)} ${ms === null ? '?' : formatWhen(ms, tz, now)} | ${i.title}${i.result === '' ? '' : ` | ${i.result}`}`
+  }
+  const part = (label: string, rows: Entry[], f: (i: Entry) => string = row): string[] => (rows.length === 0 ? [] : [`${label} (${rows.length}):`, ...rows.map(f)])
+  const s = sections(items.map((item) => ({ item, state: item.state })))
+  const fired = s.fired.map((r) => r.item)
+  const waiting = [...s.running, ...s.waiting].map((r) => r.item).sort(byDue)
+  const someday = s.someday.map((r) => r.item)
+  const history = s.history.map((r) => r.item).slice(0, HISTORY_SHOWN)
+  const bad = items.filter((i) => i.state === 'unparseable').sort(byDue)
+  const sd = all.filter((i) => i.state === 'someday' && inScope(i)).length
+  const out =
+    q.state === 'history'
+      ? part(`History (last ${HISTORY_SHOWN})`, history, histRow)
+      : q.state === 'someday'
+        ? part('Someday', someday)
+        : q.state === 'active'
+          ? [...part('Fired', fired), ...(fired.length > 0 && sd > 0 ? [`${sd} someday · /remind all`] : [])]
+          : [...part('Fired', fired), ...part('Waiting', waiting), ...part('Someday', someday), ...part('Unreadable', bad)]
   const where = `project ${dirs.project} | global ${dirs.global ?? 'unavailable'}`
-  return out.length === 0 ? `No reminders. ${where}` : [`Now: ${formatWhen(now, tz, now).replace(/, now$/, '')}`, ...out, where].join('\n')
+  const none =
+    q.state === 'active' ? `No fired reminders${sd > 0 ? ` (${sd} someday)` : ''}; /remind all lists the waiting ones.` : q.state === 'history' ? 'No closed reminders yet.' : q.state === 'someday' ? 'No someday reminders.' : 'No open reminders.'
+  return out.length === 0 ? `${none} ${where}` : [`Now: ${formatWhen(now, tz, now).replace(/, now$/, '')}`, ...out, where].join('\n')
 }
 
 const gitNote = (mode: string, i: { global: boolean; path: string }): string =>
   i.global || mode === 'off' ? '' : `\nGit: commit only ${i.path}${mode === 'commit-push' ? ' and push' : ' (no push)'} following the repo's conventions; stage nothing else.`
 
+const isClosed = (e: Entry): boolean => e.state === 'done' || e.state === 'cancelled'
 // One item by id/slug/prefix within the scope filter; a string is the refusal text.
-function pick(items: Entry[], id: string, scope: string | undefined): Entry | string {
+// Same id in both folders (e.g. after a scope move): the one open copy wins (wantClosed: the one closed copy).
+function pick(items: Entry[], id: string, scope: string | undefined, wantClosed = false): Entry | string {
   const scopes = scope === 'project' ? [false] : scope === 'global' ? [true] : [false, true]
   const hits = scopes.map((g) => ({ g, m: matchId(items.filter((i) => i.global === g).map((i) => i.id), id) }))
   const found = hits.flatMap((h) => ('id' in h.m ? [{ g: h.g, id: h.m.id }] : []))
   const q = id.trim().toLowerCase().replace(/\.md$/, '')
-  const exact = found.filter((f) => f.id.toLowerCase() === q || f.id.replace(/^[^_]*_/, '').toLowerCase() === q)
-  const hit = found.length > 1 && exact.length === 1 ? exact : found
-  if (hit.length > 1) return `"${id}" exists in project and global: pass scope`
-  const [one] = hit
-  if (one !== undefined) return items.find((i) => i.global === one.g && i.id === one.id) as Entry
+  const exact = found.filter((f) => f.id.toLowerCase() === q || slugOf(f.id) === q)
+  const hit = (found.length > 1 && exact.length === 1 ? exact : found).map((h) => items.find((i) => i.global === h.g && i.id === h.id) as Entry)
+  const fit = hit.length > 1 ? hit.filter((x) => isClosed(x) === wantClosed) : hit
+  if (hit.length > 1 && fit.length !== 1) return `"${id}" exists in project and global: pass scope`
+  const [one] = fit
+  if (one !== undefined) return one
   const bad = hits.flatMap((h) => ('candidates' in h.m ? h.m.candidates : []))
-  return bad.length > 0 ? `"${id}" is ambiguous: ${bad.join(', ')}` : `no reminder matches "${id}"; /remind list shows the ids`
+  return bad.length > 0 ? `"${id}" is ambiguous: ${bad.join(', ')}` : `no reminder matches "${id}"; /remind all lists the ids`
+}
+
+// A number = position in the fired list (same as the band); anything else = pick by id.
+function resolve(items: Entry[], token: string, scope: string | undefined): Entry | string {
+  if (!isNum(token)) return pick(items, token, scope)
+  return firedList(items)[Number(token) - 1] ?? `no fired reminder ${token}; /remind shows the numbered list`
+}
+const RUNNABLE: ReadonlySet<string> = new Set(['due', 'pending', 'running', 'someday'])
+// A `<prefix><name>` token's reminder via the /remind run resolver; closed, unreadable, ambiguous or unknown -> null (left as text).
+const runnable = (items: Entry[], name: string): Entry | null => {
+  const e = resolve(items, name, undefined)
+  return typeof e === 'string' || !RUNNABLE.has(e.state) ? null : e
 }
 
 async function claimTo(io: Io, e: Entry, sid: string, now: number): Promise<Out | null> {
-  const file = `${e.dir}/${CLAIMS_DIR}/${claimName(e.id)}`
+  const file = claimFile(e)
   if (!(await io.exists(`${e.dir}/${CLAIMS_DIR}/.gitignore`).catch(() => false))) await io.write(`${e.dir}/${CLAIMS_DIR}/.gitignore`, '*\n')
   await io.write(file, claimJson(sid, now))
   const back = parseClaim(await io.read(file).catch(() => ''))
   return back !== null && back.session === sid ? null : fail(`${e.id} is running in session ${back?.session ?? '?'}; do not run it, tell the user`)
 }
 
-type Act = { id: string; action: string; until?: string; result?: string; scope?: string }
+type Act = { id: string; action: string; until?: string; result?: string; scope?: string; fromScope?: string; text?: string; kind?: string; when?: string }
+type Ctx = { sid: string; now: number; tz: string; by: 'model' | 'user'; git: string }
+const ACTIONS = ['start', 'done', 'snooze', 'cancel', 'edit', 'reopen']
+const SOMEDAY_RE = /^(none|someday)$/i
 
-// start | done | snooze | cancel; the model is refused on a live foreign claim, the person (by: 'user') is not.
-async function act(io: Io, dirs: Dirs, a: { req: Act; sid: string; now: number; tz: string; by: 'model' | 'user'; git: string }): Promise<Out> {
+// edit: text/kind/when/scope in one write; a scope move writes the new file, then cancels the old one (a cancelled same-name file at the target is overwritten).
+// Returns old and new lines, a one-line undo call and the old file.
+async function edit(io: Io, dirs: Dirs, e: Entry, req: Act, c: Ctx): Promise<Out> {
+  const { now, tz } = c
+  if (req.kind !== undefined && req.kind !== 'action' && req.kind !== 'note') return fail('kind is action or note')
+  const when = (req.when ?? '').trim()
+  let dueMs: number | null | undefined
+  if (when !== '') {
+    const w = SOMEDAY_RE.test(when) ? null : parseWhenNatural(when, now, tz)
+    if (w !== null && !w.ok) return fail(w.error)
+    dueMs = w === null ? null : w.ms
+  }
+  const body = req.text?.trim()
+  if (body === '') return fail('text must not be empty')
+  const here = e.global ? 'global' : 'project'
+  const moveTo = req.scope !== undefined && req.scope !== here ? req.scope : undefined
+  if (req.kind === undefined && dueMs === undefined && body === undefined && moveTo === undefined) return fail('nothing to change: pass text, kind, when or scope')
+  const old = await io.read(e.path)
+  const next = editText(old, { text: body, kind: req.kind, dueMs })
+  if (moveTo === undefined) await io.write(e.path, next)
+  else {
+    const dir = moveTo === 'global' ? dirs.global : dirs.project
+    if (dir === null) return fail('the global reminders folder is unavailable (no home directory)')
+    const dest = `${dir}/${e.name}`
+    const there = (await io.exists(dest)) ? parseItem(e.name, await io.read(dest)) : null
+    if (there !== null && there.status !== 'cancelled') return fail(`${e.name} already exists in ${moveTo}; edit it there`)
+    await io.write(dest, next)
+    await io.write(e.path, patchHeader(old, { status: 'cancelled', cancelled: isoZ(now) }))
+    if (e.claim !== null) await io.write(claimFile(e), '')
+  }
+  const after = parseItem(e.name, next)
+  const change = (a: string, b: string): string => (a === b ? a : `${a} → ${b}`)
+  const head = `Reminder updated ${change(`${mark(e)} ${e.kind}`, `${mark(after)} ${after.kind}`)} · ${change(here, moveTo ?? here)} · ${e.id}`
+  // The project-side file this edit wrote: the moved-in copy, the cancelled source, or the edited file.
+  const projectFile = moveTo === 'project' ? `${dirs.project}/${e.name}` : e.path
+  const git = gitNote(c.git, { global: moveTo === undefined && e.global, path: projectFile })
+  const oldWhen = e.someday ? 'someday' : e.due !== null && e.due > now ? isoZ(e.due) : null
+  const undo = {
+    id: e.id,
+    action: 'edit',
+    ...(body !== undefined && body !== bodyOf(old) ? { text: bodyOf(old) } : {}),
+    ...(req.kind !== undefined && req.kind !== e.kind ? { kind: e.kind } : {}),
+    ...(dueMs !== undefined && oldWhen !== null ? { when: oldWhen } : {}),
+    ...(moveTo === undefined ? {} : { scope: here }),
+    from_scope: moveTo ?? here,
+  }
+  const lost = dueMs !== undefined && oldWhen === null ? ` (the old time ${e.dueRaw} has passed or is unreadable: ask for a new one)` : ''
+  const undoLine = Object.keys(undo).length > 3 || lost !== '' ? `Undo, when the user asks: update_reminder ${JSON.stringify(undo)}${lost}` : 'Undo: nothing changed'
+  return {
+    text: `${head}\n- ${mark(e)} ${here} | ${whenLine(e, tz, now)}  ${e.title}\n+ ${mark(after)} ${moveTo ?? here} | ${whenLine(after, tz, now)}  ${after.title}${git}\n${undoLine}\nOld file (${e.path}):\n${old.trimEnd()}`,
+  }
+}
+
+// start | done | snooze | cancel | edit | reopen; the model is refused on a live foreign claim, the person (by: 'user') is not.
+async function act(io: Io, dirs: Dirs, a: { req: Act } & Ctx): Promise<Out> {
   const { req, sid, now, tz } = a
-  if (!['start', 'done', 'snooze', 'cancel'].includes(req.action)) return fail(`unknown action "${req.action}": start, done, snooze or cancel`)
-  if (req.scope !== undefined && req.scope !== 'project' && req.scope !== 'global') return fail('scope is project or global')
-  const found = pick(await loadAll(io, dirs, now), req.id, req.scope)
-  if (typeof found === 'string') return fail(found)
-  const e = found
-  if (e.state === 'done' || e.state === 'cancelled') return fail(`${e.id} is already ${e.state}`)
+  if (!ACTIONS.includes(req.action)) return fail(`unknown action "${req.action}": start, done, snooze, cancel, edit or reopen`)
+  if ([req.scope, req.fromScope].some((s) => s !== undefined && s !== 'project' && s !== 'global')) return fail('scope is project or global')
+  const e = pick(await loadAll(io, dirs, now), req.id, req.action === 'edit' ? req.fromScope : (req.fromScope ?? req.scope), req.action === 'reopen')
+  if (typeof e === 'string') return fail(e)
+  const closed = isClosed(e)
+  if (req.action === 'reopen' ? !closed : closed) return fail(req.action === 'reopen' ? `${e.id} is not closed` : `${e.id} is already ${e.state}`)
   if (e.state === 'ignored') return fail(`${e.id} has no status header; add \`status: pending\` and \`due:\` first`)
-  const foreign = claimLive(e.claim, now) && e.claim !== null && e.claim.session !== sid
-  if (foreign && a.by === 'model') return fail(`${e.id} is running in session ${e.claim?.session} since ${e.claim === null ? '?' : formatWhen(e.claim.at, tz, now)}; do not run it or change it, tell the user`)
+  const foreign = foreignClaim(e, sid, now)
+  if (foreign !== null && a.by === 'model') return fail(`${e.id} is running in session ${foreign.session} since ${formatWhen(foreign.at, tz, now)}; do not run it or change it, tell the user`)
   if (req.action === 'start') {
     if (e.state === 'unparseable') return fail(`${e.id} has an unreadable due line; fix the header first`)
     const lost = await claimTo(io, e, sid, now)
-    return lost ?? { text: `started ${tag(e)}; carry out the text below, then update_reminder {id, action:"done", result}.\n${await io.read(e.path)}` }
+    return lost ?? { text: `started ${tagOf(e)}; carry out the text below, then update_reminder {id, action:"done", result}.\n${await io.read(e.path)}` }
   }
+  if (req.action === 'edit') return edit(io, dirs, e, req, a)
   const text = await io.read(e.path)
-  let patch: Record<string, string>
+  let patch: Record<string, string | null>
   if (req.action === 'done') {
     const result = oneLine(req.result ?? '', 400)
     patch = { status: 'done', done: isoZ(now), ...(result === '' ? {} : { result }) }
   } else if (req.action === 'cancel') patch = { status: 'cancelled', cancelled: isoZ(now) }
   else {
-    const w = parseWhenNatural(req.until ?? '', now, tz)
-    if (!w.ok) return fail(w.error)
-    patch = { due: w.iso, status: 'pending' }
+    const blank = (req.until ?? '').trim() === ''
+    if (req.action === 'reopen' && blank) patch = reopenPatch()
+    else {
+      const w = parseWhenNatural(req.until ?? '', now, tz)
+      if (!w.ok) return fail(w.error)
+      patch = req.action === 'reopen' ? reopenPatch(w.ms) : datePatch(w.ms)
+    }
   }
   await io.write(e.path, patchHeader(text, patch))
-  if (e.claim !== null) await io.write(`${e.dir}/${CLAIMS_DIR}/${claimName(e.id)}`, '')
-  const label = e.title === '' ? e.id : e.title
+  if (e.claim !== null) await io.write(claimFile(e), '')
+  const label = nameOf(e)
+  const dueTxt = (patch.due ?? e.dueRaw) === 'none' ? 'someday (no date)' : `due ${patch.due ?? e.dueRaw}`
   const said =
-    req.action === 'snooze' ? `snoozed: ${label} (${tag(e)}) until ${patch.due}` : `${req.action === 'done' ? 'done' : 'cancelled'}: ${label} (${tag(e)})`
+    req.action === 'snooze' ? `snoozed: ${label} (${tagOf(e)}) until ${patch.due}` : req.action === 'reopen' ? `reopened: ${label} (${tagOf(e)}) ${dueTxt}` : `${req.action === 'done' ? 'done' : 'cancelled'}: ${label} (${tagOf(e)})`
   return { text: `${said}${gitNote(a.git, e)}` }
 }
 
-type Add = { scope?: string; when?: string; text?: string; slug?: string; tz?: string; confirm?: boolean }
+type Add = { scope?: string; when?: string; text?: string; slug?: string; tz?: string; kind?: string }
 
+// Saves at once: no preview, no confirm. when `someday`/`none` = no date (never fires).
 async function add(io: Io, dirs: Dirs, a: Add, now: number, localTz: string, git: string): Promise<Out> {
   if (a.scope !== 'project' && a.scope !== 'global') return fail('scope is required: project or global')
   const dir = a.scope === 'project' ? dirs.project : dirs.global
   if (dir === null) return fail('the global reminders folder is unavailable (no home directory)')
   const text = (a.text ?? '').trim()
   if (text === '') return fail('text is required')
+  const raw = (a.when ?? '').trim()
+  const kind = a.kind === 'action' || a.kind === 'note' ? a.kind : null
+  if (raw === '' || kind === null) return fail([...(raw === '' ? [`when is required: nothing is saved without a trigger time. ${calendar(now, localTz)} ${WHEN_RULE}`] : []), ...(kind === null ? [KIND_RULE] : [])].join(' '))
   const tz = a.tz !== undefined && a.tz !== '' ? a.tz : localTz
   if (!validTz(tz)) return fail(`unknown time zone "${tz}"`)
-  const w = parseWhenNatural(a.when ?? '', now, tz)
-  if (!w.ok) return fail(w.error)
+  const w = SOMEDAY_RE.test(raw) ? null : parseWhenNatural(raw, now, tz)
+  if (w !== null && !w.ok) return fail(w.error)
+  const dueMs = w === null ? null : w.ms
   const slug = slugify(a.slug !== undefined && a.slug !== '' ? a.slug : text)
-  let name = itemName(w.ms, slug)
-  for (let n = 2; n <= 99 && (await io.exists(`${dir}/${name}`)); n++) name = itemName(w.ms, `${slug.slice(0, 40 - `-${n}`.length)}-${n}`)
+  let name = itemName(dueMs, slug)
+  for (let n = 2; n <= 99 && (await io.exists(`${dir}/${name}`)); n++) name = itemName(dueMs, `${slug.slice(0, 40 - `-${n}`.length)}-${n}`)
   if (await io.exists(`${dir}/${name}`)) return fail(`no free file name for "${slug}" at that time; use another slug`)
   const id = name.replace(/\.md$/, '')
-  const when = formatWhen(w.ms, tz, now)
-  if (a.confirm !== true) {
-    return {
-      text: `Preview, nothing written: ${when} | ${a.scope} | ${id}\n${text}\nShow the user this time line, get their confirmation with ONE AskUserQuestion (add "Where to save?" with Project (Recommended) / Global when they gave no scope), then call add_reminder again with confirm:true and the final scope, time and text.`,
-    }
-  }
   const path = `${dir}/${name}`
-  await io.write(path, buildItem({ dueMs: w.ms, text, now }))
-  return { text: `saved ${id} (${a.scope}) | due ${when} | ${path}${gitNote(git, { global: a.scope === 'global', path })}` }
+  await io.write(path, buildItem({ dueMs, text, now, kind }))
+  const due = dueMs === null ? 'someday (no date)' : `due ${formatWhen(dueMs, tz, now)}`
+  return { text: `saved ${id} (${a.scope}) | ${MARK[kind]} ${kind} | ${due} | ${path}\nchange it by saying so · /remind cancel ${id}${gitNote(git, { global: a.scope === 'global', path })}` }
 }
 
-const HELP = (dirs: Dirs, hasTools: boolean): string =>
+const WHEN_RULE =
+  'If the request names no time, ask ONE AskUserQuestion "When should it fire?" with 2-3 options you derive from this reminder\'s own context (e.g. post-deploy prod check: tonight 23:00 / tomorrow 09:00 / in 1 week; renew a domain: in 2 weeks / in 1 month; check nightly-run logs: tonight / tomorrow morning), each label showing its concrete local time, the best fit marked "(Recommended)", plus a last option "No date (someday)" (answer -> when:"someday": it never fires and shows only when the user asks); free text stays available through Other; no fixed list. A kind (action or note) or scope (project or global) that is still unclear joins that same AskUserQuestion as extra questions; ask nothing else. Every option is a concrete local time: a day-level answer like "in 1 week" or "next Monday" is saved at the time its label showed (default 09:00 local), e.g. when:"2026-10-28 09:00" or "mon 09:00"; never a bare date.'
+const KIND_RULE =
+  'kind is required: action (Claude does the work when the user runs it, e.g. "check the prod logs") or note (only tells the user, closes once shown, e.g. "reply to Ana"). Infer it from the request; ask only when it is unclear, as an extra question in the same single AskUserQuestion as the time.'
+
+const HELP = (dirs: Dirs, hasTools: boolean, alert: string): string =>
   [
-    '/remind                      list: due, running, pending, last done (no Claude turn)',
-    '/remind done|cancel [project|global] <id>   mark an item (id = file name, slug or unique prefix; no Claude turn)',
-    '/remind snooze [project|global] <id> <when>   +2h | +1d | tomorrow 9:00 | today 17:30 | 2026-10-22 09:00 (your local zone; no Claude turn)',
+    '/remind                      = the fired reminders, numbered like the band (no Claude turn)',
+    '/remind all [project|global] [today|tomorrow|week|+Nd|+Nw|until YYYY-MM-DD]   Fired, Waiting and Someday; the window filters by trigger time (week = until Sunday 23:59, local)',
+    '/remind history [filters]    = closed: done, shown notes, cancelled   |   /remind someday = only the undated ones   (show active|all|done and list still work)',
+    '/remind run <N|id> [words]   Claude runs it (action) or shows it and closes it (note); N = number in /remind',
+    '/remind done|cancel [project|global] <N|id>   close without running (id = file name, slug or unique prefix; no Claude turn)',
+    '/remind snooze [project|global] <N|id> <when>   +2h | +1d | tomorrow 9:00 | today 17:30 | fri 14:00 (next Friday) | 2026-10-22 09:00 (your local zone; a day without a time = 09:00; gives a someday item a date; no Claude turn)',
+    '/remind reopen <id> [when]   bring a closed one back, with a new time if given   |   /remind edit <N|id> <change>   Claude changes text, kind, time or scope and shows old and new',
     '/remind <words>              add or ask in your words: /remind check prod tomorrow 9:00',
-    '/remind project|global <words>   same with the folder fixed (default project; Claude asks when unsure)',
-    `Items: ${dirs.project}/<YYYYMMDD-HHMM>_<slug>.md (project), ${dirs.global ?? '~/.claude/reminders'}/ (global); header due (UTC, Z), status, body = the task.`,
-    'A due item is offered at your first prompt of a session; nothing runs unasked.',
+    '/remind project|global <words>   same with the folder fixed (default project)',
+    `Items: ${dirs.project}/\`<YYYYMMDD-HHMM>_<slug>.md\` or \`someday_<slug>.md\` (project), ${dirs.global ?? '~/.claude/reminders'}/ (global); header due (UTC, Z, or none), status, kind (action|note), body = the task.`,
+    'A fired item is offered at your first prompt of a session, then at most once per cooldown (a newly fired one at once); nothing runs unasked.',
+    `Desktop alert: ${alert}`,
     ...(hasTools ? [] : [NEEDS_TOOLS]),
   ].join('\n')
+
+const stamp = (now: number, tz: string): string => `Now: ${formatWhen(now, tz, now).replace(/, now$/, '')}, time zone ${tz}, UTC ${isoZ(now)}. Times I give without a zone are in ${tz}.`
 
 const handoff = (request: string, scope: string | null, now: number, tz: string): string =>
   [
     `${HANDOFF_MARK}${request}</request>`,
-    `Now: ${formatWhen(now, tz, now).replace(/, now$/, '')}, time zone ${tz}, UTC ${isoZ(now)}. Times I give without a zone are in ${tz}.`,
-    `Scope: ${scope ?? 'not given; ask "Where to save?" in the same dialog, Project (Recommended) / Global'}.`,
-    `Use the ${TOOL}* tools. To add: add_reminder without confirm first (preview, writes nothing), show me its time line, ONE AskUserQuestion confirming the time (plus the scope when not given), then add_reminder with confirm:true. To look or change: list_reminders, update_reminder.`,
+    stamp(now, tz),
+    calendar(now, tz),
+    `Scope: ${scope ?? 'not given: project unless I say global, everywhere or in every project; ask only when unclear, in the same single dialog'}.`,
+    `Use the ${TOOL}* tools. To add: add_reminder saves at once (no preview, no confirm) when time, kind and scope are clear; then show me its confirmation line. Every reminder needs a trigger time and a kind (action or note; infer it from my words). ${WHEN_RULE} To look: list_reminders (state active|all|someday|done, from/to); to change: update_reminder (start|done|snooze|cancel|edit|reopen).`,
+  ].join('\n')
+
+// The text a run sends to Claude (/remind run, **N): action -> start, do, done; note -> show, say it was just a reminder, done.
+const runPrompt = (e: Entry, body: string, extra: string): string =>
+  [
+    `${RUN_MARK}${e.id} (${e.title}, ${e.kind}): ${body}`,
+    e.kind === 'note'
+      ? `This is a note: show me its full text above, say it was just a reminder (nothing to execute), then call update_reminder {id:"${e.id}", action:"done"}.`
+      : `This is an action: call update_reminder {id:"${e.id}", action:"start"}, carry out its text above, then update_reminder {id:"${e.id}", action:"done", result:<one line>}.`,
+    ...(e.global ? ['It is global: pass scope:"global" in every update_reminder call.'] : []),
+    ...(extra === '' ? [] : [`My extra words: ${extra}`]),
+  ].join('\n')
+
+const editHandoff = (e: Entry, change: string, now: number, tz: string): string =>
+  [
+    `${HANDOFF_MARK}edit ${e.id}: ${change}</request>`,
+    stamp(now, tz),
+    `Edit reminder ${e.id} (${e.title}, ${e.kind}, ${e.global ? 'global' : 'project'}): ${change}`,
+    `Call ${TOOL}update_reminder {id:"${e.id}", action:"edit"} with only what changes: text, kind (action|note), when (a time, or "someday" for no date), scope (the folder to move it to; from_scope:"${e.global ? 'global' : 'project'}" is where it is now). Show me the old and new lines it returns.`,
   ].join('\n')
 
 const TOOLS = [
   {
     name: 'list_reminders',
     description:
-      "List the user's durable reminders: files in this project's .claude/scheduled and the global ~/.claude/reminders. Shows due, running, pending, unreadable and the last done/cancelled with ids and times in the user's zone. Call it before answering a question about reminders or when an id for update_reminder is unclear.",
-    inputSchema: { type: 'object', properties: { scope: { type: 'string', enum: ['project', 'global'], description: 'omit for both' } } },
-  },
-  {
-    name: 'add_reminder',
-    description:
-      "Add a durable reminder: a file that survives sessions and is offered at the first prompt of a later session once due. Unlike CronCreate or /loop (session-only), use it for 'remind me tomorrow 9:00 to check prod'. Without confirm it only returns a preview and writes nothing. For a plain-prompt request with no explicit scope (project, global, here, everywhere): preview with scope project, then ask ONE AskUserQuestion holding the scope (Project (Recommended) / Global) and the time confirmation from the preview line, then call again with confirm:true. text: what to do when due, in the user's words, self-contained. slug: 2-5 lowercase ASCII words. when: ISO with offset or Z, local 'YYYY-MM-DD HH:MM' in the user's zone (or tz), 'today|tomorrow HH:MM', or +<n>m|h|d; a past time is rejected. Take the date and zone from the Now line of the helper text or the current date.",
+      "List the user's durable reminders: files in this project's .claude/scheduled and the global ~/.claude/reminders, with ids and times in the user's zone. Fired ones are numbered like the band. state: active = fired (due) only, with an 'N someday' count line; all (default) = Fired, Waiting and Someday sections by trigger time; someday = the undated ones only (never fire); done = closed: done, shown notes and cancelled. For 'anything to remind me?', 'what's pending?', 'any reminders?', 'есть ли чем мне напомнить?' call state active and show the fired ones, then mention the someday count and offer them. from/to filter by trigger time, so 'reminders that fire this week in this project' = scope project, from 'week' (or from 'week' alone: now until Sunday 23:59). Call it before answering a question about reminders or when an id for update_reminder is unclear.",
     inputSchema: {
       type: 'object',
       properties: {
-        scope: { type: 'string', enum: ['project', 'global'], description: 'required: project (this repo) or global (all projects)' },
-        when: { type: 'string', description: 'ISO with offset/Z, "YYYY-MM-DD HH:MM" local, "tomorrow 9:00", or +2h' },
+        scope: { type: 'string', enum: ['project', 'global'], description: 'omit for both' },
+        state: { type: 'string', enum: ['active', 'all', 'someday', 'done'], description: 'default all' },
+        from: { type: 'string', description: 'earliest trigger: ISO, "YYYY-MM-DD" (00:00 local) or today|tomorrow|week|+Nd|+Nw|until YYYY-MM-DD (the window start)' },
+        to: { type: 'string', description: 'latest trigger, exclusive: ISO, "YYYY-MM-DD" (through that day) or a window word (the window end)' },
+      },
+    },
+  },
+  {
+    name: 'add_reminder',
+    description: `Add a durable reminder: a file that survives sessions and is offered at the first prompt of a later session once due. Unlike CronCreate or /loop (session-only, lost when the session ends), use it for EVERY 'remind me ...' request, short ones too ('in 2 minutes', 'tomorrow 9:00 check prod'); CronCreate only for repeating in-session polling. It saves at once (no preview, no confirm) and returns a confirmation line with the id; show it to the user. Every reminder MUST have a trigger time (or the explicit 'someday' = no date, never fires) and a kind. When the request names no time, FIRST call this tool without when: it saves nothing and returns today's date with the weekdays of the next days and the ask rule; then ask. ${WHEN_RULE} kind: action = Claude does the work when the user runs it (check the logs, run a migration dry run); note = only tells the user, closes once shown (build the CSV export, reply to Ana); infer it from context and ask only when unclear, in the same single AskUserQuestion as the time. scope: project (this repo) unless the user says global, everywhere or in every project; ask only when unclear, in that same question. text: what to do when due, in the user's words, self-contained. slug: 2-5 lowercase ASCII words. when: ISO with offset or Z, local 'YYYY-MM-DD HH:MM' in the user's zone (or tz), 'YYYY-MM-DD' (09:00 local), 'today|tomorrow [HH:MM]' (default 09:00), a weekday 'fri 14:00' (next such day, default 09:00), +<n>m|h|d|w, or 'someday'; a past time is rejected. Take the date and zone from the Now line of the helper text or the current date.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        scope: { type: 'string', enum: ['project', 'global'], description: 'project (this repo, default) or global (all projects)' },
+        kind: { type: 'string', enum: ['action', 'note'], description: 'action = Claude does it when run; note = just a reminder, closes once shown' },
+        when: { type: 'string', description: 'ISO with offset/Z, "YYYY-MM-DD HH:MM" local, "YYYY-MM-DD" (09:00 local), "tomorrow 9:00", "fri 14:00" (next Friday), +2h, +1w or "someday" (no date); needed to save: when the user named none, call without it first to get the calendar, then ask' },
         text: { type: 'string', description: 'what to do when it is due' },
         slug: { type: 'string', description: 'short ascii file name part' },
         tz: { type: 'string', description: 'IANA zone for a local time; default the user zone' },
-        confirm: { type: 'boolean', description: 'true only after the user confirmed the preview' },
       },
-      required: ['scope', 'when', 'text', 'slug'],
+      required: ['scope', 'kind', 'text', 'slug'],
     },
   },
   {
     name: 'update_reminder',
     description:
-      'Change a reminder by id (file name, slug or unique prefix). Never run a due reminder unasked: offer it, then act on the answer. start: claim it before running its text (refused while another live session runs it; returns the text). done: after running, result = one-line outcome. snooze: until = +2h, "tomorrow 9:00", "YYYY-MM-DD HH:MM" or ISO. cancel: drop it. scope only when the id exists in both project and global.',
+      'Change a reminder by id (file name, slug or unique prefix). Never run a due reminder unasked: offer it, then act on the answer. start: claim it before running its text (refused while another live session runs it; returns the text). done: after running (or after showing a note), result = one-line outcome. snooze: until = +2h, "tomorrow 9:00", a weekday "fri 14:00" (next such day, default 09:00), "YYYY-MM-DD HH:MM" or ISO; gives a someday item a date. cancel: drop it. reopen: bring a closed one back, until = optional new time. edit: change any of text, kind (action|note), when (a time in the snooze forms, or "someday" for no date), scope (the folder to MOVE it to; from_scope names where it is now); returns the old and new lines, show them, plus an Undo call and the old file: when the user says undo, make that call. scope (other actions) or from_scope only when the id exists in both project and global.',
     inputSchema: {
       type: 'object',
       properties: {
         id: { type: 'string', description: 'reminder id from list_reminders or the offer' },
-        action: { type: 'string', enum: ['start', 'done', 'snooze', 'cancel'] },
-        until: { type: 'string', description: 'snooze only: the new time' },
+        action: { type: 'string', enum: ['start', 'done', 'snooze', 'cancel', 'edit', 'reopen'] },
+        until: { type: 'string', description: 'snooze: the new time (+2h, "tomorrow 9:00", "fri 14:00", "YYYY-MM-DD HH:MM", ISO); reopen: optional new time' },
         result: { type: 'string', description: 'done only: one-line outcome' },
-        scope: { type: 'string', enum: ['project', 'global'], description: 'only when the id exists in both' },
+        text: { type: 'string', description: 'edit only: the new body' },
+        kind: { type: 'string', enum: ['action', 'note'], description: 'edit only' },
+        when: { type: 'string', description: 'edit only: a time (+2h, "tomorrow 9:00", "fri 14:00", "YYYY-MM-DD HH:MM", ISO), or "someday" for no date' },
+        scope: { type: 'string', enum: ['project', 'global'], description: 'edit: the folder to move it to; other actions: only when the id exists in both' },
+        from_scope: { type: 'string', enum: ['project', 'global'], description: 'only when the id exists in both (edit: where it is now)' },
       },
       required: ['id', 'action'],
     },
@@ -258,25 +452,40 @@ const TOOLS = [
 ] as const
 
 // No guards around the mod's own logic: the engine skips a failing hook and the chain goes on; `$` is never passed on.
-export const register: Register = (on) => {
+export const register: Register = (on, options) => {
+  const check = validatePrefix(options.prefix)
+  const prefix = check.prefix
+  const notifyOn = options.notify !== false // userConfig `notify`, default on
+  let lastNotify = '' // the last $.ui.notify result, one line for /remind help
+  let hintTail = ''
+  let known: Entry[] = [] // items of the last load: the highlight resolves against them (prompt.edit does no I/O)
   let hasTools = false
-  let refresh: (() => Promise<void>) | null = null // the band/toast refresh of this session, set at session.start
+  // Settles with hasTools once session.start's registration ends: a /remind typed right after launch waits for it.
+  let toolsSettled: (v: boolean) => void = () => undefined
+  const toolsReady = new Promise<boolean>((resolve) => (toolsSettled = resolve))
+  // The band/toast refresh of this session, set at session.start; `loaded` = items a hook just read (one numbering source).
+  let refresh: ((loaded?: { items: Entry[]; t: number }) => Promise<void>) | null = null
   let shownKey = ''
   let seenDue: Set<string> | null = null
   let io: Io // set at session.start; `$` is never passed on, so the hooks share these closures
-  let env: { cfg: string | undefined; home: string | undefined; override: string | undefined } // static env; the project root is read per call (/cd, worktree)
+  let env: Env // static env; the project root is read per call (/cd, worktree)
   let interactive = false
   let stateSid = ''
 
   on('session.start', async ($, e, next) => {
+    io = { exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p), write: (p, t) => $.fs.write(p, t) }
+    env = { cfg: await $.env.get('CLAUDE_CONFIG_DIR'), home: (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')), override: await $.env.get('REMIND_GLOBAL_DIR') }
+    if (check.warning !== null) $.ui.toast(check.warning)
     const now = await $.clock.now()
     const sid = await $.session.id()
     // remind.mjs reads this file to tell a typed prompt from a headless one when the hook payload lacks `source`.
     interactive = e.isInteractive
-    if (validSid(sid)) stateSid = sid
-    if (validSid(sid)) await $.fs.write(`${$.plugin.root}/.state/${sessionStateName(sid)}`, sessionStateJson(e.isInteractive, now)).catch(() => undefined)
+    if (validSid(sid)) {
+      stateSid = sid
+      await $.fs.write(`${$.plugin.root}/.state/${sessionStateName(sid)}`, sessionStateJson(e.isInteractive, now)).catch(() => undefined)
+    }
     await $.command
-      .register({ name: 'remind', description: 'List durable reminders, mark them done, snooze or cancel, or say in any words what to remind you of', argumentHint: '[done|cancel <id> | snooze <id> <when> | help | any words]' })
+      .register({ name: 'remind', description: 'Show fired reminders, run, snooze, close or edit them, or say in any words what to remind you of', argumentHint: '[all | history | run|done|cancel|snooze|reopen|edit <N|id> | help | any words]' })
       .catch(() => undefined)
     try {
       for (const t of TOOLS) await $.tool.register({ name: t.name, description: t.description, inputSchema: t.inputSchema, isDeferred: false })
@@ -284,13 +493,12 @@ export const register: Register = (on) => {
     } catch {
       // older build: /remind still lists and edits, only the hand-off needs the tools
     }
-    io = { exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p), write: (p, t) => $.fs.write(p, t) }
-    env = { cfg: await $.env.get('CLAUDE_CONFIG_DIR'), home: (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')), override: await $.env.get('REMIND_GLOBAL_DIR') }
+    toolsSettled(hasTools)
     if (e.isInteractive) {
-      refresh = async () => {
-        const t = await $.clock.now()
-        const dirs = dirsOf(await $.session.root().catch(() => undefined), env.cfg, env.home, env.override)
-        const items = await loadAll(io, dirs, t)
+      refresh = async (loaded) => {
+        const t = loaded?.t ?? (await $.clock.now())
+        const items = loaded?.items ?? (await loadAll(io, dirsOf(await $.session.root().catch(() => undefined), env), t))
+        known = items
         const view = viewOf(items, t)
         const key = JSON.stringify(view)
         if (key !== shownKey) {
@@ -302,7 +510,14 @@ export const register: Register = (on) => {
         else {
           const fresh = due.filter((i) => !seenDue?.has(itemKey(i)))
           for (const i of fresh) seenDue.add(itemKey(i))
-          if (fresh.length > 0) $.ui.toast(fresh.length === 1 ? `reminder due: ${fresh[0]?.title || fresh[0]?.id} · /remind` : `${fresh.length} reminders due · /remind`, { timeoutMs: 8000 })
+          if (fresh.length > 0) {
+            const what = fresh.length === 1 ? `reminder fired: ${fresh[0]?.title || fresh[0]?.id}` : `${fresh.length} reminders fired`
+            $.ui.toast(`${what} · ${prefix} to pick`, { timeoutMs: 8000 })
+            if (notifyOn) {
+              const r = await $.ui.notify(what, { title: 'Reminders' })
+              lastNotify = r.isSent ? `sent via ${r.channel}${r.channel === 'terminal_bell' ? ' (bell only, no text)' : ''}` : `not sent (${r.reason})`
+            }
+          }
         }
       }
       await refresh().catch(() => undefined)
@@ -323,20 +538,97 @@ export const register: Register = (on) => {
     return next(e)
   })
 
+  // Picker: only a standalone `<prefix>` / `<prefix><digits|name>` token (line start or after whitespace). Fired rows first, a divider, then someday rows.
+  on('prompt.autocomplete', { token: /^[^\w\s]{2}/ }, async ($, e, next) => {
+    const r = await next(e)
+    const want = e.token.startsWith(prefix) ? e.token.slice(prefix.length) : null
+    if (want === null || !/^[\w-]*$/.test(want) || !(e.start === 0 || /\s/.test(e.text.charAt(e.start - 1)))) return r
+    const now = await $.clock.now()
+    const dirs = dirsOf(await $.session.root().catch(() => undefined), env)
+    const all = await loadAll(io, dirs, now)
+    const hit = (i: Entry, n?: number): boolean => (isNum(want) ? n !== undefined && String(n).startsWith(want) : want === '' || `${i.id} ${i.title}`.toLowerCase().includes(want.toLowerCase()))
+    const fired = firedList(all).flatMap((i, k) => (hit(i, k + 1) ? [{ i, n: k + 1 }] : []))
+    const someday = isNum(want) ? [] : sections(all.map((item) => ({ item, state: item.state }))).someday.map((x) => x.item).filter((i) => hit(i))
+    known = all
+    await refresh?.({ items: all, t: now }).catch(() => undefined)
+    const rows = [
+      ...fired.map(({ i, n }) => ({ text: `${prefix}${n}`, label: `${prefix}${n}  ${mark(i)} ${nameOf(i)}`, description: relative(i.due ?? now, now) })),
+      ...(fired.length > 0 && someday.length > 0 ? [{ text: e.token, label: '── someday ──' }] : []),
+      ...someday.map((i) => ({ text: `${prefix}${i.id}`, label: `${mark(i)} ${nameOf(i)}`, description: 'someday' })),
+    ]
+    return rows.length === 0 ? r : { suggestions: [...r.suggestions, ...rows] }
+  })
+
+  // Highlight tokens that would expand: the submit resolver over the last loaded items; no I/O. `**bold**`, `**2**` never match.
+  on('prompt.edit', async ($, e, next) => {
+    const r = await next(e)
+    const deco = tokensOf(r.text, prefix).flatMap(({ start, end, name }) => (runnable(known, name) === null ? [] : [{ start, end, bold: true, color: 'warning' as const }]))
+    hintTail = deco.length > 0 ? `${prefix}N expands on Enter to "Run reminder ..."` : ''
+    return deco.length === 0 ? r : { ...r, decorations: [...(r.decorations ?? []), ...deco] }
+  })
+
+  on('ui.render', { component: 'PromptHint' }, ($, e, next) => (hintTail === '' ? next(e) : next({ ...e, props: { ...e.props, tail: hintTail } })))
+
+  // `<prefix>N` / `<prefix><id|slug|prefix>` tokens -> runPrompt blocks (the /remind run text, one per reminder), other words follow as extra words.
+  on('prompt.submit', async ($, e, next) => {
+    if (!TYPED_ORIGINS.has(e.origin.kind) || e.command !== undefined || e.isMeta !== undefined || !e.text.includes(prefix)) return next(e)
+    const tokens = tokensOf(e.text, prefix)
+    if (tokens.length === 0) return next(e)
+    const now = await $.clock.now()
+    const sid = await $.session.id()
+    const tz = tzOf(await $.env.get('TZ'))
+    const all = await loadAll(io, dirsOf(await $.session.root().catch(() => undefined), env), now)
+    known = all
+    await refresh?.({ items: all, t: now }).catch(() => undefined)
+    const blocks: string[] = []
+    const seen = new Set<string>()
+    const cut: Tok[] = []
+    for (const t of tokens) {
+      const hit = runnable(all, t.name)
+      if (hit === null) continue
+      const foreign = foreignClaim(hit, sid, now)
+      if (foreign !== null) {
+        $.ui.toast(`${hit.id} is already running in another session since ${formatWhen(foreign.at, tz, now)}`, { timeoutMs: 8000 })
+        continue
+      }
+      cut.push(t)
+      const key = `${hit.global ? 'global' : 'project'}:${hit.id}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      blocks.push(runPrompt(hit, bodyOf(await io.read(hit.path)), ''))
+    }
+    if (blocks.length === 0) return next(e)
+    const extra = cut
+      .reduceRight((s, t) => `${s.slice(0, t.start)}${s.slice(t.end)}`, e.text)
+      .replace(/\s+/g, ' ')
+      .trim()
+    return next({ ...e, text: `${blocks.join('\n\n')}${extra === '' ? '' : `\nMy extra words: ${extra}`}` })
+  })
+
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const view = await read($, viewAtom)
-    if (e.props.hasSurvey || view.open === 0 || e.props.maxRows < 3) return next(e)
+    if (e.props.hasSurvey || view.due === 0 || e.props.maxRows < 3) return next(e)
     const below = await next(e)
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
     const rows = view.rows.slice(0, Math.max(1, e.props.maxRows - 2))
-    const more = view.open - rows.length
+    const more = view.due - rows.length
     const band = Box({
       key: 'band',
       flexDirection: 'column',
       children: [
-        Text({ color: view.due > 0 ? 'warning' : 'text', bold: true, children: `reminders · ${view.due} due · ${view.open - view.due - view.running} upcoming${view.running > 0 ? ` · ${view.running} running` : ''}` }),
-        ...rows.map((r) => Text({ color: r.isDue ? 'warning' : 'text', wrap: 'truncate-end', children: `  ${r.text}` })),
-        Text({ dimColor: true, wrap: 'truncate-end', children: `${more > 0 ? `+${more} more · ` : ''}/remind  list · done · snooze · or say what to add` }),
+        Text({ color: 'warning', bold: true, children: `reminders · ${view.due} fired` }),
+        ...rows.map((r, k) =>
+          Button({
+            key: `r${k + 1}`,
+            hotkey: String(k + 1),
+            plain: true,
+            onPress: () => {
+              void $.prompt.fill({ text: `${prefix}${k + 1}`, mode: 'replace' }).catch(() => undefined)
+            },
+            label: r,
+          }),
+        ),
+        Text({ dimColor: true, wrap: 'truncate-end', children: `press ${rows.length > 1 ? `1-${rows.length}` : '1'} then Enter to run · ${more > 0 ? `+${more} more · ` : ''}${prefix} to pick · /remind all · snooze · done` }),
       ],
     })
     return below.type === 'engine' ? band : Box({ flexDirection: 'column', children: [below, band] })
@@ -345,67 +637,106 @@ export const register: Register = (on) => {
   on('command.run', { command: 'remind' }, async ($, e) => {
     const now = await $.clock.now()
     const tz = tzOf(await $.env.get('TZ'))
-    const dirs = dirsOf(await $.session.root().catch(() => undefined), env.cfg, env.home, env.override)
+    const dirs = dirsOf(await $.session.root().catch(() => undefined), env)
+    const tools = hasTools || (await Promise.race([toolsReady, new Promise<boolean>((resolve) => $.clock.after(3000, () => resolve(false)))]))
     const words = e.args.trim().split(/\s+/).filter((w) => w !== '')
     const [head = '', ...rest] = words
     const verb = head.toLowerCase()
-    if (verb === 'help' && words.length === 1) return { text: HELP(dirs, hasTools) }
-    if (words.length === 0 || (verb === 'list' && words.length === 1)) return { text: listText(await loadAll(io, dirs, now), now, tz, dirs) }
+    if (verb === 'help' && words.length === 1) return { text: HELP(dirs, tools, notifyOn ? `on, last ${lastNotify === '' ? 'none sent yet' : lastNotify}` : 'off (/config -> Reminder desktop alert)') }
+    const shown =
+      words.length === 0
+        ? query('active')
+        : verb === 'list' && words.length === 1
+          ? query('all')
+          : verb === 'show'
+            ? parseShow(rest, now, tz)
+            : verb === 'all' || verb === 'history' || verb === 'someday'
+              ? parseShow(words, now, tz)
+              : null
+    if (shown !== null) return { text: listText(await loadAll(io, dirs, now), now, tz, dirs, shown) }
     let refused = ''
-    if (verb === 'done' || verb === 'cancel' || verb === 'snooze') {
-      const usage = { text: `usage: /remind ${verb} [project|global] <id>${verb === 'snooze' ? ' <when>' : ''}` }
+    let outbound: { text: string; ack: string } | null = null
+    if (['run', 'done', 'cancel', 'snooze', 'reopen', 'edit'].includes(verb)) {
+      const need = verb === 'snooze' || verb === 'edit' ? 1 : 0
+      const usage = { text: `usage: /remind ${verb} [project|global] <${verb === 'reopen' ? 'id' : 'N|id'}>${verb === 'snooze' ? ' <when>' : verb === 'edit' ? ' <change>' : verb === 'reopen' ? ' [when]' : verb === 'run' ? ' [words]' : ''}` }
       if (rest.length === 0) return usage
       const word = rest[0]?.toLowerCase()
-      const scoped = (word === 'project' || word === 'global') && rest.length >= (verb === 'snooze' ? 3 : 2)
+      const scoped = (word === 'project' || word === 'global') && rest.length >= 2 + need
       const [id = '', ...tail] = scoped ? rest.slice(1) : rest
       const scope = scoped ? word : undefined
+      if (verb === 'reopen' && isNum(id)) return { text: 'reopen takes a name: /remind history lists the closed ones' }
       // free text that merely starts with a verb ("cancel the ...") goes to the model unless the id resolves
-      const found = verb !== 'snooze' && tail.length > 0 ? null : pick(await loadAll(io, dirs, now), id, scope)
+      const all = await loadAll(io, dirs, now)
+      const found = (verb === 'done' || verb === 'cancel') && tail.length > 0 ? null : resolve(all, id, scope)
       if (typeof found === 'string') {
         if (!found.startsWith('no reminder matches')) return { text: found }
         refused = found
       } else if (found !== null) {
-        if (verb === 'snooze' && tail.length === 0) return usage
-        const git = parseConfig(await io.read(dirs.config).catch(() => '')).git
-        const out = await act(io, dirs, { req: { id, action: verb, until: tail.join(' '), scope }, sid: await $.session.id(), now, tz, by: 'user', git })
-        await refresh?.().catch(() => undefined)
-        return { text: out.text }
+        if (need === 1 && tail.length === 0) return usage
+        const sid = await $.session.id()
+        const where = found.global ? 'global' : 'project'
+        if (verb === 'run' || verb === 'edit') {
+          if (!tools) return { text: NEEDS_TOOLS }
+          if (found.state === 'done' || found.state === 'cancelled') return { text: `${found.id} is already ${found.state}; /remind reopen ${found.id} brings it back` }
+          if (verb === 'run' && (found.state === 'unparseable' || found.state === 'ignored')) return { text: `${found.id} has an unreadable header; fix the file first` }
+          const foreign = verb === 'run' ? foreignClaim(found, sid, now) : null
+          if (foreign !== null) return { text: `${found.id} is already running in another session since ${formatWhen(foreign.at, tz, now)}` }
+          outbound =
+            verb === 'edit'
+              ? { text: editHandoff(found, tail.join(' '), now, tz), ack: `Handing this edit to Claude: ${found.id}` }
+              : { text: `${HANDOFF_MARK}run ${found.id}</request>\n${runPrompt(found, bodyOf(await io.read(found.path)), tail.join(' '))}`, ack: `Running ${nameOf(found)} (${found.kind}): handing it to Claude` }
+        } else {
+          const git = parseConfig(await io.read(dirs.config).catch(() => '')).git
+          const out = await act(io, dirs, { req: { id: found.id, action: verb, until: tail.join(' '), scope: where }, sid, now, tz, by: 'user', git })
+          await refresh?.().catch(() => undefined)
+          return { text: out.text }
+        }
       }
     }
-    const fixed = verb === 'global' ? 'global' : verb === 'project' || verb === 'default' ? 'project' : null
-    const request = (fixed === null ? words : rest).join(' ')
-    if (request === '') return { text: `usage: /remind ${verb} <what and when>` }
-    if (!hasTools) return { text: refused === '' ? NEEDS_TOOLS : refused }
-    const text = handoff(request, fixed, now, tz)
+    if (outbound === null) {
+      const fixed = verb === 'global' ? 'global' : verb === 'project' || verb === 'default' ? 'project' : null
+      const request = (fixed === null ? words : rest).join(' ')
+      if (request === '') return { text: `usage: /remind ${verb} <what and when>` }
+      if (!tools) return { text: refused === '' ? NEEDS_TOOLS : refused }
+      outbound = { text: handoff(request, fixed, now, tz), ack: `Handing this to Claude: ${request}` }
+    }
+    const send = outbound.text
     // submit is refused inside command.run: hand off from a timer; fill is the fallback.
     $.clock.after(250, () => {
       void (async () => {
         try {
-          await $.prompt.submit({ text, asUser: true })
+          await $.prompt.submit({ text: send, asUser: true })
         } catch {
-          await $.prompt.fill({ text, mode: 'replace' }).catch(() => undefined)
+          await $.prompt.fill({ text: send, mode: 'replace' }).catch(() => undefined)
         }
       })()
     })
-    return { text: `Handing this to Claude: ${request}` }
+    return { text: outbound.ack }
   }).catch((_$, _e, next) => ({ text: `failed: ${next.error.message ?? next.error.kind}` }))
 
   // The model's tools: answered here, so no permission prompt for the file writes.
   on('tool.call', { tool: /^mcp__brewmod-reminders__/ }, async ($, e) => {
     const now = await $.clock.now()
-    const dirs = dirsOf(await $.session.root().catch(() => undefined), env.cfg, env.home, env.override)
+    const dirs = dirsOf(await $.session.root().catch(() => undefined), env)
     const tz = tzOf(await $.env.get('TZ'))
     const git = parseConfig(await io.read(dirs.config).catch(() => '')).git
     const input = e as unknown as Record<string, unknown>
     let out: Out
     if (e.tool === `${TOOL}list_reminders`) {
       const scope = str(input.scope)
-      const all = await loadAll(io, dirs, now)
-      out = { text: listText(scope === 'project' ? all.filter((i) => !i.global) : scope === 'global' ? all.filter((i) => i.global) : all, now, tz, dirs) }
+      const state = STATE_WORDS.get(str(input.state) ?? 'all')
+      const range = rangeOf(str(input.from), str(input.to), now, tz)
+      out =
+        state === undefined
+          ? fail('state is active, all, someday or done')
+          : !range.ok
+            ? fail(range.error)
+            : { text: listText(await loadAll(io, dirs, now), now, tz, dirs, query(state, { scope: scope === 'project' || scope === 'global' ? scope : undefined, from: range.from, to: range.to })) }
     } else if (e.tool === `${TOOL}add_reminder`) {
-      out = await add(io, dirs, { scope: str(input.scope), when: str(input.when), text: str(input.text), slug: str(input.slug), tz: str(input.tz), confirm: input.confirm === true }, now, tz, git)
+      out = await add(io, dirs, { scope: str(input.scope), when: str(input.when), text: str(input.text), slug: str(input.slug), tz: str(input.tz), kind: str(input.kind) }, now, tz, git)
     } else if (e.tool === `${TOOL}update_reminder`) {
-      out = await act(io, dirs, { req: { id: str(input.id) ?? '', action: str(input.action) ?? '', until: str(input.until), result: str(input.result), scope: str(input.scope) }, sid: await $.session.id(), now, tz, by: 'model', git })
+      const req = { id: str(input.id) ?? '', action: str(input.action) ?? '', until: str(input.until), result: str(input.result), scope: str(input.scope), fromScope: str(input.from_scope), text: str(input.text), kind: str(input.kind), when: str(input.when) }
+      out = await act(io, dirs, { req, sid: await $.session.id(), now, tz, by: 'model', git })
     } else out = fail(`unknown tool ${e.tool}`)
     if (e.tool !== `${TOOL}list_reminders`) await refresh?.().catch(() => undefined)
     return { result: out.text, ...out }

@@ -1,0 +1,26 @@
+ ▐▛███▛█   Claude Code v2.1.306
+▝▜██████▀  Haiku 5.5 with medium effort · Claude Max
+ ▝▝   ▝▝   /Volumes/brewery
+
+
+❯ remind me tomorrow at 9 to have you run npm test, short text
+
+⏺ brewmod-reminders - add_reminder (MCP)(scope: "project", kind: "action", when:
+                                        "tomorrow 9:00", text: "Run npm test", slug:
+                                        "run-npm-test")
+  ⎿  saved 20261022-0800_run-npm-test (project) | ▶ action | due Thu 22 Oct 09:00 L
+     isbon (08:00 UTC), in 15 h | /Volumes/brewery/.claude/scheduled/20261022-0800_
+     run-npm-test.md
+     change it by saying so · /remind cancel 20261022-0800_run-npm-test
+
+⏺ Reminder set for tomorrow (Thu 22 Oct) at 09:00 Lisbon time: "Run npm test." It's
+  saved to this project.
+
+✻ Baked for 3s · done 6:10 PM
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ remind me tomorrow at 5pm to reply to Ana: new tier is 49/month
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on
+
+

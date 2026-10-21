@@ -11,3 +11,4 @@ export { default as Spoiler } from './Spoiler.astro';
 export { default as ModPromo } from './ModPromo.astro';
 export { default as Icon } from './Icon.astro';
 export { default as SourceLink } from './SourceLink.astro';
+export { default as Console } from './Console.astro';

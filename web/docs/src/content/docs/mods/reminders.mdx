@@ -1,22 +1,22 @@
 ---
 title: "Reminders"
-description: "Durable reminders for Claude Code: a Markdown file in your repo, a band at session start, offered at the first prompt, never run unasked."
+description: "Smart reminders for Claude Code: say it in plain words, a band shows it when it fires, press 1 or ** to run it. Notes, actions, someday; nothing runs unasked."
 order: 43
 ---
-import { Badge, Callout, Card, CardGrid, InstallPrompt, SourceLink, Spoiler, UpdateNotice } from '../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Console, InstallPrompt, SourceLink, Spoiler, Steps, UpdateNotice } from '../../../components/mdx';
 
 # Reminders
 
 <Badge variant="mod" text="Claude Code 2.1.301+" /> <Badge variant="secondary" text="Works on Team orgs" /> <Badge variant="primary" text="brewmod-reminders" />
 
-Tell Claude what to remember and when. The reminder is a Markdown file that outlives the session: any later session in that repo shows it and offers to run it.
+Tell Claude what to remember and when. The reminder is a Markdown file in your repo, so it outlives the session. When it fires, a band above the prompt shows it, and you run it with `1` or `**`.
 
-Session cron jobs and `/loop` die with the session, and cloud `/schedule` has no access to your SSH keys, local scripts or VPS. A file-based reminder runs where you work.
+Session cron jobs and `/loop` die with the session, and cloud `/schedule` has no access to your SSH keys, local scripts or VPS. A file-based reminder runs where you work, and only when you say so.
 
 {/* Stable deep link, shared outside the docs: /mods/reminders/#demo. Keep the id. */}
 <p align="center" id="demo">
-  <img src="/brewmods/reminders.gif" alt="Claude Code terminal: /remind project in 1 min: run the test suite shows a preview and one time question, then the reminders band reads 0 due, 1 upcoming. In a new session the band reads 1 due before any prompt, Claude offers run, snooze, done or cancel at the first prompt, runs npm test on request, marks the reminder done and the band disappears." width="800" height="629" loading="lazy" />
-  <br /><small>Recorded in a real Claude Code 2.1.306 session, sped up where the title bar shows ⏩.</small>
+  <img src="/brewmods/reminders.gif" alt="Claude Code terminal: a reminder is created by a plain prompt, fires, and the reminders band shows 1 fired above the prompt. Typing **1 runs the action and marks it done, and a note is shown in full and closed." width="800" height="629" loading="lazy" />
+  <br /><small>Recorded in a real Claude Code session, sped up where the title bar shows ⏩.</small>
 </p>
 
 <SourceLink path="brewmod-reminders/README.md" anchor="demo" variant="mod" />
@@ -41,59 +41,223 @@ Dev mode without installing: `claude --plugin-dir ./brewmod-reminders`
 
 </Spoiler>
 
-## Use it
+## Quick reference
 
-| You do | You get |
-|--------|---------|
-| Say it in plain words: `remind me tomorrow 9:00 to check prod` | Claude shows a preview (`Preview, nothing written: Thu 22 Oct 09:00 Lisbon (08:00 UTC), in 18 h \| project \| 20261022-0800_check-prod`) and asks once. With no scope given, the one question has two tabs: Time and Where (Project, recommended, or Global). The file is written without a permission prompt |
-| `/remind project in 1 min: run the test suite` | The text is handed to Claude (`Handing this to Claude: ...`), same preview and one question. Start with `global`, `project` or `default` to pick the scope |
-| Open a session while a reminder is open | A band above the prompt lists open items. Nothing goes to Claude yet |
-| Send the first prompt | Claude tells you which items are due first, then offers to run now, snooze, mark done or cancel. It says so when one is more than 24 h late |
-| Answer `run it` | Claude claims the item, runs its text, records the result and marks it done |
+| Field | Value |
+|-------|-------|
+| Command | `/remind` (keys run instantly, free text goes to Claude) |
+| Picker | `**` in the prompt (prefix is configurable) |
+| Kinds | `action`, `note`, `someday` |
+| Scopes | project (default), global |
+| Settings | `prefix`, `cooldownMinutes`, `notify`, `keepDays` in `/config`; `git` in `.claude/reminders.json` |
+| Requires | Claude Code 2.1.301+, `node` on the `PATH` |
 
-Each item is offered once per session and again after `/compact`. It is never run unasked. A `/remind <text>` hand-off turn never carries the offer; the next prompt does.
+## How it works
 
-## What you see
+You say what to remember and when, in plain words. The mod saves a file at once, with no preview and no permission prompt. When the time comes, the reminder is marked as fired and shown in a band above the prompt. You press `1`, type `**1`, or answer Claude's one-line note.
 
-| Where | Text | When |
-|-------|------|------|
-| Band header | `reminders · 1 due · 2 upcoming`, plus `· N running` when items are running | At session start while open items exist; upcoming counts pending items only |
-| Band rows | `  <title>  <relative time>`, up to 3 | Time reads `now` (due for under a minute), `in <1 min`, `5 min ago` or `2 d ago` (due for longer); `(global)` marks a global item, `· running` one in progress |
-| Band footer | `+N more · /remind  list · done · snooze · or say what to add` | Under the rows; the `+N more ·` prefix appears only when more than 3 items are open |
-| Toast, 8 s | `reminder due: <title> · /remind` or `N reminders due · /remind` | An item falls due mid-session; a 60 s tick refreshes the band. The next prompt carries the offer |
-| Running | `<id> is running in session <sid> since <time>` | A second open session tries an item another one claimed |
+Three kinds cover everything you would put on a sticky note. An action is work for Claude, a note is a message to you, and someday is a thought with no date.
+
+## When to use
+
+| Situation | What you say |
+|-----------|--------------|
+| Check something after a deploy | `remind me tomorrow at 9 to check the prod logs and show me errors` |
+| Remember a task that is yours | `remind me Friday to reply to Ana about pricing` |
+| Park an idea | `someday try the new semble release` |
+| Need it in every project | `remind me globally on Monday to renew the domain` |
+| See what is waiting | `/remind all` or `what fires this week?` |
+
+## Example scenarios
+
+### 1. One reminder, from prompt to done
+
+Create it by a plain prompt. Time passes. Open a session later and the band is already there.
+
+<Console caption="Wednesday 16:10: create it" text={`[u]❯[/u] remind me tomorrow at 9 to check the prod logs after the hotfix and show me errors
+
+saved 20261022-0800_check-prod-logs (project) | [x]▶ action[/x] | due Thu 22 Oct 09:00 Lisbon (08:00 UTC), in 17 h | …/.claude/scheduled/20261022-0800_check-prod-logs.md
+[d]change it by saying so · /remind cancel 20261022-0800_check-prod-logs[/d]`} />
+
+<Console caption="Thursday 09:20: a new session shows the band at once" text={`[a]reminders · 1 fired[/a]
+1: [x]▶[/x] check the prod logs after the hotfix and show me errors  [d]20 min ago[/d]
+[d]press 1 then Enter to run · ** to pick · /remind all · snooze · done[/d]`} />
+
+<Console caption="First prompt: Claude opens with one line, then answers" text={`[u]❯[/u] what is 2+2?
+
+A reminder came due: "check the prod logs after the hotfix and show me errors". Run it now, snooze it, mark it done, or cancel it?
+2+2 is 4.`} />
+
+<Console caption="Press 1, then Enter: the action runs and closes" text={`[u]❯[/u] [h]**1[/h]
+
+update_reminder start, then the work, then update_reminder done
+done: check the prod logs after the hotfix and show me errors (20261022-0800_check-prod-logs)
+[d]band is gone: nothing is fired[/d]`} />
+
+### 2. Two reminders: run one, read one
+
+Thursday 11:00. An action is picked with `**` and run. A note is shown in full and closed.
+
+<Console caption="Type ** to open the picker" text={`[a]reminders · 2 fired[/a]
+1: [x]▶[/x] check the prod logs after the hotfix and show me errors  [d]2 h ago[/d]
+2: [n]✎[/n] Reply to Ana about pricing: the new tier is 49 per month  [d]1 h ago[/d]
+
+[u]❯[/u] [h]**[/h]
+  [s]**1  ▶ check the prod logs after the hotfix and show me errors[/s]   [d]2 h ago[/d]
+  **2  [n]✎[/n] Reply to Ana about pricing: the new tier is 49 per month   [d]1 h ago[/d]
+  [d]── someday ──[/d]
+  [n]✎[/n] try the new semble release   [d]someday[/d]`} />
+
+<Console caption="Run the action, then the note" text={`[u]❯[/u] [h]**1[/h]
+done: check the prod logs after the hotfix and show me errors (20261022-0800_check-prod-logs)
+
+[u]❯[/u] [h]**2[/h]
+Full text of the reminder:
+  [n]✎[/n] Reply to Ana about pricing: the new tier is 49 per month
+This was just a reminder, so there was nothing to execute. Marking it done now.
+done: Reply to Ana about pricing: the new tier is 49 per month (20261022-0900_reply-ana)`} />
+
+### 3. Manage them
+
+Thursday 11:00. The prod-logs action fired two hours ago, Ana's action is due Friday, and one idea is parked.
+
+<Console caption="List, snooze, edit by saying so, close, history, reopen" text={`[u]❯[/u] /remind all
+Now: Thu 22 Oct 11:00 Lisbon (10:00 UTC)
+Fired (1):
+- 1 [x]▶[/x] 20261022-0800_check-prod-logs | Thu 22 Oct 09:00 Lisbon (08:00 UTC), 2 h ago | check the prod logs after the hotfix and show me errors
+Waiting (1):
+- [x]▶[/x] 20261023-0800_reply-ana | Fri 23 Oct 09:00 Lisbon (08:00 UTC), in 22 h | Reply to Ana about pricing: the new tier is 49 per month
+Someday (1):
+- [n]✎[/n] someday_try-semble-release | no date (someday) | try the new semble release
+[d]project …/.claude/scheduled | global …/reminders[/d]
+
+[u]❯[/u] /remind snooze 1 tomorrow 9:00
+snoozed: check the prod logs after the hotfix and show me errors (20261022-0800_check-prod-logs) until 2026-10-23T08:00:00Z
+
+[u]❯[/u] move the Ana reminder to a note for Monday
+Reminder updated [x]▶ action[/x] → [n]✎ note[/n] · project · 20261023-0800_reply-ana
+- [x]▶[/x] project | Fri 23 Oct 09:00 Lisbon (08:00 UTC), in 22 h  Reply to Ana about pricing: the new tier is 49 per month
++ [n]✎[/n] project | Mon 26 Oct 09:00 Lisbon (09:00 UTC), in 4 d  Reply to Ana about pricing: the new tier is 49 per month
+
+[u]❯[/u] /remind done check-prod-logs
+done: check the prod logs after the hotfix and show me errors (20261022-0800_check-prod-logs)
+
+[u]❯[/u] /remind history
+Now: Thu 22 Oct 11:00 Lisbon (10:00 UTC)
+History (last 20) (1):
+- ✓ [x]▶[/x] 20261022-0800_check-prod-logs | done Thu 22 Oct 11:00 Lisbon (10:00 UTC), now | check the prod logs after the hotfix and show me errors
+[d]project …/.claude/scheduled | global …/reminders[/d]
+
+[u]❯[/u] /remind reopen 20261022-0800_check-prod-logs tomorrow 9:00
+reopened: check the prod logs after the hotfix and show me errors (20261022-0800_check-prod-logs) due 2026-10-23T08:00:00Z`} />
+
+## Timeline
+
+<Steps>
+  <li><div><strong>Wed 16:10, you ask</strong><p>You say "tomorrow at 9 check the prod logs after the hotfix and show me errors". It is saved as an action.</p></div></li>
+  <li><div><strong>Thu 09:00, it fires</strong><p>The session is closed, so nothing happens yet.</p></div></li>
+  <li><div><strong>Thu 09:20, you open a session</strong><p>The band reads <code>reminders · 1 fired</code>.</p></div></li>
+  <li><div><strong>09:21, first prompt</strong><p>Claude opens its reply with one line about the fired reminder, then answers your prompt.</p></div></li>
+  <li><div><strong>09:22, you run it</strong><p>Type <code>**1</code>. Claude runs the action, closes it, and the band disappears.</p></div></li>
+  <li><div><strong>Within the hour, no repeat</strong><p>The line repeats at most once per <code>cooldownMinutes</code> (60). A reminder that just fired is mentioned at once.</p></div></li>
+</Steps>
+
+## Kinds and scopes
+
+| Kind | Mark | What it is for | What happens |
+|------|------|----------------|--------------|
+| action | ▶ | Work for Claude: "check the prod logs and show me errors" | Claude claims it, runs it when you say so, closes it with a one-line result |
+| note | ✎ | A message to yourself: "build the CSV export" | Shown in full, Claude says it was just a reminder, closes it |
+| someday | ▶ or ✎ (its kind) | A thought with no date, an action or a note: "someday try the new semble release" | Never fires. Not in the band, toast, alert or Claude's line. Shown only when you ask: the `/remind all` Someday section, `/remind someday`, the `**` picker (after a divider), or "anything to remind me?" |
+
+Say "move it to Friday" and a someday item becomes a normal reminder.
+
+| Scope | Where it lives | Shows in |
+|-------|----------------|----------|
+| project (default) | `.claude/scheduled/` of the repo | Sessions of that project |
+| global | `${CLAUDE_CONFIG_DIR:-~/.claude}/reminders/` | Every project on this machine, per Claude profile; never put in git |
+
+Say "global" or "in every project", or start with `/remind global …`, to pick global.
+
+When you give no time, Claude asks one question, "When should it fire?", with 2-3 options built from your request, each showing a concrete local time (a day-level answer such as "in 1 week" is saved at 09:00 local, never midnight), a "No date (someday)" option and Other. The kind or scope joins that dialog only when unclear.
+
+## When it fires
+
+- **Band.** Above the prompt, only fired reminders: `reminders · N fired`, rows like `1: ▶ title  2 h ago` (`✎` for notes, `(global)` suffix), up to 3 rows. With more, the footer adds `+N more`. Nothing fired, no band.
+- **Session start.** Open, resume and `/clear` show the band at once.
+- **Idle open session.** Within about a minute of the due time: the band, a toast `reminder fired: <title> · ** to pick`, and a desktop alert.
+- **Your next prompt.** Claude starts its reply with one line about what fired, then answers. Notes are shown in full and closed.
+
+## Ways to talk to it
+
+| Way | Example | What happens |
+|-----|---------|--------------|
+| Plain prompt | `remind me tomorrow at 9 to check the prod logs` | Claude creates it. Also answers `anything to remind me?` and `what fires this week?` |
+| `/remind` with free text | `/remind check prod tomorrow 9:00` | Handed to Claude: create or answer. Start with `global` or `project` to fix the scope |
+| `/remind` with a key | `/remind snooze 1 +1h` | Instant, printed by the mod, no Claude turn |
+| `**` picker | `**`, `**1`, `**1 **2` | Pick and run fired reminders |
+| Band keys | `1`, `2`, `3` | Fill `**N` in an empty prompt; Enter runs it |
+
+### Pick and run with `**`
+
+- Type `**` to open the picker: fired reminders first, then a `── someday ──` divider and the someday ones. Arrows plus Tab insert `**1`; Enter sends.
+- Type `**1` directly. `**1 **2` runs both. `**1 only the last hour` adds your words. `**<id>` works for any reminder, someday included.
+- Band keys: a digit `1` to `3` typed into an empty prompt, then a pause of about 0.4 s while a reminder is fired, fills `**1` without sending. Enter runs it; ctrl+u undoes the fill.
+- `/remind run <N|id>` does the same; so does saying "run the prod logs one".
+- `**bold**` text never expands. Change the prefix with `prefix` in `/config`.
+- Two sessions: only one runs a reminder. The other shows `<id> is already running in another session since <time>`.
 
 ## Commands
 
 | Command | Result |
 |---------|--------|
-| `/remind` or `/remind list` | Prints, in this order, due, running, pending, unreadable, done (last 10) and cancelled (last 10) items in local time, no Claude turn |
-| `/remind help` | Prints the help text; `help` and `list` act only when typed alone |
-| `/remind done [project\|global] <id>` | `done: <title> (<id>)` |
-| `/remind cancel [project\|global] <id>` | `cancelled: <title> (<id>)` |
-| `/remind snooze [project\|global] <id> <when>` | `snoozed: <title> (<id>) until <ISO>` |
-| `/remind [global\|project\|default] <any words>` | Handed to Claude, which adds the reminder. Text that starts with `done`, `cancel` or `snooze` but whose id does not resolve goes here too |
+| `/remind` | Fired reminders, numbered like the band |
+| `/remind all [project\|global] [today\|tomorrow\|week\|+Nd\|+Nw\|until YYYY-MM-DD]` | Sections Fired, Waiting, Someday. Fired are always listed; the window filters Waiting |
+| `/remind history` | Closed reminders (done, shown notes, cancelled), newest first |
+| `/remind someday` | Only the undated ones |
+| `/remind run <N\|id> [words]` | Run an action, or show a note and close it |
+| `/remind snooze <N\|id> <when>` | `+1h`, `today` or `tomorrow` (09:00, or add a time: `tomorrow 9:00`), a weekday (`fri` = next Friday 09:00, `fri 14:00`), `YYYY-MM-DD` (09:00 local) or `YYYY-MM-DD HH:MM`; gives a someday item a date |
+| `/remind edit <N\|id> <change>` | Claude changes text, kind, time or scope and shows `- …` and `+ …` lines. Claude keeps the old version: say "undo" and it restores it, including a move back between project and global |
+| `/remind done <N\|id>` | You did it yourself |
+| `/remind cancel <N\|id>` | Drop it |
+| `/remind reopen <id> [when]` | Bring a closed one back |
+| `/remind help` | Help text, and whether the desktop alert is on |
+| `/remind [global\|project] <any words>` | Handed to Claude, which adds or answers |
 
-The id is the file name without `.md`; a unique prefix of the slug also matches. `snooze` takes `+2h`, `+30m`, `+3d`, `tomorrow 9:00`, `today 18`, a local `YYYY-MM-DD HH:MM` or an ISO time with an offset or `Z`. A time in the past is rejected. Times are stored in UTC and shown in the system time zone, daylight saving included.
+Aliases: `show active|all|done`, `list`. The id is the file name without `.md`; a unique prefix of the slug also matches. Closed reminders are deleted after `keepDays`.
+
+## Settings
+
+| Setting | Where | Default | Effect |
+|---------|-------|---------|--------|
+| `prefix` | `/config` | `**` | Picker and run token |
+| `cooldownMinutes` | `/config` | 60 | Minutes between offers in one session; a newly fired reminder is offered at once |
+| `notify` | `/config` | on | Desktop alert when a reminder fires in an open session |
+| `keepDays` | `/config` | 30 | Days a closed reminder is kept |
+| `git` | `.claude/reminders.json` | `off` | `off`, `commit` or `commit-push` for the item file only |
 
 ## Good to know
 
-- **Scopes.** Project (default) lives in `.claude/scheduled/` of the repo and shows in that project's sessions. Global lives in `${CLAUDE_CONFIG_DIR:-~/.claude}/reminders/` (per Claude profile), shows in every session, and is never put in git.
-- **Headless runs.** `claude -p`, CI, the SDK and subagents get no offer; it is made only for an interactive prompt, and prompts that start with `/` are skipped.
-- **Team organizations.** Checked live on a Team seat with Claude Code 2.1.306: band, offer through the bundled command hook, `/remind` hand-off and the mod tools.
+- **Desktop alert.** Needs a terminal with a notification channel: iTerm2, kitty or ghostty. Inside tmux nothing is sent. `/remind help` ends with the current state.
+- **Headless runs.** `claude -p`, CI, the SDK and subagents get no offer; prompts that start with `/` are skipped.
+- **Team organizations.** Checked live on a Team seat: band, offer through the bundled command hook, `/remind` hand-off and the mod tools.
 - **Worktrees and clones.** Claims and status are per checkout. A tracked item marked done in one checkout shows pending in another until the change is pulled.
-- **State resets on update.** Session and offered marks live under the plugin root (`.state/`, pruned after 7 days). An update installs a new version directory, so an open item can be offered once more.
-- **Git is your call.** `.claude/reminders.json` takes `{"git": "off"}` (default), `"commit"` or `"commit-push"`. The mod never runs git; it tells Claude to commit, and push, only that item file, so your permission mode and repo rules stay in force. `.gitignore` is untouched.
+- **Git is your call.** The mod never runs git; with `commit` or `commit-push` it tells Claude to commit, and push, only that item file. `.gitignore` is untouched.
+- **Nothing runs unasked.** A fired reminder is offered, never started on its own.
 
-<Spoiler title="Technical details" id="technical-details" meta="item files, claims, migration">
+<Spoiler title="Technical details" id="technical-details" meta="item files, claims, tools, hooks">
 
-**Item file.** `<YYYYMMDD-HHMM>_<slug>.md`, where the prefix is the due time in UTC. Header lines at the top, up to the first blank line (optional `---` fences): `due: 2026-10-22T08:00:00Z`, `status: pending`, `done:` or `cancelled:` with a UTC time, optional `created:` and `result:`. The body is the text Claude runs. A `README.md` in the folder is skipped. A time without `Z` is listed as unreadable with the hint to add `Z`. If the mod tools are unavailable, edit the header by hand: `status: done` plus `done: <UTC>`.
+**Item file.** `<YYYYMMDD-HHMM>_<slug>.md` (the prefix is the due time in UTC) or `someday_<slug>.md`. Header lines at the top, up to the first blank line (optional `---` fences): `due: 2026-10-22T08:00:00Z` (UTC `Z`, or `none`), `status: pending|done|cancelled`, `kind: action|note` (missing means action), `done:` or `cancelled:` with a UTC time, optional `created:` and `result:`. The body is the text Claude runs or shows. A `README.md` in the folder is skipped. A time without `Z` is listed as unreadable with the hint to add `Z`. If the mod tools are unavailable, edit the header by hand: `status: done` plus `done: <UTC>`.
 
-**Claims.** Starting an item writes `.claims/<id>.json` in its folder (the folder carries its own `.gitignore` with `*`), so a second open session cannot run it too. A claim from a crashed session expires after 6 h. Claude finishes with `update_reminder done` and a result, which sets `status: done`, `done:` and `result:`.
+**Claims.** Starting an action writes `.claims/<id>.json` in its folder (the folder carries its own `.gitignore` with `*`), so a second open session cannot run it too. A claim from a crashed session expires after 6 h. Claude finishes with `update_reminder done` and a result, which sets `status: done`, `done:` and `result:`.
+
+**Tools Claude uses.** `list_reminders` (`scope`, `state` active, all, someday or done, `from`, `to`), `add_reminder` (`scope`, `when` or `someday`, `text`, `slug`, `kind`, `tz`; saves at once; `when` is optional: called without it, the tool saves nothing, returns a short calendar of the next days and asks Claude to ask you once, so weekday options are right) and `update_reminder` (`action` start, done, snooze, cancel, edit or reopen, plus `until`, `result`, `text`, `kind`, `when`, `scope`, `from_scope`).
 
 **Migrating a hand-written hook.** Items from a custom SessionStart hook (for example `due-checks.sh` with `.claude/scheduled/*.md`) parse unchanged. Remove the hook block from `.claude/settings.json` or `.claude/settings.local.json` and the script; while it is still registered, the offer reminds you to do so.
 
-**How it works.** A bundled command hook, `hooks/remind.mjs`, runs on `UserPromptSubmit` and on `SessionStart` with the `compact` matcher, so the offer reaches Claude on Team organizations, where a module's own `classic.*` hooks are bypassed. The module draws the band, runs the tick and the `/remind` command, and registers the tools `add_reminder`, `list_reminders` and `update_reminder`. Every path fails open.
+**State.** Session and offered marks live under the plugin root (`.state/`, pruned after 7 days). An update installs a new version directory, so a fired reminder can be offered once more.
+
+**How it works.** A bundled command hook, `hooks/remind.mjs`, runs on `UserPromptSubmit` and on `SessionStart` with the `compact` matcher, so the offer reaches Claude on Team organizations, where a module's own `classic.*` hooks are bypassed. The module draws the band, runs the tick, the picker and the `/remind` command, and registers the tools above. Every path fails open.
 
 </Spoiler>
 

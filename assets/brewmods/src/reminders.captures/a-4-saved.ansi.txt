@@ -1,26 +1,26 @@
+[38;5;174m ▐[48;5;16m▛███▛█[39m[49m   [1mClaude[0m [1mCode[0m [38;5;246mv2.1.306[39m
+[38;5;174m▝▜[48;5;16m█████[49m█▀[39m  [38;5;246mHaiku[39m [38;5;246m5.5[39m [38;5;246mwith[39m [38;5;246mmedium[39m [38;5;246meffort[39m [38;5;246m·[39m [38;5;246mClaude[39m [38;5;246mMax[39m
+[38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;246m/Volumes/brewery[39m
 
-[38;5;114m⏺[39m [1mbrewmod-reminders - add_reminder (MCP)[0m(scope: "project", when: "+1m", text: "Run the
-                                        test suite for this project and report the
-                                        results.", slug: "run test suite", confirm:
-                                        true)
-[38;5;246m  ⎿  [39msaved 20261021-1450_run-test-suite (project) | due Wed 21 Oct 15:50 Lisbon (14
-     :50 UTC), in <1 min | /Volumes/brewery/.claude/scheduled/20261021-1450_run-tes
-     t-suite.md
 
-[38;5;231m⏺[39m I saved the reminder as a project reminder, due Wed 21 Oct at 15:50 Lisbon (14:50
-  UTC). It says: "Run the test suite for this project and report the results." The file
-  is [38;5;153m/Volumes/brewery/.claude/scheduled/20261021-1450_run-test-suite.md[39m.
+[38;5;246m[48;5;237m❯ [38;5;231mremind me tomorrow at 9 to have you run npm test, short text[39m
 
-  It will be offered at the first prompt of a session once it's due. I won't run the
-  tests until you say so.
+[38;5;114m[49m⏺[39m [1mbrewmod-reminders - add_reminder (MCP)[0m(scope: "project", kind: "action", when:
+                                        "tomorrow 9:00", text: "Run npm test", slug:
+                                        "run-npm-test")
+[38;5;246m  ⎿  [39msaved 20261022-0800_run-npm-test (project) | ▶ action | due Thu 22 Oct 09:00 L
+     isbon (08:00 UTC), in 15 h | /Volumes/brewery/.claude/scheduled/20261022-0800_
+     run-npm-test.md
+     change it by saying so · /remind cancel 20261022-0800_run-npm-test
 
-[38;5;246m✻[39m [38;5;246mBrewed for 6s · done 3:49 PM[39m
-[1m[38;5;231mreminders · 0 due · 1 upcoming[0m                                                      [38;5;246m[-][39m
-[38;5;231m [39m [38;5;231mRun[39m [38;5;231mthe[39m [38;5;231mtest[39m [38;5;231msuite[39m [38;5;231mfor[39m [38;5;231mthis[39m [38;5;231mproject[39m [38;5;231mand[39m [38;5;231mreport[39m [38;5;231mthe[39m [38;5;231mresults.[39m  [38;5;231min[39m [38;5;231m<1[39m [38;5;231mmin[39m
-[38;5;246m/remind[39m  [38;5;246mlist[39m [38;5;246m·[39m [38;5;246mdone[39m [38;5;246m·[39m [38;5;246msnooze[39m [38;5;246m·[39m [38;5;246mor[39m [38;5;246msay[39m [38;5;246mwhat[39m [38;5;246mto[39m [38;5;246madd[39m
+[38;5;231m⏺[39m Reminder set for tomorrow (Thu 22 Oct) at 09:00 Lisbon time: "Run npm test." It's
+  saved to this project.
+
+[38;5;246m✻[39m [38;5;246mBaked for 3s · done 6:10 PM[39m
 
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
 [39m❯ 
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
-[39m  [38;5;246m⏸[39m [38;5;246mmanual[39m [38;5;246mmode[39m [38;5;246mon[39m [38;5;246m·[39m [38;5;246m? for shortcuts[39m                                [38;5;246m◐[39m [38;5;246mmedium[39m [38;5;246m·[39m [38;5;246m/effort[39m
+[39m  [38;5;246m⏸ manual mode on · ? for shortcuts[39m
+
 

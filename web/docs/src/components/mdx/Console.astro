@@ -1,0 +1,82 @@
+---
+// Terminal mockup: escapes text, then maps [a]..[/a] style markers to colour spans.
+interface Props {
+  text: string;
+  caption?: string;
+}
+
+const { text, caption } = Astro.props;
+
+const escaped = text
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;');
+
+const render = (s: string): string =>
+  s.replace(/\[([adkxnubhs])\]([\s\S]*?)\[\/\1\]/g, (_m, k: string, inner: string) => `<span class="c-${k}">${render(inner)}</span>`);
+
+const html = render(escaped);
+---
+
+<figure class="console not-prose my-6">
+  <pre class="console-pre"><code set:html={html} /></pre>
+  {caption && <figcaption class="console-cap">{caption}</figcaption>}
+</figure>
+
+<style>
+  .console {
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+    /* Site palette: stone text, amber alert, brand green ok/action, soft orange note. */
+    --c-bg: #141311;
+    --c-fg: #d6d3d1;
+    --c-dim: #8a857d;
+    --c-amb: #ebbb40;
+    --c-ok: #86c98b;
+    --c-act: #b0e0b4;
+    --c-note: #e59a5e;
+    --c-prompt: #f5f5f4;
+    --c-box: #4a4535;
+    --c-sel: #2b2718;
+  }
+  .console-pre {
+    margin: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: pre;
+    tab-size: 2;
+    background: var(--c-bg);
+    color: var(--c-fg);
+    border: 1px solid var(--c-box);
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-family: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+  }
+  .console-pre code {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    white-space: inherit;
+  }
+  .console-cap {
+    margin-top: 0.5rem;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    color: oklch(var(--bc) / 0.7);
+  }
+  .console-pre :global(.c-a) { color: var(--c-amb); }
+  .console-pre :global(.c-d) { color: var(--c-dim); }
+  .console-pre :global(.c-k) { color: var(--c-ok); }
+  .console-pre :global(.c-x) { color: var(--c-act); }
+  .console-pre :global(.c-n) { color: var(--c-note); }
+  .console-pre :global(.c-u) { color: var(--c-prompt); font-weight: 600; }
+  .console-pre :global(.c-b) { color: var(--c-box); }
+  .console-pre :global(.c-h) { color: var(--c-amb); text-decoration: underline; }
+  .console-pre :global(.c-s) { background: var(--c-sel); }
+</style>

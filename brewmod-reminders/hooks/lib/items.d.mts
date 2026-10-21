@@ -2,9 +2,10 @@
 // Copyright (c) 2025-2026 Maksim Kochetkov
 
 // Types of items.mjs for register.ts (tsc without allowJs).
-export type Item = { id: string; name: string; due: number | null; dueRaw: string; status: string; created: string; done: string; cancelled: string; result: string; title: string }
+export type Item = { id: string; name: string; due: number | null; dueRaw: string; someday: boolean; kind: Kind; status: string; created: string; done: string; cancelled: string; result: string; title: string }
+export type Kind = 'action' | 'note'
 export type Claim = { session: string; at: number }
-export type State = 'due' | 'pending' | 'running' | 'done' | 'cancelled' | 'unparseable' | 'ignored'
+export type State = 'due' | 'pending' | 'running' | 'someday' | 'done' | 'cancelled' | 'unparseable' | 'ignored'
 export type When = { ok: true; ms: number; iso: string } | { ok: false; error: string }
 export type Match = { id: string } | { error: 'none' | 'ambiguous'; candidates: string[] }
 
@@ -13,7 +14,9 @@ export const HANDOFF_MARK: string
 export const validSid: (sid: unknown) => boolean
 export const sessionStateName: (sid: string) => string
 export const claimName: (id: string) => string
-export const itemKey: (item: { global?: boolean; id: string; dueRaw: string }) => string
+export const itemKey: (item: { id: string; dueRaw: string }) => string
+export const tagOf: (item: { id: string; global?: boolean }) => string
+export const slugOf: (id: string) => string
 export const isItemName: (name: string) => boolean
 export const isoZ: (ms: number) => string
 export const sessionStateJson: (isInteractive: boolean, now: number) => string
@@ -23,12 +26,30 @@ export const parseClaim: (text: string) => Claim | null
 export const claimLive: (claim: Claim | null | undefined, now: number) => boolean
 export const classify: (item: Item, claim: Claim | null, now: number) => State
 export const slugify: (s: string) => string
-export const itemName: (dueMs: number, slug: string) => string
-export const buildItem: (a: { dueMs: number; text: string; now: number }) => string
-export const patchHeader: (text: string, patch: Record<string, string>) => string
+export const itemName: (dueMs: number | null, slug: string) => string
+export const buildItem: (a: { dueMs: number | null; text: string; now: number; kind?: Kind }) => string
+export const bodyOf: (text: string) => string
+export const patchBody: (text: string, body: string) => string
+export const editText: (text: string, change: { text?: string; kind?: Kind; dueMs?: number | null }) => string
+export const datePatch: (ms: number | null) => Record<string, string>
+export const reopenPatch: (ms?: number | null) => Record<string, string | null>
+export const closedAt: (item: Item) => number | null
+export const closedLabel: (item: Item) => 'shown' | 'done' | 'cancelled' | ''
+export type Row = { item: Item; state: State }
+export const sections: <R extends Row>(rows: R[]) => { fired: R[]; running: R[]; waiting: R[]; someday: R[]; history: R[] }
+export const expiredIds: (items: Item[], now: number, keepDays: number) => string[]
+export const patchHeader: (text: string, patch: Record<string, string | null>) => string
 export const parseItem: (name: string, text: string) => Item
 export const parseWhenNatural: (input: string, now: number, tz: string) => When
+export const calendar: (now: number, tz: string) => string
+export const windowOf: (input: string, now: number, tz: string) => { from: number; to: number } | null
+export const rangeOf: (from: string | undefined, to: string | undefined, now: number, tz: string) => { ok: true; from: number; to: number } | { ok: false; error: string }
 export const formatWhen: (ms: number, tz: string, now: number) => string
 export const relative: (ms: number, now: number) => string
 export const systemTz: () => string
 export const matchId: (ids: string[], query: string) => Match
+export const RUN_MARK: string
+export const offeredJson: (offered: Record<string, number>, last: number) => string
+export const parseLastOffer: (text: string) => number | null
+export const optNumber: (raw: string | undefined, dflt: number, min?: number) => number
+export const offerNow: (a: { last: number | null; hasNew: boolean; hasDue: boolean; now: number; cooldownMs: number }) => boolean

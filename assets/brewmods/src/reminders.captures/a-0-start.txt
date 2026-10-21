@@ -1,12 +1,12 @@
  ▐▛███▛█   Claude Code v2.1.306
-▝▜██████▀  Sonnet 5.5 with medium effort · Claude Max
+▝▜██████▀  Haiku 5.5 with medium effort · Claude Max
  ▝▝   ▝▝   /Volumes/brewery
 
 
 ────────────────────────────────────────────────────────────────────────────────────────
 ❯ 
 ────────────────────────────────────────────────────────────────────────────────────────
-  ⏸ manual mode on · ? for shortcuts
+  ⏸ manual mode on · ? for shortcuts · ← for agents                 ◐ medium · /effort
 
 
 

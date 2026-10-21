@@ -12,8 +12,8 @@ Requirement: the mods need Claude Code 2.1.301 or newer. Run `claude --version`;
 - [Prompt placeholders mod](https://doc-claude.brewcode.app/mods/placeholders/): `++r`, `++m`, `+++` and your own, with `/placeholders`.
 - [Console recording of placeholders](https://brewcode.app/mods/placeholders.gif): `++` typeahead, the text shown before Enter, a `++r` review, adding your own with `/placeholders`, plan mode.
 - [Plan-mode effort mod](https://doc-claude.brewcode.app/mods/plan-effort/): plan mode raises the effort to `xhigh` by default; `/plan-effort` sets the level.
-- [Reminders mod](https://doc-claude.brewcode.app/mods/reminders/): reminders kept in the repo, shown again in a later session.
-- [Console recording of reminders](https://brewcode.app/mods/reminders.gif): adding, listing and finishing reminders in a terminal.
+- [Reminders mod](https://doc-claude.brewcode.app/mods/reminders/): reminders kept in the repo; once due, they show above the prompt and run with `**1`. Kinds: action, note, someday.
+- [Console recording of reminders](https://brewcode.app/mods/reminders.gif): adding, firing and running reminders in a terminal.
 - [Getting started](https://doc-claude.brewcode.app/getting-started/): what the suite contains.
 - [Installation](https://doc-claude.brewcode.app/installation/): requirements, install methods, verifying, mods.
 - [Plugin update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/): `/brewtools:plugin-update` updates every installed plugin and mod in one run, offers the missing ones once and prints what changed.

@@ -50,7 +50,7 @@ Project- or local-scope installs update from their own project directory; `/brew
    - `++r` in a prompt: a whole review block; the caret on it shows its text before Enter.
    - `++m`: manager mode, the main session delegates and keeps a task graph.
    - `/placeholders`: lists the tokens; `/placeholders show ++r` prints one; `/placeholders add ++name: ...` writes your own.
-   - `/remind in 1 min: run the test suite` (brewmod-reminders): Claude previews the time, asks once, saves a reminder file; a later session shows it above the prompt and offers it at your first prompt.
+   - `/remind in 1 min: run the test suite` (brewmod-reminders): Claude saves a reminder file at once (asks only when the time is missing); once due, a session shows it above the prompt and `**1` runs it.
 
 ## First steps in a project
 
