@@ -5,7 +5,7 @@ import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 import {
   CLAIMS_DIR, HANDOFF_MARK, buildItem, claimJson, claimLive, claimName, classify, formatWhen, isItemName, isoZ, itemKey, itemName, matchId, parseClaim, parseConfig,
-  parseItem, parseWhenNatural, patchHeader, relative, sessionStateJson, sessionStateName, slugify, systemTz, validSid,
+  parseItem, parseWhenNatural, patchHeader, rangeOf, relative, sessionStateJson, sessionStateName, slugify, systemTz, validSid, windowOf,
   type Claim, type Item, type State,
 } from './lib/items.mjs'
 import type { ReminderView } from '../types'
@@ -82,22 +82,38 @@ function viewOf(items: Entry[], now: number): ReminderView {
   return { due: due.length, rows: due.map((i) => `${i.title === '' ? i.id : i.title}  ${relative(i.due ?? now, now)}${i.global ? ' (global)' : ''}`).slice(0, BAND_ROWS) }
 }
 
-function listText(items: Entry[], now: number, tz: string, dirs: Dirs): string {
+type Query = { state: 'active' | 'all' | 'done'; scope?: 'project' | 'global'; from: number; to: number }
+const STATES = ['active', 'all', 'done'] as const
+const query = (state: Query['state'], rest: Partial<Query> = {}): Query => ({ state, from: -Infinity, to: Infinity, ...rest })
+
+// `show` words after the verb: [active|all|done] [project|global] [window]; null when anything is left over (-> free text).
+function parseShow(words: string[], now: number, tz: string): Query | null {
+  const w = words.map((x) => x.toLowerCase())
+  const state = STATES.find((s) => s === w[0])
+  const at = state === undefined ? 0 : 1
+  const scope = w[at] === 'project' || w[at] === 'global' ? w[at] : undefined
+  const rest = w.slice(at + (scope === undefined ? 0 : 1)).join(' ')
+  const win = rest === '' ? { from: -Infinity, to: Infinity } : windowOf(rest, now, tz)
+  return win === null ? null : query(state ?? 'active', { scope: scope as Query['scope'], ...win })
+}
+
+function listText(all: Entry[], now: number, tz: string, dirs: Dirs, q: Query): string {
+  const items = all.filter((i) => (q.scope === undefined || i.global === (q.scope === 'global')) && (!(q.from > -Infinity || q.to < Infinity) || (i.due !== null && i.due >= q.from && i.due < q.to)))
   const line = (i: Entry, tail: string): string => `${tag(i)} | ${i.due === null ? `bad due "${i.dueRaw}" (UTC with Z needed)` : formatWhen(i.due, tz, now)} | ${i.title}${tail}`
-  const part = (state: State, label: string, tail: (i: Entry) => string = () => '', rows: Entry[] = items.filter((i) => i.state === state).sort(byDue)): string[] =>
-    rows.length === 0 ? [] : [`${label} (${rows.length}):`, ...rows.map((i) => `- ${line(i, tail(i))}`)]
+  const part = (label: string, rows: Entry[], tail: (i: Entry) => string = () => ''): string[] => (rows.length === 0 ? [] : [`${label} (${rows.length}):`, ...rows.map((i) => `- ${line(i, tail(i))}`)])
   const finished = (state: State): Entry[] =>
     items.filter((i) => i.state === state).sort((a, b) => (state === 'done' ? b.done : b.cancelled).localeCompare(state === 'done' ? a.done : a.cancelled)).slice(0, DONE_SHOWN)
-  const out = [
-    ...part('due', 'Due'),
-    ...part('running', 'Running', (i) => ` | running in session ${i.claim?.session ?? '?'} since ${i.claim === null ? '?' : formatWhen(i.claim.at, tz, now)}`),
-    ...part('pending', 'Pending'),
-    ...part('unparseable', 'Unreadable'),
-    ...part('done', `Done (last ${DONE_SHOWN})`, (i) => ` | done ${i.done}${i.result === '' ? '' : ` | ${i.result}`}`, finished('done')),
-    ...part('cancelled', `Cancelled (last ${DONE_SHOWN})`, () => '', finished('cancelled')),
-  ]
+  const running = (i: Entry): string => (i.state === 'running' ? ` | running in session ${i.claim?.session ?? '?'} since ${i.claim === null ? '?' : formatWhen(i.claim.at, tz, now)}` : '')
+  const open = (...states: State[]): Entry[] => items.filter((i) => states.includes(i.state)).sort(byDue)
+  const out =
+    q.state === 'done'
+      ? [...part(`Done (last ${DONE_SHOWN})`, finished('done'), (i) => ` | done ${i.done}${i.result === '' ? '' : ` | ${i.result}`}`), ...part(`Cancelled (last ${DONE_SHOWN})`, finished('cancelled'))]
+      : q.state === 'active'
+        ? part('Active', open('due'))
+        : [...part('Open', open('due', 'running', 'pending'), running), ...part('Unreadable', open('unparseable'))]
   const where = `project ${dirs.project} | global ${dirs.global ?? 'unavailable'}`
-  return out.length === 0 ? `No reminders. ${where}` : [`Now: ${formatWhen(now, tz, now).replace(/, now$/, '')}`, ...out, where].join('\n')
+  const none = q.state === 'active' ? 'No active reminders (none due); /remind show all lists the upcoming ones.' : `No ${q.state === 'done' ? 'finished' : 'open'} reminders.`
+  return out.length === 0 ? `${none} ${where}` : [`Now: ${formatWhen(now, tz, now).replace(/, now$/, '')}`, ...out, where].join('\n')
 }
 
 const gitNote = (mode: string, i: { global: boolean; path: string }): string =>
@@ -172,6 +188,7 @@ async function add(io: Io, dirs: Dirs, a: Add, now: number, localTz: string, git
   if (dir === null) return fail('the global reminders folder is unavailable (no home directory)')
   const text = (a.text ?? '').trim()
   if (text === '') return fail('text is required')
+  if ((a.when ?? '').trim() === '') return fail(`when is required: nothing is saved without a trigger time. ${WHEN_RULE}`)
   const tz = a.tz !== undefined && a.tz !== '' ? a.tz : localTz
   if (!validTz(tz)) return fail(`unknown time zone "${tz}"`)
   const w = parseWhenNatural(a.when ?? '', now, tz)
@@ -192,9 +209,14 @@ async function add(io: Io, dirs: Dirs, a: Add, now: number, localTz: string, git
   return { text: `saved ${id} (${a.scope}) | due ${when} | ${path}${gitNote(git, { global: a.scope === 'global', path })}` }
 }
 
+const WHEN_RULE =
+  'If the request names no time, ask the user ONE AskUserQuestion "When should it fire?" with 2-4 options you derive from this reminder\'s own context (e.g. post-deploy prod check: tonight 23:00 / tomorrow 09:00 / in 1 week; renew a domain: in 2 weeks / in 1 month; check nightly-run logs: tonight / tomorrow morning), each label showing its concrete local time, the best fit marked "(Recommended)"; free text stays available through Other; no fixed list. A scope question may share that AskUserQuestion as a second question. An answer like "in 1 week" becomes a date-only when (YYYY-MM-DD, fires 00:00 local that day).'
+
 const HELP = (dirs: Dirs, hasTools: boolean): string =>
   [
-    '/remind                      list: due, running, pending, last done (no Claude turn)',
+    '/remind                      = show active: the items that fired (due), no Claude turn',
+    '/remind show active|all|done [project|global] [today|tomorrow|week|+Nd|until YYYY-MM-DD]   all = every open item by time; done = done and cancelled; the window filters by trigger time (week = until Sunday 23:59, local)',
+    '/remind list                 = show all',
     '/remind done|cancel [project|global] <id>   mark an item (id = file name, slug or unique prefix; no Claude turn)',
     '/remind snooze [project|global] <id> <when>   +2h | +1d | tomorrow 9:00 | today 17:30 | 2026-10-22 09:00 (your local zone; no Claude turn)',
     '/remind <words>              add or ask in your words: /remind check prod tomorrow 9:00',
@@ -209,31 +231,39 @@ const handoff = (request: string, scope: string | null, now: number, tz: string)
     `${HANDOFF_MARK}${request}</request>`,
     `Now: ${formatWhen(now, tz, now).replace(/, now$/, '')}, time zone ${tz}, UTC ${isoZ(now)}. Times I give without a zone are in ${tz}.`,
     `Scope: ${scope ?? 'not given; ask "Where to save?" in the same dialog, Project (Recommended) / Global'}.`,
-    `Use the ${TOOL}* tools. To add: add_reminder without confirm first (preview, writes nothing), show me its time line, ONE AskUserQuestion confirming the time (plus the scope when not given), then add_reminder with confirm:true. To look or change: list_reminders, update_reminder.`,
+    `Use the ${TOOL}* tools. To add: add_reminder without confirm first (preview, writes nothing), show me its time line, ONE AskUserQuestion confirming the time (plus the scope when not given), then add_reminder with confirm:true. Every reminder needs a trigger time. ${WHEN_RULE} My pick of a time is the confirmation: then call add_reminder with confirm:true directly. To look or change: list_reminders (state active|all|done, from/to), update_reminder.`,
   ].join('\n')
 
 const TOOLS = [
   {
     name: 'list_reminders',
     description:
-      "List the user's durable reminders: files in this project's .claude/scheduled and the global ~/.claude/reminders. Shows due, running, pending, unreadable and the last done/cancelled with ids and times in the user's zone. Call it before answering a question about reminders or when an id for update_reminder is unclear.",
-    inputSchema: { type: 'object', properties: { scope: { type: 'string', enum: ['project', 'global'], description: 'omit for both' } } },
+      "List the user's durable reminders: files in this project's .claude/scheduled and the global ~/.claude/reminders, with ids and times in the user's zone. state: active = fired (due) only, all (default) = every open one by trigger time (due, running, pending), done = done and cancelled. from/to filter by trigger time, so 'reminders that fire this week in this project' = scope project, from 'week' (or from 'week' alone: now until Sunday 23:59). Call it before answering a question about reminders or when an id for update_reminder is unclear.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        scope: { type: 'string', enum: ['project', 'global'], description: 'omit for both' },
+        state: { type: 'string', enum: ['active', 'all', 'done'], description: 'default all' },
+        from: { type: 'string', description: 'earliest trigger: ISO, "YYYY-MM-DD" (00:00 local) or today|tomorrow|week|+Nd|until YYYY-MM-DD (the window start)' },
+        to: { type: 'string', description: 'latest trigger, exclusive: ISO, "YYYY-MM-DD" (through that day) or a window word (the window end)' },
+      },
+    },
   },
   {
     name: 'add_reminder',
     description:
-      "Add a durable reminder: a file that survives sessions and is offered at the first prompt of a later session once due. Unlike CronCreate or /loop (session-only), use it for 'remind me tomorrow 9:00 to check prod'. Without confirm it only returns a preview and writes nothing. For a plain-prompt request with no explicit scope (project, global, here, everywhere): preview with scope project, then ask ONE AskUserQuestion holding the scope (Project (Recommended) / Global) and the time confirmation from the preview line, then call again with confirm:true. text: what to do when due, in the user's words, self-contained. slug: 2-5 lowercase ASCII words. when: ISO with offset or Z, local 'YYYY-MM-DD HH:MM' in the user's zone (or tz), 'today|tomorrow HH:MM', or +<n>m|h|d; a past time is rejected. Take the date and zone from the Now line of the helper text or the current date.",
+      "Add a durable reminder: a file that survives sessions and is offered at the first prompt of a later session once due. Unlike CronCreate or /loop (session-only), use it for 'remind me tomorrow 9:00 to check prod'. Without confirm it only returns a preview and writes nothing. Every reminder MUST have a trigger time: when the request names none, do not call this tool yet. ${WHEN_RULE} For a plain-prompt request with no explicit scope (project, global, here, everywhere): preview with scope project, then ask ONE AskUserQuestion holding the scope (Project (Recommended) / Global) and the time confirmation from the preview line, then call again with confirm:true. text: what to do when due, in the user's words, self-contained. slug: 2-5 lowercase ASCII words. when: ISO with offset or Z, local 'YYYY-MM-DD HH:MM' in the user's zone (or tz), 'YYYY-MM-DD' (00:00 local), 'today|tomorrow HH:MM', or +<n>m|h|d|w; a past time is rejected. Take the date and zone from the Now line of the helper text or the current date.",
     inputSchema: {
       type: 'object',
       properties: {
         scope: { type: 'string', enum: ['project', 'global'], description: 'required: project (this repo) or global (all projects)' },
-        when: { type: 'string', description: 'ISO with offset/Z, "YYYY-MM-DD HH:MM" local, "tomorrow 9:00", or +2h' },
+        when: { type: 'string', description: 'ISO with offset/Z, "YYYY-MM-DD HH:MM" local, "YYYY-MM-DD" (00:00 local), "tomorrow 9:00", +2h or +1w; required: ask the user when they named none' },
         text: { type: 'string', description: 'what to do when it is due' },
         slug: { type: 'string', description: 'short ascii file name part' },
         tz: { type: 'string', description: 'IANA zone for a local time; default the user zone' },
         confirm: { type: 'boolean', description: 'true only after the user confirmed the preview' },
       },
-      required: ['scope', 'when', 'text', 'slug'],
+      required: ['scope', 'text', 'slug'],
     },
   },
   {
@@ -347,7 +377,8 @@ export const register: Register = (on) => {
     const [head = '', ...rest] = words
     const verb = head.toLowerCase()
     if (verb === 'help' && words.length === 1) return { text: HELP(dirs, hasTools) }
-    if (words.length === 0 || (verb === 'list' && words.length === 1)) return { text: listText(await loadAll(io, dirs, now), now, tz, dirs) }
+    const shown = words.length === 0 ? query('active') : verb === 'list' && words.length === 1 ? query('all') : verb === 'show' ? parseShow(rest, now, tz) : null
+    if (shown !== null) return { text: listText(await loadAll(io, dirs, now), now, tz, dirs, shown) }
     let refused = ''
     if (verb === 'done' || verb === 'cancel' || verb === 'snooze') {
       const usage = { text: `usage: /remind ${verb} [project|global] <id>${verb === 'snooze' ? ' <when>' : ''}` }
@@ -397,8 +428,9 @@ export const register: Register = (on) => {
     let out: Out
     if (e.tool === `${TOOL}list_reminders`) {
       const scope = str(input.scope)
-      const all = await loadAll(io, dirs, now)
-      out = { text: listText(scope === 'project' ? all.filter((i) => !i.global) : scope === 'global' ? all.filter((i) => i.global) : all, now, tz, dirs) }
+      const state = STATES.find((s) => s === (str(input.state) ?? 'all'))
+      const range = rangeOf(str(input.from), str(input.to), now, tz)
+      out = state === undefined ? fail('state is active, all or done') : !range.ok ? fail(range.error) : { text: listText(await loadAll(io, dirs, now), now, tz, dirs, query(state, { scope: scope === 'project' || scope === 'global' ? scope : undefined, from: range.from, to: range.to })) }
     } else if (e.tool === `${TOOL}add_reminder`) {
       out = await add(io, dirs, { scope: str(input.scope), when: str(input.when), text: str(input.text), slug: str(input.slug), tz: str(input.tz), confirm: input.confirm === true }, now, tz, git)
     } else if (e.tool === `${TOOL}update_reminder`) {

@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { run } from '../hooks/remind.mjs'
-import { formatWhen, parseItem, parseWhen, parseWhenNatural, patchHeader } from '../hooks/lib/items.mjs'
+import { formatWhen, parseItem, parseWhen, parseWhenNatural, patchHeader, rangeOf, windowOf } from '../hooks/lib/items.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SCRIPT = join(HERE, '..', 'hooks', 'remind.mjs')
@@ -112,6 +112,7 @@ test('GIVEN the prototype file verbatim WHEN remind.mjs runs THEN the offer text
     'Reminders are due (1), stored as files:',
     `- ${PROTO.replace('.md', '')} | due Thu 22 Oct 09:03 Lisbon (08:03 UTC), 57 min ago | Post-hotfix prod check for v1.115.1 (main 24e2f198, deployed 2026-10-21 ~13:30Z) | ${PROTO_PATH(ctx)}`,
     'Before anything else tell the user (in their language) these are due; for each offer: run now, snooze, mark done, or cancel. Never run one unasked. Say plainly when one is more than 24 h late.',
+    'A note-style item (its body only says what to remember, nothing to execute, e.g. "renew domain"): do not offer to run it; state the note and offer done or snooze.',
     'Run accepted: update_reminder {id, action:"start"}, read the file, carry out its body, then update_reminder {id, action:"done", result}. Snooze: {id, action:"snooze", until}; cancel: {id, action:"cancel"}.',
     'update_reminder unavailable -> edit the file header: `status: done` plus `done: <UTC now, YYYY-MM-DDTHH:MM:SSZ>` (cancel: `status: cancelled` plus `cancelled: <UTC>`); never touch the body.',
     "Git: after changing an item file, commit only that file and push following the repo's conventions; never stage anything else.",
@@ -148,7 +149,11 @@ const when = [
   ['local in the DST gap', '2026-03-29 01:30', LIS, { ok: false, error: '"2026-03-29 01:30" does not exist in Europe/Lisbon (DST gap)' }],
   ['relative hours', '+2h', LIS, { ok: true, ms: T0 + 7200000, iso: '2026-03-01T02:00:00Z' }],
   ['past is rejected', '2026-02-01 09:00', LIS, { ok: false, error: '2026-02-01T09:00:00Z is in the past' }],
-  ['garbage is rejected', 'tomorrow', LIS, { ok: false, error: 'unrecognised time "tomorrow": use ISO with offset/Z, "YYYY-MM-DD HH:MM" or +<n>m|h|d' }],
+  ['garbage is rejected', 'tomorrow', LIS, { ok: false, error: 'unrecognised time "tomorrow": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local) or +<n>m|h|d|w' }],
+  ['relative weeks', '+1w', LIS, { ok: true, ms: T0 + 7 * 86400000, iso: '2026-03-08T00:00:00Z' }],
+  ['date only before the DST change (00:00 WET)', '2026-03-28', LIS, { ok: true, ms: Date.parse('2026-03-28T00:00:00Z'), iso: '2026-03-28T00:00:00Z' }],
+  ['date only after the DST change (00:00 WEST)', '2026-03-30', LIS, { ok: true, ms: Date.parse('2026-03-29T23:00:00Z'), iso: '2026-03-29T23:00:00Z' }],
+  ['date only in the past', '2026-02-01', LIS, { ok: false, error: '2026-02-01T00:00:00Z is in the past' }],
   ['unknown zone', '2026-10-22 09:00', 'Mars/Base', { ok: false, error: 'unknown time zone "Mars/Base"' }],
   ['relative beyond the date range', '+99999999d', LIS, { ok: false, error: '"+99999999d" is out of range' }],
 ]
@@ -192,4 +197,32 @@ test('GIVEN BOM, mixed-EOL and fenced item files WHEN patchHeader runs THEN only
 
 test('GIVEN remind.mjs imported in-process WHEN run gets an invalid session id THEN it returns {} and the import wrote nothing', () => {
   assert.deepEqual(run({ hook_event_name: 'UserPromptSubmit', session_id: '../x' }, {}), {}, 'import-safe module and fail-open run')
+})
+
+// NOW 2026-10-21 (Wed) 14:00Z; Lisbon is WEST until 25 Oct 01:00Z, so a local day starts at 23:00Z the day before, then at 00:00Z.
+const W_NOW = Date.parse('2026-10-21T14:00:00Z')
+const z = (iso) => Date.parse(iso)
+const windows = [
+  ['today', 'today', { from: z('2026-10-20T23:00:00Z'), to: z('2026-10-21T23:00:00Z') }],
+  ['tomorrow', 'tomorrow', { from: z('2026-10-21T23:00:00Z'), to: z('2026-10-22T23:00:00Z') }],
+  ['week ends Sunday 23:59 local (Mon 26 Oct 00:00 WET)', 'week', { from: W_NOW, to: z('2026-10-26T00:00:00Z') }],
+  ['+3d', '+3d', { from: W_NOW, to: W_NOW + 3 * 86400000 }],
+  ['+2w', '+2w', { from: W_NOW, to: W_NOW + 14 * 86400000 }],
+  ['until a date runs through that local day', 'until 2026-10-25', { from: W_NOW, to: z('2026-10-26T00:00:00Z') }],
+  ['an unknown word', 'soon', null],
+  ['a bad until date', 'until 2026-13-45', null],
+]
+test('GIVEN window words WHEN windowOf runs in Lisbon THEN from and to are exact', () => {
+  assert.deepEqual(windows.map(([, s]) => windowOf(s, W_NOW, LIS)), windows.map((r) => r[2]), 'window rows')
+})
+
+const ranges = [
+  ['nothing', [undefined, undefined], { ok: true, from: -Infinity, to: Infinity }],
+  ['a window word alone', ['week', undefined], { ok: true, from: W_NOW, to: z('2026-10-26T00:00:00Z') }],
+  ['ISO from and to', ['2026-10-22T00:00:00Z', '2026-10-23T00:00:00Z'], { ok: true, from: z('2026-10-22T00:00:00Z'), to: z('2026-10-23T00:00:00Z') }],
+  ['a date-only to runs through that day', ['2026-10-22', '2026-10-22'], { ok: true, from: z('2026-10-21T23:00:00Z'), to: z('2026-10-22T23:00:00Z') }],
+  ['garbage', ['soon', undefined], { ok: false, error: 'unrecognised time "soon": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local) or +<n>m|h|d|w' }],
+]
+test('GIVEN from/to values WHEN rangeOf runs in Lisbon THEN the range is exact', () => {
+  assert.deepEqual(ranges.map(([, [a, b]]) => rangeOf(a, b, W_NOW, LIS)), ranges.map((r) => r[2]), 'range rows')
 })

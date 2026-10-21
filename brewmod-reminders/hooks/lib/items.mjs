@@ -139,16 +139,16 @@ export function classify(item, claim, now) {
   return item.due <= now ? 'due' : 'pending'
 }
 
-// -> { ok:true, ms, iso } | { ok:false, error }; offset/Z ISO, local `YYYY-MM-DD HH:MM[:SS]` in tz, or +<n>m|h|d; past rejected.
-export function parseWhen(input, now, tz) {
+// -> { ok:true, ms } | { ok:false, error }; offset/Z ISO, local `YYYY-MM-DD[ HH:MM[:SS]]` in tz (date only = 00:00), or +<n>m|h|d|w; no past check.
+function parseTime(input, now, tz) {
   const s = String(input ?? '').trim()
   let ms = null
-  const rel = /^\+(\d+)([mhd])$/.exec(s)
-  if (rel) ms = now + +rel[1] * { m: 60000, h: 3600000, d: 86400000 }[rel[2]]
+  const rel = /^\+(\d+)([mhdw])$/.exec(s)
+  if (rel) ms = now + +rel[1] * { m: 60000, h: 3600000, d: 86400000, w: 7 * 86400000 }[rel[2]]
   else {
-    const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(Z|[+-]\d{2}(?::?\d{2})?)?$/.exec(s)
-    if (!m) return { ok: false, error: `unrecognised time "${s}": use ISO with offset/Z, "YYYY-MM-DD HH:MM" or +<n>m|h|d` }
-    const [y, mo, d, h, mi, sec] = [+m[1], +m[2], +m[3], +m[4], +m[5], +(m[6] ?? 0)]
+    const m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(Z|[+-]\d{2}(?::?\d{2})?)?)?$/.exec(s)
+    if (!m) return { ok: false, error: `unrecognised time "${s}": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local) or +<n>m|h|d|w` }
+    const [y, mo, d, h, mi, sec] = [+m[1], +m[2], +m[3], +(m[4] ?? 0), +(m[5] ?? 0), +(m[6] ?? 0)]
     const naive = Date.UTC(y, mo - 1, d, h, mi, sec)
     const nd = new Date(naive)
     if (nd.getUTCMonth() !== mo - 1 || nd.getUTCDate() !== d || h > 23 || mi > 59 || sec > 59) return { ok: false, error: `invalid date/time "${s}"` }
@@ -166,11 +166,52 @@ export function parseWhen(input, now, tz) {
     }
   }
   if (!(ms <= MAX_MS)) return { ok: false, error: `"${s}" is out of range` }
-  ms = Math.floor(ms / 1000) * 1000
-  return ms <= now ? { ok: false, error: `${isoZ(ms)} is in the past` } : { ok: true, ms, iso: isoZ(ms) }
+  return { ok: true, ms: Math.floor(ms / 1000) * 1000 }
 }
 
-// parseWhen plus `today|tomorrow H[:MM]` as wall time in tz.
+// -> { ok:true, ms, iso } | { ok:false, error }; parseTime, a past time rejected.
+export function parseWhen(input, now, tz) {
+  const t = parseTime(input, now, tz)
+  return !t.ok ? t : t.ms <= now ? { ok: false, error: `${isoZ(t.ms)} is in the past` } : { ok: true, ms: t.ms, iso: isoZ(t.ms) }
+}
+
+// Start of the local day `add` days from ms's day in tz (a DST-gap midnight reads as 01:00 minus 1 h).
+function dayStart(ms, tz, add = 0) {
+  const p = zoneParts(ms, tz, 'numeric')
+  const naive = Date.UTC(+p.year, +p.month - 1, +p.day + add)
+  return zonedToUtc(naive, tz) ?? zonedToUtc(naive + 3600000, tz) - 3600000
+}
+const DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 }
+
+// today|tomorrow|week|+Nd|+Nw|until YYYY-MM-DD -> { from, to } (to exclusive, local days in tz) | null when not a window word.
+export function windowOf(input, now, tz) {
+  const s = String(input ?? '').trim().toLowerCase()
+  if (s === 'today') return { from: dayStart(now, tz), to: dayStart(now, tz, 1) }
+  if (s === 'tomorrow') return { from: dayStart(now, tz, 1), to: dayStart(now, tz, 2) }
+  if (s === 'week') return { from: now, to: dayStart(now, tz, 8 - DOW[zoneParts(now, tz).weekday]) }
+  const n = /^\+(\d+)([dw])$/.exec(s)
+  if (n) return { from: now, to: now + +n[1] * (n[2] === 'w' ? 7 : 1) * 86400000 }
+  const u = /^until\s+(\d{4}-\d{2}-\d{2})$/.exec(s)
+  const day = u ? parseTime(u[1], now, tz) : null
+  return day?.ok ? { from: now, to: dayStart(day.ms, tz, 1) } : null
+}
+
+// list_reminders from/to (ISO, date, or a window word; a date-only `to` runs through that day) -> { ok:true, from, to } (-/+Infinity when absent) | { ok:false, error }.
+export function rangeOf(from, to, now, tz) {
+  const side = (v, key, dflt) => {
+    if (v === undefined || String(v).trim() === '') return { ok: true, ms: dflt }
+    const w = windowOf(v, now, tz)
+    if (w) return { ok: true, ms: w[key] }
+    const t = parseTime(v, now, tz)
+    return !t.ok ? t : { ok: true, ms: key === 'to' && /^\d{4}-\d{2}-\d{2}$/.test(String(v).trim()) ? dayStart(t.ms, tz, 1) : t.ms }
+  }
+  const a = side(from, 'from', -Infinity)
+  const lone = (to === undefined || String(to).trim() === '') && from !== undefined ? windowOf(from, now, tz) : null // a window word alone sets both ends
+  const b = lone ? { ok: true, ms: lone.to } : side(to, 'to', Infinity)
+  return !a.ok ? a : !b.ok ? b : { ok: true, from: a.ms, to: b.ms }
+}
+
+// parseWhen plus `today|tomorrow H[:MM]` as wall time in tz (date-only: 00:00 local).
 export function parseWhenNatural(input, now, tz) {
   const s = String(input ?? '').trim()
   const m = /^(today|tomorrow)\s+(\d{1,2})(?::(\d{2}))?$/i.exec(s)
@@ -273,6 +314,7 @@ export function buildOffer({ due, bad, now, tz, git, legacy }) {
     }
     out.push(
       'Before anything else tell the user (in their language) these are due; for each offer: run now, snooze, mark done, or cancel. Never run one unasked. Say plainly when one is more than 24 h late.',
+      'A note-style item (its body only says what to remember, nothing to execute, e.g. "renew domain"): do not offer to run it; state the note and offer done or snooze.',
       'Run accepted: update_reminder {id, action:"start"}, read the file, carry out its body, then update_reminder {id, action:"done", result}. Snooze: {id, action:"snooze", until}; cancel: {id, action:"cancel"}.',
       'update_reminder unavailable -> edit the file header: `status: done` plus `done: <UTC now, YYYY-MM-DDTHH:MM:SSZ>` (cancel: `status: cancelled` plus `cancelled: <UTC>`); never touch the body.',
     )

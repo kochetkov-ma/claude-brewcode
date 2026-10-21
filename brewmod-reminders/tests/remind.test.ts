@@ -76,36 +76,62 @@ test('GIVEN an interactive start WHEN session.start runs THEN the command, the t
   })
 })
 
-test('GIVEN project, global and finished items WHEN /remind list runs THEN the text is grouped, exact, and no turn is handed off', async ($, on) => {
-  const clock = mock.clock(on, { now: NOW })
-  const tree: Tree = {
-    [HOTFIX]: item('2026-10-21T08:03:00Z', 'Post-hotfix prod check'),
-    [LATER]: item('2026-10-23T08:00:00Z', 'Rotate keys'),
-    [GLOBAL]: item('2026-10-22T08:00:00Z', 'Global thing'),
-    [OLD]: item('2026-10-20T09:00:00Z', 'Old task', 'done', 'done: 2026-10-20T10:00:00Z\nresult: ok\n'),
-  }
-  const ops = wire(on, tree)
-  await start($)
+const gclaim = (session: string, at: number): string => JSON.stringify({ session, at })
+type Run = ($: any) => Promise<{ text?: string; isError?: boolean }>
+const NOW_LINE = 'Now: Wed 21 Oct 15:00 Lisbon (14:00 UTC)'
+const WHERE = `project ${P_DIR} | global ${G_DIR}`
+const L_HOT = '- 20261021-0803_hotfix | Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago | Post-hotfix prod check'
+const L_G = '- 20261022-0800_g (global) | Thu 22 Oct 09:00 Lisbon (08:00 UTC), in 18 h | Global thing'
+const L_RUN = '- 20261022-1000_run | Thu 22 Oct 11:00 Lisbon (10:00 UTC), in 20 h | Run task | running in session other since Wed 21 Oct 14:00 Lisbon (13:00 UTC), 1 h ago'
+const L_LATER = '- 20261023-0800_later | Fri 23 Oct 09:00 Lisbon (08:00 UTC), in 42 h | Rotate keys'
+const L_OLD = '- 20261020-0900_old | Tue 20 Oct 10:00 Lisbon (09:00 UTC), 29 h ago | Old task | done 2026-10-20T10:00:00Z | ok'
+const NONE_ACTIVE = `No active reminders (none due); /remind show all lists the upcoming ones. ${WHERE}`
+const shows: { name: string; run: Run; text: string }[] = [
+  { name: '/remind', run: ($) => remind($, ''), text: [NOW_LINE, 'Active (1):', L_HOT, WHERE].join('\n') },
+  { name: '/remind show active', run: ($) => remind($, 'show active'), text: [NOW_LINE, 'Active (1):', L_HOT, WHERE].join('\n') },
+  { name: '/remind show (state omitted)', run: ($) => remind($, 'show'), text: [NOW_LINE, 'Active (1):', L_HOT, WHERE].join('\n') },
+  { name: '/remind show all', run: ($) => remind($, 'show all'), text: [NOW_LINE, 'Open (4):', L_HOT, L_G, L_RUN, L_LATER, WHERE].join('\n') },
+  { name: '/remind list (alias of show all)', run: ($) => remind($, 'list'), text: [NOW_LINE, 'Open (4):', L_HOT, L_G, L_RUN, L_LATER, WHERE].join('\n') },
+  { name: '/remind show all global week', run: ($) => remind($, 'show all global week'), text: [NOW_LINE, 'Open (1):', L_G, WHERE].join('\n') },
+  { name: '/remind show all project tomorrow', run: ($) => remind($, 'show all project tomorrow'), text: [NOW_LINE, 'Open (1):', L_RUN, WHERE].join('\n') },
+  { name: '/remind show all +1d', run: ($) => remind($, 'show all +1d'), text: [NOW_LINE, 'Open (2):', L_G, L_RUN, WHERE].join('\n') },
+  { name: '/remind show all until 2026-10-22', run: ($) => remind($, 'show all until 2026-10-22'), text: [NOW_LINE, 'Open (2):', L_G, L_RUN, WHERE].join('\n') },
+  { name: '/remind show active global', run: ($) => remind($, 'show active global'), text: NONE_ACTIVE },
+  { name: '/remind show done', run: ($) => remind($, 'show done'), text: [NOW_LINE, 'Done (last 10) (1):', L_OLD, WHERE].join('\n') },
+  { name: 'list_reminders {scope project, from week}', run: ($) => tool($, 'list_reminders', { scope: 'project', from: 'week' }), text: [NOW_LINE, 'Open (2):', L_RUN, L_LATER, WHERE].join('\n') },
+  { name: 'list_reminders {state active}', run: ($) => tool($, 'list_reminders', { state: 'active' }), text: [NOW_LINE, 'Active (1):', L_HOT, WHERE].join('\n') },
+  { name: 'list_reminders {state done}', run: ($) => tool($, 'list_reminders', { state: 'done' }), text: [NOW_LINE, 'Done (last 10) (1):', L_OLD, WHERE].join('\n') },
+  { name: 'list_reminders {from, to as dates}', run: ($) => tool($, 'list_reminders', { from: '2026-10-23', to: '2026-10-23' }), text: [NOW_LINE, 'Open (1):', L_LATER, WHERE].join('\n') },
+  { name: 'list_reminders {state bogus}', run: ($) => tool($, 'list_reminders', { state: 'bogus' }), text: 'state is active, all or done' },
+  {
+    name: 'list_reminders {from garbage}',
+    run: ($) => tool($, 'list_reminders', { from: 'soon' }),
+    text: 'unrecognised time "soon": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local) or +<n>m|h|d|w',
+  },
+]
+for (const { name, run, text } of shows) {
+  test(`GIVEN project, global, running and finished items WHEN ${name} runs THEN the text is exact and no turn is handed off`, async ($, on) => {
+    const clock = mock.clock(on, { now: NOW })
+    const tree: Tree = {
+      [HOTFIX]: item('2026-10-21T08:03:00Z', 'Post-hotfix prod check'),
+      [LATER]: item('2026-10-23T08:00:00Z', 'Rotate keys'),
+      [GLOBAL]: item('2026-10-22T08:00:00Z', 'Global thing'),
+      [`${P_DIR}/20261022-1000_run.md`]: item('2026-10-22T10:00:00Z', 'Run task'),
+      [`${P_DIR}/.claims/20261022-1000_run.json`]: gclaim('other', NOW - 3600000),
+      [OLD]: item('2026-10-20T09:00:00Z', 'Old task', 'done', 'done: 2026-10-20T10:00:00Z\nresult: ok\n'),
+    }
+    const ops = wire(on, tree)
+    await start($)
 
-  const out = await remind($, 'list')
-  await clock.advance(1000)
+    const out = await run($)
+    await clock.advance(1000)
 
-  expect({ text: out.text, submits: ops.submits }, 'list text and submits').toEqual({
-    text: [
-      'Now: Wed 21 Oct 15:00 Lisbon (14:00 UTC)',
-      'Due (1):',
-      '- 20261021-0803_hotfix | Wed 21 Oct 09:03 Lisbon (08:03 UTC), 6 h ago | Post-hotfix prod check',
-      'Pending (2):',
-      '- 20261022-0800_g (global) | Thu 22 Oct 09:00 Lisbon (08:00 UTC), in 18 h | Global thing',
-      '- 20261023-0800_later | Fri 23 Oct 09:00 Lisbon (08:00 UTC), in 42 h | Rotate keys',
-      'Done (last 10) (1):',
-      '- 20261020-0900_old | Tue 20 Oct 10:00 Lisbon (09:00 UTC), 29 h ago | Old task | done 2026-10-20T10:00:00Z | ok',
-      `project ${P_DIR} | global ${G_DIR}`,
-    ].join('\n'),
-    submits: [],
+    expect({ text: out.text, submits: ops.submits }, name).toEqual({ text, submits: [] })
   })
-})
+}
 
+const WHEN_RULE =
+  'If the request names no time, ask the user ONE AskUserQuestion "When should it fire?" with 2-4 options you derive from this reminder\'s own context (e.g. post-deploy prod check: tonight 23:00 / tomorrow 09:00 / in 1 week; renew a domain: in 2 weeks / in 1 month; check nightly-run logs: tonight / tomorrow morning), each label showing its concrete local time, the best fit marked "(Recommended)"; free text stays available through Other; no fixed list. A scope question may share that AskUserQuestion as a second question. An answer like "in 1 week" becomes a date-only when (YYYY-MM-DD, fires 00:00 local that day).'
 const ADD = { scope: 'project', when: 'tomorrow 9:00', text: 'Check prod.', slug: 'Check prod' }
 const PREVIEW = [
   'Preview, nothing written: Thu 22 Oct 09:00 Lisbon (08:00 UTC), in 18 h | project | 20261022-0800_check-prod',
@@ -120,6 +146,20 @@ const BODY = 'due: 2026-10-22T08:00:00Z\nstatus: pending\ncreated: 2026-10-21T14
 const rows: AddRow[] = [
   { name: 'no confirm', input: ADD, text: PREVIEW, writes: [] },
   { name: 'confirm', input: { ...ADD, confirm: true }, text: SAVED('20261022-0800_check-prod'), writes: [[`${P_DIR}/20261022-0800_check-prod.md`, BODY]] },
+  { name: 'no when', input: { ...ADD, when: undefined, confirm: true }, text: `when is required: nothing is saved without a trigger time. ${WHEN_RULE}`, writes: [] },
+  { name: 'a blank when', input: { ...ADD, when: '  ', confirm: true }, text: `when is required: nothing is saved without a trigger time. ${WHEN_RULE}`, writes: [] },
+  {
+    name: 'a date-only when (00:00 local) and confirm',
+    input: { ...ADD, when: '2026-10-28', confirm: true },
+    text: `saved 20261028-0000_check-prod (project) | due Wed 28 Oct 00:00 Lisbon (00:00 UTC), in 6 d | ${P_DIR}/20261028-0000_check-prod.md`,
+    writes: [[`${P_DIR}/20261028-0000_check-prod.md`, 'due: 2026-10-28T00:00:00Z\nstatus: pending\ncreated: 2026-10-21T14:00:00Z\n\nCheck prod.\n']],
+  },
+  {
+    name: 'a +1w when and confirm',
+    input: { ...ADD, when: '+1w', confirm: true },
+    text: `saved 20261028-1400_check-prod (project) | due Wed 28 Oct 14:00 Lisbon (14:00 UTC), in 7 d | ${P_DIR}/20261028-1400_check-prod.md`,
+    writes: [[`${P_DIR}/20261028-1400_check-prod.md`, 'due: 2026-10-28T14:00:00Z\nstatus: pending\ncreated: 2026-10-21T14:00:00Z\n\nCheck prod.\n']],
+  },
   { name: 'past time', input: { ...ADD, when: '2026-10-21 09:00', confirm: true }, text: '2026-10-21T08:00:00Z is in the past', writes: [] },
   { name: 'no scope', input: { ...ADD, scope: undefined }, text: 'scope is required: project or global', writes: [] },
   { name: 'a posix-style TZ env (:Europe/Lisbon)', input: { ...ADD, confirm: true }, tz: ':Europe/Lisbon', text: SAVED('20261022-0800_check-prod'), writes: [[`${P_DIR}/20261022-0800_check-prod.md`, BODY]] },
@@ -158,8 +198,6 @@ const HOT = item('2026-10-21T08:03:00Z', 'Hotfix')
 const HOT_G = `${G_DIR}/20261021-0803_hotfix.md`
 const HOT_TWO = `${G_DIR}/20261021-0803_hotfix-two.md`
 const ID = '20261021-0803_hotfix'
-const gclaim = (session: string, at: number): string => JSON.stringify({ session, at })
-type Run = ($: any) => Promise<{ text?: string; isError?: boolean }>
 const acts: { name: string; tree: Tree; run: Run; text: string; isError?: true; writes: [string, string][] }[] = [
   {
     name: 'a live claim of another session and start',
@@ -276,7 +314,7 @@ test('GIVEN the project root moved after the start WHEN /remind list runs THEN i
 
   const out = await remind($, 'list')
 
-  expect(out.text, 'list text').toEqual(`No reminders. project /proj2/.claude/scheduled | global ${G_DIR}`)
+  expect(out.text, 'list text').toEqual(`No open reminders. project /proj2/.claude/scheduled | global ${G_DIR}`)
 })
 
 test('GIVEN a /clear (new session id, no session.start) WHEN a turn completes THEN the session state file exists for the new id', async ($, on) => {
@@ -312,7 +350,7 @@ test('GIVEN a free-text /remind WHEN it runs THEN the ack returns at once and th
         'Reminder helper. My request: <request>check prod tomorrow 9:00</request>',
         'Now: Wed 21 Oct 15:00 Lisbon (14:00 UTC), time zone Europe/Lisbon, UTC 2026-10-21T14:00:00Z. Times I give without a zone are in Europe/Lisbon.',
         'Scope: global.',
-        `Use the ${TOOL}* tools. To add: add_reminder without confirm first (preview, writes nothing), show me its time line, ONE AskUserQuestion confirming the time (plus the scope when not given), then add_reminder with confirm:true. To look or change: list_reminders, update_reminder.`,
+        `Use the ${TOOL}* tools. To add: add_reminder without confirm first (preview, writes nothing), show me its time line, ONE AskUserQuestion confirming the time (plus the scope when not given), then add_reminder with confirm:true. Every reminder needs a trigger time. ${WHEN_RULE} My pick of a time is the confirmation: then call add_reminder with confirm:true directly. To look or change: list_reminders (state active|all|done, from/to), update_reminder.`,
       ].join('\n'),
     ],
   })
