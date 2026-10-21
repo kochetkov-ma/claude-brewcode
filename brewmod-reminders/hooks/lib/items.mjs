@@ -2,7 +2,7 @@
 // Copyright (c) 2025-2026 Maksim Kochetkov
 
 // Pure reminder core for hooks/remind.mjs and register.ts: strings + `now` in, values out, no IO.
-// API: parseItem classify parseWhen formatWhen relative patchHeader buildItem itemName matchId claim* shouldOffer buildOffer.
+// API: parseItem classify parseWhen parseWhenNatural isoZ formatWhen relative patchHeader buildItem itemName matchId claim* shouldOffer buildOffer.
 
 // Items: <dir>/<YYYYMMDD-HHMM>_<slug>.md, header until the first blank line, id = basename without .md.
 // State: .state/session-<sid>.json {isInteractive,ts} (module writes), .state/offered-<sid>.json {offered:{key:ts}}.
@@ -19,11 +19,11 @@ export const validSid = (sid) => typeof sid === 'string' && SID_RE.test(sid)
 export const sessionStateName = (sid) => `session-${sid}.json`
 export const offeredStateName = (sid) => `offered-${sid}.json`
 export const claimName = (id) => `${id}.json`
-export const itemKey = (item) => `${item.global ? 'g' : 'p'}:${item.id}`
+export const itemKey = (item) => `${item.global ? 'g' : 'p'}:${item.id}:${item.dueRaw}`
 export const isItemName = (name) => /\.md$/i.test(name) && !name.startsWith('.') && name.toLowerCase() !== 'readme.md'
 
 const pad = (n, w = 2) => String(n).padStart(w, '0')
-const isoZ = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z')
+export const isoZ = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z')
 const parseJson = (text) => {
   try {
     const v = JSON.parse(text)
@@ -171,6 +171,21 @@ export function parseWhen(input, now, tz) {
   }
   ms = Math.floor(ms / 1000) * 1000
   return ms <= now ? { ok: false, error: `${isoZ(ms)} is in the past` } : { ok: true, ms, iso: isoZ(ms) }
+}
+
+// parseWhen plus `today|tomorrow H[:MM]` as wall time in tz.
+export function parseWhenNatural(input, now, tz) {
+  const s = String(input ?? '').trim()
+  const m = /^(today|tomorrow)\s+(\d{1,2})(?::(\d{2}))?$/i.exec(s)
+  if (!m) return parseWhen(s, now, tz)
+  let p
+  try {
+    p = zoneParts(now, tz, 'numeric')
+  } catch {
+    return { ok: false, error: `unknown time zone "${tz}"` }
+  }
+  const d = new Date(Date.UTC(+p.year, +p.month - 1, +p.day + (m[1].toLowerCase() === 'tomorrow' ? 1 : 0)))
+  return parseWhen(`${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(+m[2])}:${m[3] ?? '00'}`, now, tz)
 }
 
 function zoneParts(ms, tz, month = 'short') {

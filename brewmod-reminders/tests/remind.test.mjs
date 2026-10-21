@@ -6,7 +6,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, utimesSy
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { formatWhen, parseWhen } from '../hooks/lib/items.mjs'
+import { formatWhen, parseWhen, parseWhenNatural } from '../hooks/lib/items.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SCRIPT = join(HERE, '..', 'hooks', 'remind.mjs')
@@ -126,4 +126,26 @@ test('GIVEN when inputs across the Lisbon DST change WHEN parseWhen and formatWh
   const got = when.map(([, s, tz]) => parseWhen(s, T0, tz))
   assert.deepEqual(got, when.map((r) => r[3]), 'parseWhen rows')
   assert.equal(formatWhen(Date.parse('2026-03-30T08:00:00Z'), LIS, T0), 'Mon 30 Mar 09:00 Lisbon (08:00 UTC), in 29 d', 'formatWhen after the change')
+})
+
+const NAT_NOW = Date.parse('2026-10-24T22:30:00Z')
+const natural = [
+  ['tomorrow 9:00 across the DST end (25 Oct, +0 after)', 'tomorrow 9:00', LIS, { ok: true, ms: Date.parse('2026-10-25T09:00:00Z'), iso: '2026-10-25T09:00:00Z' }],
+  ['today 23:30 equals now (22:30Z) so it is past', 'today 23:30', LIS, { ok: false, error: '2026-10-24T22:30:00Z is in the past' }],
+  ['today 23:45 is 22:45Z, ahead', 'today 23:45', LIS, { ok: true, ms: Date.parse('2026-10-24T22:45:00Z'), iso: '2026-10-24T22:45:00Z' }],
+  ['tomorrow with hour only', 'Tomorrow 7', 'UTC', { ok: true, ms: Date.parse('2026-10-25T07:00:00Z'), iso: '2026-10-25T07:00:00Z' }],
+  ['plain forms pass through', '+30m', LIS, { ok: true, ms: NAT_NOW + 1800000, iso: '2026-10-24T23:00:00Z' }],
+  ['unknown zone', 'tomorrow 9:00', 'Mars/Base', { ok: false, error: 'unknown time zone "Mars/Base"' }],
+]
+test('GIVEN today/tomorrow wall times near the Lisbon DST end WHEN parseWhenNatural runs THEN the results are exact', () => {
+  assert.deepEqual(natural.map(([, s, tz]) => parseWhenNatural(s, NAT_NOW, tz)), natural.map((r) => r[3]), 'natural rows')
+})
+
+test('GIVEN an offered item whose due line was snoozed WHEN the next prompt arrives THEN it is offered again once it is due', () => {
+  const ctx = { proj: mkdtempSync(join(tmpdir(), 'remind-p-')), cfg: mkdtempSync(join(tmpdir(), 'remind-c-')), plugin: mkdtempSync(join(tmpdir(), 'remind-r-')) }
+  old(ctx)
+  const first = call(ctx, {}, {}).ids
+  sched(ctx, `${A}.md`, item('2026-10-22T08:30:00Z', 'pending'))
+  const later = call(ctx, {}, {}).ids
+  assert.deepEqual({ first, later }, { first: [A], later: [A] }, 'offered before and after the snooze moved due into the past')
 })
