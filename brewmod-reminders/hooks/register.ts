@@ -44,6 +44,7 @@ const TYPED_ORIGINS: ReadonlySet<string> = new Set(['composer', 'bridge', 'sdk']
 const TICK_MS = 60_000
 const BAND_ROWS = 3
 const HISTORY_SHOWN = 20
+const HISTORY_PICK = 10
 const TOOL = 'mcp__brewmod-reminders__'
 const NEEDS_TOOLS = 'Claude tools for reminders are unavailable on this build; edit the files in .claude/scheduled by hand (see /remind help).'
 
@@ -351,9 +352,10 @@ const WHEN_RULE =
 const KIND_RULE =
   'kind is required: action (Claude does the work when the user runs it, e.g. "check the prod logs") or note (only tells the user, closes once shown, e.g. "reply to Ana"). Infer it from the request; ask only when it is unclear, as an extra question in the same single AskUserQuestion as the time.'
 
-const HELP = (dirs: Dirs, hasTools: boolean, alert: string): string =>
+const HELP = (dirs: Dirs, hasTools: boolean, alert: string, p: string): string =>
   [
     '/remind                      = the fired reminders, numbered like the band (no Claude turn)',
+    `${p} / ${p}?  typeahead: fired + someday / every reminder by state, project and global; ${p}N or ${p}<id> + Enter runs one; a bare ${p} or ${p}? + Enter prints /remind all (no Claude turn)`,
     '/remind all [project|global] [today|tomorrow|week|+Nd|+Nw|until YYYY-MM-DD]   Fired, Waiting and Someday; the window filters by trigger time (week = until Sunday 23:59, local)',
     '/remind history [filters]    = closed: done, shown notes, cancelled   |   /remind someday = only the undated ones   (show active|all|done and list still work)',
     '/remind run <N|id> [words]   Claude runs it (action) or shows it and closes it (note); N = number in /remind',
@@ -538,25 +540,51 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // Picker: only a standalone `<prefix>` / `<prefix><digits|name>` token (line start or after whitespace). Fired rows first, a divider, then someday rows.
+  // Picker: only a standalone `<prefix>` / `<prefix>?` / `<prefix><digits|name>` token (line start or after whitespace).
+  // `<prefix>`: fired, someday, then the `<prefix>?` hint; `<prefix>?`: every reminder by state; non-runnable rows insert the token itself.
   on('prompt.autocomplete', { token: /^[^\w\s]{2}/ }, async ($, e, next) => {
     const r = await next(e)
     const want = e.token.startsWith(prefix) ? e.token.slice(prefix.length) : null
-    if (want === null || !/^[\w-]*$/.test(want) || !(e.start === 0 || /\s/.test(e.text.charAt(e.start - 1)))) return r
+    const every = want === '?'
+    if (want === null || !(every || /^[\w-]*$/.test(want)) || !(e.start === 0 || /\s/.test(e.text.charAt(e.start - 1)))) return r
     const now = await $.clock.now()
     const dirs = dirsOf(await $.session.root().catch(() => undefined), env)
     const all = await loadAll(io, dirs, now)
-    const hit = (i: Entry, n?: number): boolean => (isNum(want) ? n !== undefined && String(n).startsWith(want) : want === '' || `${i.id} ${i.title}`.toLowerCase().includes(want.toLowerCase()))
-    const fired = firedList(all).flatMap((i, k) => (hit(i, k + 1) ? [{ i, n: k + 1 }] : []))
-    const someday = isNum(want) ? [] : sections(all.map((item) => ({ item, state: item.state }))).someday.map((x) => x.item).filter((i) => hit(i))
     known = all
     await refresh?.({ items: all, t: now }).catch(() => undefined)
-    const rows = [
-      ...fired.map(({ i, n }) => ({ text: `${prefix}${n}`, label: `${prefix}${n}  ${mark(i)} ${nameOf(i)}`, description: relative(i.due ?? now, now) })),
-      ...(fired.length > 0 && someday.length > 0 ? [{ text: e.token, label: '── someday ──' }] : []),
-      ...someday.map((i) => ({ text: `${prefix}${i.id}`, label: `${mark(i)} ${nameOf(i)}`, description: 'someday' })),
-    ]
-    return rows.length === 0 ? r : { suggestions: [...r.suggestions, ...rows] }
+    const hit = (i: Entry, n?: number): boolean => (isNum(want) ? n !== undefined && String(n).startsWith(want) : want === '' || every || `${i.id} ${i.title}`.toLowerCase().includes(want.toLowerCase()))
+    const s = sections(all.map((item) => ({ item, state: item.state })))
+    const where = (i: Entry): string => (i.global ? 'global' : 'project')
+    const fired = firedList(all).flatMap((i, k) => (hit(i, k + 1) ? [{ i, n: k + 1 }] : []))
+    const someday = isNum(want) ? [] : s.someday.map((x) => x.item).filter((i) => hit(i))
+    const firedRows = fired.map(({ i, n }) => ({ text: `${prefix}${n}`, label: `${prefix}${n}  ${mark(i)} ${nameOf(i)}`, description: `${relative(i.due ?? now, now)} · ${where(i)}` }))
+    const openRow = (i: Entry, when: string) => ({ text: `${prefix}${i.id}`, label: `${mark(i)} ${nameOf(i)}`, description: `${when} · ${where(i)}` })
+    const somedayRows = someday.map((i) => openRow(i, 'someday'))
+    const empty = { text: e.token, label: all.length === 0 ? 'no reminders · ask Claude "remind me ..."' : `nothing fired · ${prefix}? lists the rest` }
+    if (every) {
+      const div = (name: string, n: number) => ({ text: e.token, label: `── ${name} (${n}) ──` })
+      const part = <T,>(name: string, rows: T[], n = rows.length): (T | { text: string; label: string })[] => (rows.length === 0 ? [] : [div(name, n), ...rows])
+      const history = s.history.map((x) => x.item)
+      const histRows = history.slice(0, HISTORY_PICK).map((i) => ({
+        text: e.token,
+        label: `${i.status === 'cancelled' ? '✗' : '✓'} ${mark(i)} ${nameOf(i)}`,
+        description: `${closedLabel(i)} ${relative(closedAt(i) ?? now, now)} · ${where(i)}`,
+      }))
+      const more = history.length - histRows.length
+      const bad = all.filter((i) => i.state === 'unparseable').sort(byDue)
+      const rows = [
+        ...part('fired', firedRows),
+        ...part('running', s.running.map((x) => openRow(x.item, `running · ${relative(x.item.due ?? now, now)}`))),
+        ...part('waiting', s.waiting.map((x) => openRow(x.item, relative(x.item.due ?? now, now)))),
+        ...part('someday', somedayRows),
+        ...part('unreadable', bad.map((i) => ({ text: e.token, label: `${mark(i)} ${nameOf(i)}`, description: `bad due "${i.dueRaw}" · ${where(i)}` }))),
+        ...part('history', [...histRows, ...(more > 0 ? [{ text: e.token, label: `+${more} more · /remind history` }] : [])], history.length),
+      ]
+      return { suggestions: [...r.suggestions, ...(rows.length === 0 ? [empty] : rows)] }
+    }
+    const rows = [...firedRows, ...(fired.length > 0 && someday.length > 0 ? [{ text: e.token, label: '── someday ──' }] : []), ...somedayRows]
+    if (want !== '') return rows.length === 0 ? r : { suggestions: [...r.suggestions, ...rows] }
+    return { suggestions: [...r.suggestions, ...(rows.length === 0 ? [empty] : rows), { text: `${prefix}?`, label: `${prefix}?  all reminders · project + global` }] }
   })
 
   // Highlight tokens that would expand: the submit resolver over the last loaded items; no I/O. `**bold**`, `**2**` never match.
@@ -572,6 +600,15 @@ export const register: Register = (on, options) => {
   // `<prefix>N` / `<prefix><id|slug|prefix>` tokens -> runPrompt blocks (the /remind run text, one per reminder), other words follow as extra words.
   on('prompt.submit', async ($, e, next) => {
     if (!TYPED_ORIGINS.has(e.origin.kind) || e.command !== undefined || e.isMeta !== undefined || !e.text.includes(prefix)) return next(e)
+    // A bare `<prefix>` / `<prefix>?` prints the /remind all list to the transcript (no turn); answered without next, nothing enters.
+    if (e.text.trim() === prefix || e.text.trim() === `${prefix}?`) {
+      const t = await $.clock.now()
+      const dirs = dirsOf(await $.session.root().catch(() => undefined), env)
+      // One log call per line: the terminal draws a newline inside one as a box glyph.
+      for (const line of listText(await loadAll(io, dirs, t), t, tzOf(await $.env.get('TZ')), dirs, query('all')).split('\n')) $.ui.log(line)
+      $.clock.after(50, () => void $.prompt.fill({ text: '', mode: 'replace' }).catch(() => undefined))
+      return { drop: 'reminders listed above · no Claude turn' }
+    }
     const tokens = tokensOf(e.text, prefix)
     if (tokens.length === 0) return next(e)
     const now = await $.clock.now()
@@ -628,7 +665,7 @@ export const register: Register = (on, options) => {
             label: r,
           }),
         ),
-        Text({ dimColor: true, wrap: 'truncate-end', children: `press ${rows.length > 1 ? `1-${rows.length}` : '1'} then Enter to run · ${more > 0 ? `+${more} more · ` : ''}${prefix} to pick · /remind all · snooze · done` }),
+        Text({ dimColor: true, wrap: 'truncate-end', children: `press ${rows.length > 1 ? `1-${rows.length}` : '1'} then Enter to run · ${more > 0 ? `+${more} more · ` : ''}${prefix} to pick · ${prefix}? all · /remind snooze · done` }),
       ],
     })
     return below.type === 'engine' ? band : Box({ flexDirection: 'column', children: [below, band] })
@@ -642,7 +679,7 @@ export const register: Register = (on, options) => {
     const words = e.args.trim().split(/\s+/).filter((w) => w !== '')
     const [head = '', ...rest] = words
     const verb = head.toLowerCase()
-    if (verb === 'help' && words.length === 1) return { text: HELP(dirs, tools, notifyOn ? `on, last ${lastNotify === '' ? 'none sent yet' : lastNotify}` : 'off (/config -> Reminder desktop alert)') }
+    if (verb === 'help' && words.length === 1) return { text: HELP(dirs, tools, notifyOn ? `on, last ${lastNotify === '' ? 'none sent yet' : lastNotify}` : 'off (/config -> Reminder desktop alert)', prefix) }
     const shown =
       words.length === 0
         ? query('active')

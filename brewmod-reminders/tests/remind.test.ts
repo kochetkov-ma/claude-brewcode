@@ -19,7 +19,7 @@ const item = (due: string, title: string, status = 'pending', extra = ''): strin
 // Stubs beneath the mod: an in-memory file system over `tree`, fixed env and session, recorders for toasts, tools, command, submits.
 function wire(on: On, tree: Tree) {
   const live = { root: ROOT, sid: SID }
-  const ops = { vars: {} as Record<string, string>, live, writes: [] as [string, string][], toasts: [] as string[], notifies: [] as [string, string | undefined][], tools: [] as string[], defs: [] as { name: string; description: string; inputSchema: { required?: string[] } }[], cmds: [] as unknown[], submits: [] as string[], fills: [] as string[] }
+  const ops = { vars: {} as Record<string, string>, live, writes: [] as [string, string][], toasts: [] as string[], notifies: [] as [string, string | undefined][], tools: [] as string[], defs: [] as { name: string; description: string; inputSchema: { required?: string[] } }[], cmds: [] as unknown[], submits: [] as string[], fills: [] as string[], logs: [] as string[] }
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('fs.exists', (_$, e) => ({ value: e.path in tree || Object.keys(tree).some((k) => k.startsWith(`${e.path}/`)) }) as never)
   on('fs.list', (_$, e) => {
@@ -48,6 +48,7 @@ function wire(on: On, tree: Tree) {
   on('prompt.submit', (_$, e) => (ops.submits.push(e.text), { text: e.text }))
   on('turn.complete', (_$, e) => ({ text: e.answer }))
   on('prompt.fill', (_$, e) => (ops.fills.push(e.text), { isFilled: true }) as never)
+  on('ui.log', (_$, e) => (ops.logs.push(e.text), { value: undefined }) as never)
   on('ui.notify', (_$, e) => (ops.notifies.push([e.text, e.title]), { value: { isSent: true, channel: 'kitty' } }) as never)
   on('ui.render', () => ENGINE as never)
   on('prompt.autocomplete', () => ({ suggestions: [] }))
@@ -619,7 +620,7 @@ async function band($: any): Promise<string[]> {
   return rows
 }
 
-const FOOT = (n: number, more = ''): string => `press ${n > 1 ? `1-${n}` : '1'} then Enter to run · ${more}** to pick · /remind all · snooze · done`
+const FOOT = (n: number, more = ''): string => `press ${n > 1 ? `1-${n}` : '1'} then Enter to run · ${more}** to pick · **? all · /remind snooze · done`
 const FRESH = `${P_DIR}/20261021-1359_fresh.md`
 const RUN = `${P_DIR}/20261021-0800_run.md`
 const bands: { name: string; tree: Tree; rows: string[] }[] = [
@@ -696,15 +697,17 @@ const PICK_TREE = (): Tree => ({
   [SOMEDAY]: item('none', 'Try semble', 'pending', 'kind: note\n'),
   [LATER]: item('2026-10-23T08:00:00Z', 'Rotate keys'),
 })
-const R1 = { text: '**1', label: '**1  ▶ Post-hotfix prod check', description: '6 h ago' }
-const R2 = { text: '**2', label: '**2  ✎ Fresh', description: 'now' }
+const R1 = { text: '**1', label: '**1  ▶ Post-hotfix prod check', description: '6 h ago · project' }
+const R2 = { text: '**2', label: '**2  ✎ Fresh', description: 'now · project' }
 const RDIV = { text: '**', label: '── someday ──' }
-const RSD = { text: '**someday_semble', label: '✎ Try semble', description: 'someday' }
+const RSD = { text: '**someday_semble', label: '✎ Try semble', description: 'someday · project' }
+const HINT = { text: '**?', label: '**?  all reminders · project + global' }
 const picks: [string, string, { suggestions: unknown[] }][] = [
-  ['the bare prefix', '**', { suggestions: [R1, R2, RDIV, RSD] }],
+  ['the bare prefix', '**', { suggestions: [R1, R2, RDIV, RSD, HINT] }],
   ['a digit filter', '**2', { suggestions: [R2] }],
   ['a name filter', '**sem', { suggestions: [RSD] }],
-  ['a token after a space', 'run **', { suggestions: [R1, R2, RDIV, RSD].map((r) => (r === RDIV ? { ...r, text: '**' } : r)) }],
+  ['a token after a space', 'run **', { suggestions: [R1, R2, RDIV, RSD, HINT] }],
+  ['a question mark with more text', '**?x', { suggestions: [] }],
   ['a token glued to a word', 'x**', { suggestions: [] }],
   ['a markdown bold opener', '**bold', { suggestions: [] }],
   ['a triple star', '***', { suggestions: [] }],
@@ -719,6 +722,70 @@ for (const [name, text, expected] of picks) {
     const r = await ($ as any).prompt.autocomplete({ text, cursor: text.length, token, start: text.length - token.length } as never)
 
     expect(r, name).toEqual(expected)
+  })
+}
+
+const closedTree = (): Tree =>
+  Object.fromEntries(
+    Array.from({ length: 11 }, (_, k) => [
+      `${P_DIR}/202610${10 + k}-0900_h${k}.md`,
+      k === 10 ? item(`2026-10-${10 + k}T09:00:00Z`, `H${k}`, 'cancelled', `cancelled: 2026-10-${10 + k}T10:00:00Z\n`) : item(`2026-10-${10 + k}T09:00:00Z`, `H${k}`, 'done', `done: 2026-10-${10 + k}T10:00:00Z\n`),
+    ]),
+  )
+const ALL_TREE = (): Tree => ({
+  ...PICK_TREE(),
+  ...closedTree(),
+  [GLOBAL]: item('2026-10-22T08:00:00Z', 'Global thing'),
+  [RUN]: item('2026-10-21T08:00:00Z', 'Run task'),
+  [`${P_DIR}/.claims/20261021-0800_run.json`]: gclaim('other', NOW - 1000),
+  [`${P_DIR}/20261024-0800_bad.md`]: item('garbage', 'Bad'),
+})
+const Q = '**?'
+const div = (name: string, n: number) => ({ text: Q, label: `── ${name} (${n}) ──` })
+const hist = (k: number, ago: string) => ({ text: Q, label: `${k === 10 ? '✗' : '✓'} ▶ H${k}`, description: `${k === 10 ? 'cancelled' : 'done'} ${ago} ago · project` })
+const AGES = ['28 h', '2 d', '3 d', '4 d', '5 d', '6 d', '7 d', '8 d', '9 d', '10 d']
+const EMPTY = (text: string) => ({ text, label: 'no reminders · ask Claude "remind me ..."' })
+const allPicks: [string, () => Tree, string, unknown[]][] = [
+  ['no reminders', () => ({}), '**', [EMPTY('**'), HINT]],
+  ['no reminders', () => ({}), Q, [EMPTY(Q)]],
+  ['only a waiting item', () => ({ [LATER]: item('2026-10-23T08:00:00Z', 'Rotate keys') }), '**', [{ text: '**', label: 'nothing fired · **? lists the rest' }, HINT]],
+  [
+    'every state, project and global, 11 closed',
+    ALL_TREE,
+    Q,
+    [
+      div('fired', 2), R1, R2,
+      div('running', 1), { text: '**20261021-0800_run', label: '▶ Run task', description: 'running · 6 h ago · project' },
+      div('waiting', 2), { text: '**20261022-0800_g', label: '▶ Global thing', description: 'in 18 h · global' }, { text: '**20261023-0800_later', label: '▶ Rotate keys', description: 'in 42 h · project' },
+      div('someday', 1), RSD,
+      div('unreadable', 1), { text: Q, label: '▶ Bad', description: 'bad due "garbage" · project' },
+      div('history', 11), ...AGES.map((a, i) => hist(10 - i, a)), { text: Q, label: '+1 more · /remind history' },
+    ],
+  ],
+]
+for (const [name, tree, text, suggestions] of allPicks) {
+  test(`GIVEN ${name} WHEN the box holds ${JSON.stringify(text)} THEN the picker rows are exact`, async ($, on) => {
+    mock.clock(on, { now: NOW })
+    wire(on, tree())
+    await start($)
+
+    const r = await ($ as any).prompt.autocomplete({ text, cursor: text.length, token: text, start: 0 } as never)
+
+    expect(r, name).toEqual({ suggestions })
+  })
+}
+
+for (const text of ['**', '**?', ' **? ']) {
+  test(`GIVEN 2 fired and 1 someday WHEN a bare ${JSON.stringify(text)} is submitted THEN the /remind all lines are logged, nothing is sent and the box is cleared`, async ($, on) => {
+    const clock = mock.clock(on, { now: NOW })
+    const ops = wire(on, PICK_TREE())
+    await start($)
+    const all = (await remind($, 'all')).text.split('\n')
+
+    const r = await $.prompt.submit({ text, origin: { kind: 'composer' }, wait: false } as never)
+    await clock.advance(50)
+
+    expect({ r, submits: ops.submits, logs: ops.logs, fills: ops.fills }, text).toEqual({ r: { drop: 'reminders listed above · no Claude turn' }, submits: [], logs: all, fills: [''] })
   })
 }
 
