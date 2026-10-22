@@ -192,12 +192,22 @@ bp_post() {
   fi
 }
 
-# The tail every block shares: URL out, owner token to history, one OK/FAILED line.
+# Error JSON ({status, message}, never a token) -> "HTTP <status>: <message>", one line; else empty.
+bp_error_reason() {
+  printf '%s' "$1" | jq -r 'select(type == "object" and (.status | type) == "number")
+    | "HTTP \(.status): \((.message // .error // "") | tostring | explode | map(if . < 32 then 32 else . end) | implode | .[0:400])"' 2>/dev/null || true
+}
+
+# The tail every block shares: URL out, owner token to history, one OK/FAILED line, then any server NOTICE lines.
 # `site` is the only type whose response carries .fileCount.
 bp_finish() {
-  local response="$1" days="$2" type="$3" url token fcount owner_api identity
+  local response="$1" days="$2" type="$3" url token fcount owner_api identity reason
   url=$(printf '%s' "$response" | jq -r '.link // empty')
-  [ -n "$url" ] || { echo "FAILED: publish rejected (no .link in response)"; return 1; }
+  if [ -z "$url" ]; then
+    reason=$(bp_error_reason "$response")
+    echo "FAILED: publish rejected (${reason:-no .link in response})"
+    return 1
+  fi
   token=$(printf '%s' "$response" | jq -r '.ownerToken // empty')
   owner_api=$(printf '%s' "$response" | jq -r '.ownerLink // empty')
   identity=$(printf '%s' "$response" | jq -c '{id, namespace, type, routingCohort, deliveryMode, modeLocked, hostingVersion, managementLink, createdAt, expiresAt}')
@@ -209,6 +219,7 @@ bp_finish() {
     [ -n "$token" ] && bp_history_append "$url" "$token" "$days" "$type" "$owner_api" "$identity"
     echo "OK $url"
   fi
+  printf '%s' "$response" | jq -r '.notices[]?.message // empty | "NOTICE: " + (tostring | explode | map(if . < 32 then 32 else . end) | implode)' 2>/dev/null || true
 }
 
 # publish.mjs verdict for both site blocks: success -> ENTRY from manifest; else rc 2 (needs human OK)

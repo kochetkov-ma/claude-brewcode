@@ -52,7 +52,8 @@ rule pre-approves exactly that shape, so the skill never prompts, headless inclu
 - Keep every command under 8,000 characters (longer ones are always refused); longer text goes
   through `stage` (Step 6).
 - The script prints one decisive line: `OK {url}`, `OK {url} | Files: N`, `CONFIRM: …` (exit 2,
-  nothing uploaded) or `FAILED: …`. It removes its private run directory on every exit.
+  nothing uploaded) or `FAILED: …`, then any `NOTICE: …` lines (what the server skipped or adjusted).
+  It removes its private run directory on every exit.
 
 ## Workflow
 
@@ -93,7 +94,7 @@ Content:  <type description> · <size> · <api endpoint>
 TTL:      <N> days
 ```
 
-For SITE (entry: `--entry` > `index.html` > first `.html` alphabetically; `ENTRY: none` → fail with an explicit error, never guess):
+For SITE (entry = server rule: `--entry` > root `index.html` > shallowest `.html`; another page → pass `--entry`; `ENTRY: none` → fail with an explicit error, never guess):
 ```
 Content:  site · <N> files · <total_size> · POST /api/sites
 Entry:    <entry_file>
@@ -101,6 +102,18 @@ TTL:      <N> days
 ```
 These are source-tree estimates: report the ARCHIVE MANIFEST that Step 6 prints before upload; its
 `ENTRY:` line is the entry `scripts/publish.mjs` resolved in the built archive.
+
+**Site limits** (`GET https://brewpage.app/api/limits` returns the current ones): 25 MB per request; a site
+holds 200 files, 5 MB per file, 20 MB total uncompressed, a ZIP expands to at most 40 MB; a path is at most
+380 characters / 900 bytes, each file or folder name at most 200 bytes. A big site (`FILES` or `SIZE_KB`
+near a limit) → check the current values first, and send many files as one ZIP (a folder is always zipped).
+**EXECUTE** using Bash tool:
+```bash
+bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh limits
+```
+Pre-checks, folder or ZIP: system files (`.DS_Store`, `__MACOSX/`, `Thumbs.db`) never count and are
+dropped; hidden files and folders are dropped too, except the root `.well-known/`; at least one `.html`
+file must remain.
 
 ### Step 4: Ask Namespace
 
@@ -147,13 +160,13 @@ control characters (header injection). Never Read, generate or print the passwor
 
 ### Step 6: Publish and Save Token (secure)
 
-Delivery mode: NEW sites and non-public namespaces require Dedicated subdomain (`subdomain`; explicit `path` is
-rejected); NEW public non-sites default to Promotion (`path`) and may select `subdomain`, password-protected
-included. Send it only as `X-Delivery-Mode`, never in authored JSON, text or multipart fields. A deduplicated
+Delivery mode: NEW sites always get a Dedicated subdomain (an explicit `path` is not refused: the site lands on
+its subdomain and the response reports the mismatch); everything else defaults to Promotion (`path`) and may
+select `subdomain`, password-protected included. Send it only as `X-Delivery-Mode`, never in authored JSON, text or multipart fields. A deduplicated
 OLD or NEW winner may differ: keep its identity, cohort, mode and exact `link`. Missing/null OLD routing
 metadata means Existing link; never infer mode from its address.
 
-> **SECURITY:** the ownerToken NEVER appears in conversation output: the script does curl, token parsing and history save in one run and prints only the URL; failures print no response body.
+> **SECURITY:** the ownerToken NEVER appears in conversation output: the script does curl, token parsing and history save in one run and prints only the URL; failures print only the server's status and message.
 
 Every slot is re-validated by the script before anything is written or uploaded:
 
@@ -223,6 +236,16 @@ removed its own run directory and never touches other runs, user source files or
 Publish failed: {the FAILED line, verbatim}
 ```
 
+| Status | Meaning | Do |
+|--------|---------|----|
+| 400 | Fixable limit or path problem (file count/size, path length, bad value) | Fix what the message names, retry |
+| 413 | Request over 25 MB, or too many parts | Shrink the bundle; many files → one ZIP |
+| 422 | No servable file left (every file has an unsupported or missing extension) | Add the `.html`/assets |
+| 408 | Upload interrupted | Retry the identical command once |
+
+Unstorable metadata (tags, names, control characters) is stored as the closest valid value with a notice;
+a value that still cannot be stored is a 400, not a 409.
+
 ## Notes
 
 - **`format` is a query param**: `/api/html` reads only `?format=` from the URL; a body `format` key is ignored and the default `html` stores markdown as raw text.
@@ -232,7 +255,7 @@ Publish failed: {the FAILED line, verbatim}
 - History TTL = requested days; stored `createdAt`/`expiresAt` are authoritative: a deduplicated winner keeps its original expiry, and ordinary PUT/update does not renew it.
 - Owner API calls use the returned `ownerLink` and stored identity metadata, never a NEW root hostname parsed for namespace/ID; OLD rows without metadata keep their existing API identifiers.
 - **Update a site**: `PUT` the new bundle to its apex owner API with `X-Owner-Token`; it replaces the file set and keeps the host. No `X-Delivery-Mode` on ordinary PUT/update.
-- Hosting change, NEW public non-sites only (OLD, sites and non-public identities have no mode choice): owner-only `PATCH /api/{type}/{ns}/{id}/hosting` with `{"deliveryMode":"subdomain","expectedVersion":1}` from current identity metadata; then use the returned URL/version.
+- Hosting change, NEW publications without a required subdomain only (OLD, sites and non-public HTML pages keep their mode, 200 with a notice): owner-only `PATCH /api/{type}/{ns}/{id}/hosting` with `{"deliveryMode":"subdomain","expectedVersion":1}` from current identity metadata; then use the returned URL/version.
 - NEW password-protected links stay clean: never generate or append `?p=`. API password requests use `X-Password`; OLD password behavior is unchanged.
-- **SITE bundles are allowlisted**: `pack` drops dot-entries (`.env`, `.git/`, `.DS_Store`), `node_modules/`, symlinks and unknown types, and verifies the archive (`unzip -t`, name set) before `curl`, else deletes it and exits 1. `inspect` never rewrites a supplied ZIP; it exits 2 when anything unexpected or sensitive is inside.
+- **SITE bundles are allowlisted**: `pack` drops dot-entries (`.env`, `.git/`, `.DS_Store`; the root `.well-known/` stays), `node_modules/`, `__MACOSX/`, symlinks and unknown types, and verifies the archive (`unzip -t`, name set) before `curl`, else deletes it and exits 1. `inspect` never rewrites a supplied ZIP; it exits 2 when anything unexpected, hidden or sensitive is inside (system files the server drops are left alone).
 - Keep `.link` exact (NEW subdomain roots keep `/`, OLD links their form); never reconstruct a host from IDs. Verify NEW native sites at the exact URL and asset paths in a browser; OLD sites may redirect via a landing page: check in a browser or fetch the explicit entry asset.

@@ -322,7 +322,35 @@ try {
     const rejected = run(textCode(''), variant.name + '-rejected', { CURL_RESPONSE: JSON.stringify({ ownerToken: 'error-private-owner' }) });
     assert.equal(rejected.stdout, 'FAILED: publish rejected (no .link in response)\n', 'THEN failure prints only its safe explanation');
     assert.equal(rejected.stderr, '', 'THEN no rejected-response token appears in errors');
+
+    // GIVEN server error bodies and notices WHEN the shipped caller renders them THEN status + message or notices, never a token.
+    const rendered = [
+      [{ status: 400, error: 'Bad Request', message: 'Sites allow at most 200 files.\nRemove some.', ownerToken: 'error-private-owner' },
+        1, 'FAILED: publish rejected (HTTP 400: Sites allow at most 200 files. Remove some.)\n'],
+      [{ status: 408, error: 'Request Timeout', message: 'Upload was interrupted before it finished; please retry.' },
+        1, 'FAILED: publish rejected (HTTP 408: Upload was interrupted before it finished; please retry.)\n'],
+      [{ link: 'https://example.invalid/n', ownerToken: 'private-notice-owner', notices: [{ code: 'a', message: 'Tags were cut.' }, { code: 'b', message: 'Second.' }] },
+        0, 'OK https://example.invalid/n\nNOTICE: Tags were cut.\nNOTICE: Second.\n'],
+    ];
+    assert.deepEqual(rendered.map(([body], i) => {
+      const r = run(textCode(''), variant.name + '-reason-' + i, { CURL_RESPONSE: JSON.stringify(body) });
+      return [r.status, r.stdout, r.stderr];
+    }), rendered.map(([, status, stdout]) => [status, stdout, '']), 'THEN each response renders exactly its reason or notices');
   }
+
+  // GIVEN the limits endpoint answering limits or an error WHEN the shipped limits command runs THEN exact lines or one FAILED line.
+  const limitsBody = { requestMaxBytes: 26214400, sites: { maxFiles: 200, maxFileBytes: 5242880, maxTotalBytes: 20971520,
+    maxArchiveExpansionBytes: 41943040, maxPathChars: 380, maxPathBytes: 900, maxNameBytes: 200, defaultTtlDays: 15 } };
+  const limits = [
+    [limitsBody, 0, 'REQUEST_MAX_MB: 25\nSITE_MAX_FILES: 200\nSITE_MAX_FILE_MB: 5\nSITE_MAX_TOTAL_MB: 20\n'
+      + 'SITE_MAX_ARCHIVE_EXPANSION_MB: 40\nPATH_MAX_CHARS: 380\nPATH_MAX_BYTES: 900\nNAME_MAX_BYTES: 200\n'],
+    [{ status: 404, error: 'Not Found', message: 'Resource not found' }, 1, 'FAILED: limits unavailable (unexpected response)\n'],
+  ];
+  assert.deepEqual(limits.map(([body], i) => {
+    const r = run('bash "$SUBST_SKILL_DIR/scripts/brewpage-run.sh" limits', 'limits-' + i, { CURL_RESPONSE: JSON.stringify(body) });
+    return [r.status, r.stdout, JSON.parse(readFileSync(join(base, 'args-limits-' + i), 'utf8'))];
+  }), limits.map(([, status, stdout]) => [status, stdout, ['-s', '-A', 'ClaudeCode/1.0', 'https://brewpage.app/api/limits']]),
+  'THEN limits print exact KEY: value lines from one GET, or fail on an error body');
   assert.equal(existsSync(join(root, '.claude/tmp')), false, 'THEN no run ever touched the protected project .claude/tmp');
   assert.deepEqual(readdirSync(tmp).sort(), ['brewpage-password.txt', 'first-run', 'second-run'],
     'THEN every run dir under $TMPDIR was removed; only fixture files remain');

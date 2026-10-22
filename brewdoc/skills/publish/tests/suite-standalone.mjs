@@ -36,7 +36,7 @@ const FRONTMATTER = {
   ],
 };
 // Reference text -> copy text: [from, to] pairs, each `from` present exactly once in the brewdoc script.
-const RUN_LINE2 = '# brewpage-run.sh <probe|stage|publish|cleanup> [flags] - the only command brewdoc:publish runs.\n';
+const RUN_LINE2 = '# brewpage-run.sh <probe|limits|stage|publish|cleanup> [flags] - the only command brewdoc:publish runs.\n';
 const RUN_LINE3 = '# One allowed-tools rule covers every call; values arrive as single-quoted argv, never as shell source.\n';
 const LIB_LINE3 = '# Owns token-history location (BD03) and URL-safety of prompt-derived query params (BD02).\n';
 const libRootBlock = ref => ref.slice(ref.indexOf('# rc 0: $1 is HOME'), ref.indexOf('BP_TMPDIR="${TMPDIR:-/tmp}"'));
@@ -48,9 +48,10 @@ const DRIFT = {
   },
   openclaw: {
     'brewpage-run.sh': () => [
-      [RUN_LINE2 + RUN_LINE3, '# brewpage-run.sh <probe|stage|publish|cleanup> [flags] - the only command OpenClaw brewpage-publish runs.\n'
+      [RUN_LINE2 + RUN_LINE3, '# brewpage-run.sh <probe|limits|stage|publish|cleanup> [flags] - the only command OpenClaw brewpage-publish runs.\n'
         + '# Values arrive as single-quoted argv, never as shell source.\n'],
       ['-H "User-Agent: ClaudeCode/1.0"', '-H "User-Agent: OpenClaw/1.0"'],
+      ['-A "ClaudeCode/1.0"', '-A "OpenClaw/1.0"'],
     ],
     'brewpage-lib.sh': ref => [
       [LIB_LINE3, '# Owns token-history location (workspace cwd) and URL-safety of prompt-derived query params.\n'],
@@ -142,9 +143,9 @@ for (const copy of COPIES) {
     const all = fences(copy);
     const outsideQuotes = cmd => cmd.replace(/'[^']*'/g, '');
     assert.deepEqual(all.map(f => [f.startsWith(prefix(copy) + ' '), f.includes('\n'), /[;&|$`()<>"\\]/.test(outsideQuotes(f.slice(prefix(copy).length)))]),
-      Array(6).fill([true, false, false]), 'six single-line commands, all inert outside single-quoted slots');
-    assert.deepEqual(all.map(f => f.split(' ')[2]), ['probe', 'publish', 'publish', 'stage', 'publish', 'cleanup'],
-      'probe, path/text/staged publish, stage and cleanup are covered');
+      Array(7).fill([true, false, false]), 'seven single-line commands, all inert outside single-quoted slots');
+    assert.deepEqual(all.map(f => f.split(' ')[2]), ['probe', 'limits', 'publish', 'publish', 'stage', 'publish', 'cleanup'],
+      'probe, limits, path/text/staged publish, stage and cleanup are covered');
     assert.deepEqual(all.filter(f => f.includes(' publish ')).map(f => [f.split(' ')[3], ...[...f.matchAll(/ --([a-z-]+) '\{?([a-z_]*)\}?'/g)].map(m => m[1] + '=' + m[2])]), [
       ['{type}', 'ns=ns', 'ttl=days', 'entry=entry', 'delivery-mode=delivery_mode', 'password-file=password_file', 'path=path'],
       [{ skills: '{type}', openclaw: 'html' }[copy.name], 'ns=ns', 'ttl=days', 'entry=', 'delivery-mode=delivery_mode', 'password-file=password_file', 'text=content'],

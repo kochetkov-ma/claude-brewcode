@@ -105,6 +105,17 @@ function inspect(args, extraEnv = {}) {
   check('entry.missing.result', miss.field('RESULT'), 'fail', 'the failure is machine-readable');
 }
 
+// ── server pre-checks on a supplied ZIP: system files pass, hidden ones need a human, entry = shallowest HTML ──
+for (const [name, files, want] of [
+  ['system', { 'site/page.html': 'p', 'top.html': 't', '.DS_Store': 'd', '__MACOSX/._top.html': 'm', '.well-known/a.json': '{}' },
+    [0, 'ok', 'top.html', '']],
+  ['hidden', { 'index.html': 'i', '.cache/app.js': 'c', 'css/.draft.css': 'd' }, [2, 'confirm', 'index.html', '.cache/app.js, css/.draft.css']],
+]) {
+  const r = inspect(['--zip', makeZip(name, files)]);
+  check(`precheck.${name}`, [r.status, r.field('RESULT'), r.field('ENTRY'), r.field('UNEXPECTED')], want,
+    'GIVEN a supplied ZIP WHEN inspected THEN only hidden entries need confirmation and the entry follows the server rule');
+}
+
 // ── refusals: nothing unverified reaches curl ──────────────────────────────
 {
   const empty = join(BASE, 'zero.zip');

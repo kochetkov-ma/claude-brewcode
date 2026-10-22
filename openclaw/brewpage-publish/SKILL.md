@@ -21,7 +21,8 @@ Every shell step is ONE command of the exact shape in the fences below, run with
   any other form: single-quoted argv is what keeps the content inert.
 - Text longer than 6,000 characters goes through `stage` (Step 6).
 - The script prints one decisive line: `OK {url}`, `OK {url} | Files: N`, `CONFIRM: …` (exit 2,
-  nothing uploaded) or `FAILED: …`. It removes its private run directory on every exit.
+  nothing uploaded) or `FAILED: …`, then any `NOTICE: …` lines (what the server skipped or adjusted).
+  It removes its private run directory on every exit.
 
 ## Workflow
 
@@ -61,7 +62,7 @@ Content:  <type description> · <size> · <api endpoint>
 TTL:      <N> days
 ```
 
-For SITE (entry: `--entry` > `index.html` > first `.html` alphabetically; `ENTRY: none` → fail with an explicit error, never guess):
+For SITE (entry = server rule: `--entry` > root `index.html` > shallowest `.html`; another page → pass `--entry`; `ENTRY: none` → fail with an explicit error, never guess):
 
 **Built-static guard (before publishing).** Publish BUILT output, never project sources:
 - No `.html` file in the directory (`ENTRY: none`) → **FAIL** with an explicit error: "No `.html` found — build the site first, then point at the build output directory." Do not guess an entry.
@@ -73,6 +74,17 @@ TTL:      <N> days
 ```
 These are source-tree estimates: report the ARCHIVE MANIFEST that Step 6 prints before upload; its
 `ENTRY:` line is the entry `scripts/publish.mjs` resolved in the built archive.
+
+**Site limits** (`GET https://brewpage.app/api/limits` returns the current ones): 25 MB per request; a site
+holds 200 files, 5 MB per file, 20 MB total uncompressed, a ZIP expands to at most 40 MB; a path is at most
+380 characters / 900 bytes, each file or folder name at most 200 bytes. A big site (`FILES` or `SIZE_KB`
+near a limit) → check the current values first, and send many files as one ZIP (a folder is always zipped). Run:
+```bash
+bash {baseDir}/scripts/brewpage-run.sh limits
+```
+Pre-checks, folder or ZIP: system files (`.DS_Store`, `__MACOSX/`, `Thumbs.db`) never count and are
+dropped; hidden files and folders are dropped too, except the root `.well-known/`; at least one `.html`
+file must remain.
 
 ### Step 4: Ask Namespace
 
@@ -124,13 +136,13 @@ generate or print the password contents.
 
 ### Step 6: Publish and Save Token (secure)
 
-NEW sites and non-public namespaces require Dedicated subdomain (`subdomain`); explicit `path` is rejected.
-NEW public non-sites default to Promotion (`path`) and may select `subdomain`, including password-protected uploads.
+NEW sites always get a Dedicated subdomain: an explicit `path` is not refused, the site lands on its subdomain and the response reports the mismatch.
+Everything else defaults to Promotion (`path`) and may select `subdomain`, including password-protected uploads.
 Send the mode only as `X-Delivery-Mode` (the `--delivery-mode` slot), never in authored content or upload fields.
 Deduplication may return an OLD or NEW winner: retain its identity, cohort, mode and exact server `link`, even when the requested mode differs.
 Missing/null OLD routing metadata means Existing link; never infer mode from its URL.
 
-> **SECURITY:** The ownerToken MUST NEVER appear in conversation output: the script does curl, token parsing and history save in one run and prints only the URL; failures print no response body.
+> **SECURITY:** The ownerToken MUST NEVER appear in conversation output: the script does curl, token parsing and history save in one run and prints only the URL; failures print only the server's status and message.
 
 Every slot is re-validated by the script before anything is written or uploaded:
 
@@ -199,6 +211,16 @@ its own run directory and never touches other runs, user source files or the sha
 Publish failed: {the FAILED line, verbatim}
 ```
 
+| Status | Meaning | Do |
+|--------|---------|----|
+| 400 | Fixable limit or path problem (file count/size, path length, bad value) | Fix what the message names, retry |
+| 413 | Request over 25 MB, or too many parts | Shrink the bundle; many files → one ZIP |
+| 422 | No servable file left (every file has an unsupported or missing extension) | Add the `.html`/assets |
+| 408 | Upload interrupted | Retry the identical command once |
+
+Unstorable metadata (tags, names, control characters) is stored as the closest valid value with a notice;
+a value that still cannot be stored is a 400, not a 409.
+
 ## Notes
 
 - Scripts: `scripts/brewpage-run.sh` (the only entry), `scripts/brewpage-lib.sh` (sourced helpers), `scripts/publish.mjs` (offline SITE bundle build/verify). Requires `bash`, `curl`, `jq`; sites also `node`, `zip`, `unzip`.
@@ -208,9 +230,9 @@ Publish failed: {the FAILED line, verbatim}
 - TTL default is `15` days. Namespace must match `^[a-z0-9-]{1,32}$`, default `public`.
 - Use returned `ownerLink` and stored identity metadata for owner API operations; never parse NEW root hosts for namespace/ID. OLD history without metadata retains its existing API identifiers.
 - To **update a published site**, `PUT` the replacement bundle to its apex owner API with `X-Owner-Token`; retain the host and omit `X-Delivery-Mode` on ordinary PUT/update.
-- Only NEW public non-sites allow owner-only `PATCH /api/{type}/{ns}/{id}/hosting` with `{"deliveryMode":"subdomain","expectedVersion":1}` from current identity metadata. OLD, sites and non-public identities have no mode choice. Use the returned URL/version afterward.
+- Only NEW publications without a required subdomain allow owner-only `PATCH /api/{type}/{ns}/{id}/hosting` with `{"deliveryMode":"subdomain","expectedVersion":1}` from current identity metadata. OLD, sites and non-public HTML pages keep their mode (200 with a notice). Use the returned URL/version afterward.
 - NEW password-protected links stay clean: never generate or append `?p=`. API requests still use `X-Password`; OLD password behavior remains unchanged.
-- **SITE bundles are allowlisted**: the directory build drops dot-entries (`.env`, `.git/`, `.DS_Store`), `node_modules/`, symlinks and unknown types (`*.map`, `*.log`, `Thumbs.db`), flags kept names that look sensitive (`secret`, `token`, `password`, `credential`) for confirmation, and verifies the archive (`unzip -t`, name set) before upload. A supplied ZIP is never rewritten; anything unexpected or sensitive inside it needs confirmation.
+- **SITE bundles are allowlisted**: the directory build drops dot-entries (`.env`, `.git/`, `.DS_Store`; the root `.well-known/` stays), `node_modules/`, `__MACOSX/`, symlinks and unknown types (`*.map`, `*.log`, `Thumbs.db`), flags kept names that look sensitive (`secret`, `token`, `password`, `credential`) for confirmation, and verifies the archive (`unzip -t`, name set) before upload. A supplied ZIP is never rewritten; anything unexpected, hidden or sensitive inside it needs confirmation (system files the server drops are left alone).
 - Preserve `.link` exactly: NEW subdomain roots retain `/`; OLD links retain their existing form. Never reconstruct a host from IDs.
 - Verify NEW native sites at the exact returned URL and asset paths; a browser proves rendering. OLD sites may still use the landing-page redirect; verify those in a browser or fetch their explicit entry asset.
 

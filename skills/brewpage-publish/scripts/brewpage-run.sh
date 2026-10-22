@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# brewpage-run.sh <probe|stage|publish|cleanup> [flags] - the only command brewpage-publish runs.
+# brewpage-run.sh <probe|limits|stage|publish|cleanup> [flags] - the only command brewpage-publish runs.
 # One allowed-tools rule covers every call; values arrive as single-quoted argv, never as shell source.
 set -euo pipefail
 
@@ -21,6 +21,7 @@ new_run() {
 usage() {
   cat <<'USAGE'
 brewpage-run.sh probe <path>
+brewpage-run.sh limits
 brewpage-run.sh stage --run <run_id|''> --text <chunk>
 brewpage-run.sh publish <html|json|file|site-dir|site-zip> --ns <ns> [--ttl N] [--entry F]
   [--delivery-mode path|subdomain] [--password-file ABS] [--confirmed] (--text T | --run ID | --path P)
@@ -35,8 +36,12 @@ cmd_probe() {
   local p="$1" abs html_files entry
   if [ -d "$p" ]; then
     abs=$(cd "$p" && pwd -P)
-    html_files=$(cd "$abs" && find . -type f \( -name '*.html' -o -name '*.htm' \) | sed 's|^\./||' | LC_ALL=C sort)
-    if [ -f "$abs/index.html" ]; then entry=index.html; else entry=$(printf '%s\n' "$html_files" | sed -n '1p'); fi
+    # Hidden paths (root .well-known/ aside) never ship; entry = server rule: index.html, else shallowest HTML.
+    html_files=$(cd "$abs" && find . -type f \( -name '*.html' -o -name '*.htm' \) | sed 's|^\./||' | LC_ALL=C sort |
+      awk -F/ '{ for (i = 1; i <= NF; i++) if ($i ~ /^\./ && !(i == 1 && $i == ".well-known")) next; print }')
+    if [ -f "$abs/index.html" ]; then entry=index.html; else
+      entry=$(printf '%s\n' "$html_files" | awk -F/ 'NF { print NF "\t" $0 }' | LC_ALL=C sort -s -n -k1,1 | sed -n '1p' | cut -f2-)
+    fi
     printf 'TYPE: site-dir\nPATH: %s\nFILES: %s\nHTML: %s\nSIZE_KB: %s\nENTRY: %s\n' "$abs" \
       "$(find "$abs" -type f | wc -l | tr -d ' ')" "$(printf '%s' "$html_files" | grep -c . || true)" \
       "$(du -sk "$abs" | cut -f1)" "${entry:-none}"
@@ -49,6 +54,19 @@ cmd_probe() {
   else
     printf 'TYPE: none\n'
   fi
+}
+
+# Read-only: the server's current user-facing upload limits (GET /api/limits), one KEY: value per line.
+cmd_limits() {
+  [ "$#" -eq 0 ] || die "limits takes no arguments"
+  command -v jq >/dev/null || die "jq required"
+  local body
+  body=$(curl -s -A "ClaudeCode/1.0" https://brewpage.app/api/limits) || die "limits request failed"
+  printf '%s' "$body" | jq -er '(.sites // empty) as $s | def mb: . / 1048576 * 10 | round / 10;
+    "REQUEST_MAX_MB: \(.requestMaxBytes | mb)", "SITE_MAX_FILES: \($s.maxFiles)", "SITE_MAX_FILE_MB: \($s.maxFileBytes | mb)",
+    "SITE_MAX_TOTAL_MB: \($s.maxTotalBytes | mb)", "SITE_MAX_ARCHIVE_EXPANSION_MB: \($s.maxArchiveExpansionBytes | mb)",
+    "PATH_MAX_CHARS: \($s.maxPathChars)", "PATH_MAX_BYTES: \($s.maxPathBytes)", "NAME_MAX_BYTES: \($s.maxNameBytes)"' 2>/dev/null ||
+    die "limits unavailable (unexpected response)"
 }
 
 # Allocates a run (empty --run) or appends to it; chunks rejoin with one newline between them.
@@ -185,6 +203,7 @@ cmd="${1:-}"
 if [ "$#" -gt 0 ]; then shift; fi
 case "$cmd" in
   probe) cmd_probe "$@" ;;
+  limits) cmd_limits "$@" ;;
   stage) cmd_stage "$@" ;;
   publish) cmd_publish "$@" ;;
   cleanup) cmd_cleanup "$@" ;;

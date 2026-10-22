@@ -269,11 +269,11 @@ check('skill.frontmatter.invocation', FM.filter((l) => /^(user-invocable|disable
   const outsideQuotes = (cmd) => cmd.replace(/'[^']*'/g, '');
   check('skill.fences.rule', [rules, fences.length, fences.map((f) => [
     f.startsWith(rules[0] + ' '), f.includes('\n'), /[;&|$`()<>"\\]/.test(outsideQuotes(f.slice(rules[0].length))),
-  ])], [['bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh'], 6, Array(6).fill([true, false, false])],
+  ])], [['bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh'], 7, Array(7).fill([true, false, false])],
   'GIVEN the rule prefix WHEN each fence is checked THEN it starts with it, is one line and has no operator, quote or expansion outside single quotes');
   check('skill.fences.subcommands', fences.map((f) => f.split(' ')[2]),
-    ['probe', 'publish', 'publish', 'stage', 'publish', 'cleanup'],
-    'GIVEN the shipped fences WHEN their subcommands are listed THEN probe, path/text/staged publish, stage and cleanup are covered');
+    ['probe', 'limits', 'publish', 'publish', 'stage', 'publish', 'cleanup'],
+    'GIVEN the shipped fences WHEN their subcommands are listed THEN probe, limits, path/text/staged publish, stage and cleanup are covered');
   check('skill.fences.slots', fences.filter((f) => f.includes(' publish ')).map((f) => [...f.matchAll(/ --([a-z-]+) '\{?([a-z_]*)\}?'/g)].map((m) => m[1] + '=' + m[2])), [
     ['ns=ns', 'ttl=days', 'entry=entry', 'delivery-mode=delivery_mode', 'password-file=password_file', 'path=path'],
     ['ns=ns', 'ttl=days', 'entry=', 'delivery-mode=delivery_mode', 'password-file=password_file', 'text=content'],
