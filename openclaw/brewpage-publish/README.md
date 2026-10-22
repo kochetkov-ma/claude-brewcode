@@ -2,6 +2,8 @@
 
 Publish HTML, markdown, text, any file, or a whole multi-file site to [brewpage.app](https://brewpage.app) — free hosting with no sign-up. Paste text, share a file, host a temporary page, or upload a site and get an instant public URL to share a link.
 
+BrewPage needs no account and keeps pages for 1 to 30 days. To compare it with GitHub Pages, Netlify Drop, Tiiny Host and others, see [brewpage.app/compare](https://brewpage.app/compare).
+
 This is an [AgentSkills](https://docs.openclaw.ai/tools/skills)-standard skill for **OpenClaw**.
 
 ## What It Does

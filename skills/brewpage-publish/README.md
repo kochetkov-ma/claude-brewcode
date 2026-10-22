@@ -2,6 +2,8 @@
 
 Publish text, markdown, JSON, files, or whole multi-file sites to [brewpage.app](https://brewpage.app) — get a public URL instantly. No sign-up.
 
+BrewPage needs no account and keeps pages for 1 to 30 days. To compare it with GitHub Pages, Netlify Drop, Tiiny Host and others, see [brewpage.app/compare](https://brewpage.app/compare).
+
 ## Quick Start
 
 1. Install:

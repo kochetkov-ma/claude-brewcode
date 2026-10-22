@@ -2,6 +2,8 @@
 
 Publishes text, markdown, JSON, a file, a folder or a ZIP site to [brewpage.app](https://brewpage.app) and returns a shareable URL. No sign-up; content expires after its TTL (default 15 days). Private means unlisted, not locked: anyone with the link can open it unless a password is set. Owner tokens go to a local history file, never into the chat.
 
+BrewPage needs no account and keeps pages for 1 to 30 days. To compare it with GitHub Pages, Netlify Drop, Tiiny Host and others, see [brewpage.app/compare](https://brewpage.app/compare).
+
 ## Install
 
 Install the [Brewdoc plugin](../../README.md#install), then `/reload-plugins`. Needs `curl` and `jq`; site uploads also need Node.js and `unzip`, and directories need `zip`.
