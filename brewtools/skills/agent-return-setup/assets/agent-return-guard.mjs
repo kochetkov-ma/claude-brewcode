@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.11.1 content_version=6.5.0 generated_by=brewtools:agent-return-setup
+// brewcode-meta: version=6.12.0 content_version=6.5.0 generated_by=brewtools:agent-return-setup
 
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2025-2026 Maksim Kochetkov

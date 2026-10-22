@@ -2,6 +2,23 @@
 
 ---
 
+## v6.12.0 (2026-10-22)
+
+> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+**What changed for you**
+
+- `/brewdoc:publish` knows BrewPage's upload limits (25 MB per request; a site holds 200 files, 5 MB per file, 20 MB total) and looks up the current values before it publishes a big site. Ask it, or run `curl -s https://brewpage.app/api/limits`. See [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/).
+- A site's entry page is picked the way the server picks it: root `index.html`, else the shallowest page. `--entry <file>` overrides it.
+- The root `.well-known/` folder is kept in the upload, extension-less files included (for example `apple-app-site-association`). Other hidden files and system files such as `.DS_Store` are dropped.
+- A rejected upload shows the server's reason (`HTTP <status>: <message>`). After a successful upload, the server's `NOTICE:` lines say what it skipped or adjusted.
+
+### brewdoc
+
+#### Changed
+
+- **publish:** `limits` is a read-only lookup of the server's current values, run by the skill for a big site; pre-checks drop system and hidden entries, keep the root `.well-known/` (extension-less files included) and require at least one `.html`; entry by the server rule (`--entry` > root `index.html` > shallowest `.html`); `FAILED:` carries the HTTP status and message, `NOTICE:` lines follow an `OK` line. Same change in the standalone `skills/brewpage-publish` and `openclaw/brewpage-publish` copies.
+
 ## v6.11.1 (2026-10-21)
 
 > Docs: [reminders](https://doc-claude.brewcode.app/mods/reminders/)

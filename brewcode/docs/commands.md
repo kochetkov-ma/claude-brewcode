@@ -6,7 +6,7 @@ description: Detailed description of all brewcode plugin commands
 
 # BC Plugin Commands
 
-> **ver:** 6.11.1 | **Author:** Maksim Kochetkov | **License:** MIT
+> **ver:** 6.12.0 | **Author:** Maksim Kochetkov | **License:** MIT
 
 Walkthroughs: `https://doc-claude.brewcode.app/brewcode/skills/<name>/`. This page keeps modes, arguments, defaults and models.
 

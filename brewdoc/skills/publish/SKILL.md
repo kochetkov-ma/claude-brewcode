@@ -51,8 +51,8 @@ rule pre-approves exactly that shape, so the skill never prompts, headless inclu
   other shape falls back to the normal permission prompt.
 - Keep every command under 8,000 characters (longer ones are always refused); longer text goes
   through `stage` (Step 6).
-- The script prints one decisive line: `OK {url}`, `OK {url} | Files: N`, `CONFIRM: …` (exit 2,
-  nothing uploaded) or `FAILED: …`, then any `NOTICE: …` lines (what the server skipped or adjusted).
+- The script prints one decisive line: `OK {url}` or `OK {url} | Files: N` (then any `NOTICE: …` lines:
+  what the server skipped or adjusted), `CONFIRM: …` (exit 2, nothing uploaded) or `FAILED: …` (server reason `HTTP <status>: <message>`).
   It removes its private run directory on every exit.
 
 ## Workflow
@@ -257,5 +257,5 @@ a value that still cannot be stored is a 400, not a 409.
 - **Update a site**: `PUT` the new bundle to its apex owner API with `X-Owner-Token`; it replaces the file set and keeps the host. No `X-Delivery-Mode` on ordinary PUT/update.
 - Hosting change, NEW publications without a required subdomain only (OLD, sites and non-public HTML pages keep their mode, 200 with a notice): owner-only `PATCH /api/{type}/{ns}/{id}/hosting` with `{"deliveryMode":"subdomain","expectedVersion":1}` from current identity metadata; then use the returned URL/version.
 - NEW password-protected links stay clean: never generate or append `?p=`. API password requests use `X-Password`; OLD password behavior is unchanged.
-- **SITE bundles are allowlisted**: `pack` drops dot-entries (`.env`, `.git/`, `.DS_Store`; the root `.well-known/` stays), `node_modules/`, `__MACOSX/`, symlinks and unknown types, and verifies the archive (`unzip -t`, name set) before `curl`, else deletes it and exits 1. `inspect` never rewrites a supplied ZIP; it exits 2 when anything unexpected, hidden or sensitive is inside (system files the server drops are left alone).
+- **SITE bundles are allowlisted**: `pack` drops dot-entries (`.env`, `.git/`, `.DS_Store`; the root `.well-known/` stays, extension-less files included), `node_modules/`, `__MACOSX/`, symlinks and unknown types, and verifies the archive (`unzip -t`, name set) before `curl`, else deletes it and exits 1. `inspect` never rewrites a supplied ZIP; it exits 2 when anything unexpected, hidden or sensitive is inside (system files the server drops are left alone).
 - Keep `.link` exact (NEW subdomain roots keep `/`, OLD links their form); never reconstruct a host from IDs. Verify NEW native sites at the exact URL and asset paths in a browser; OLD sites may redirect via a landing page: check in a browser or fetch the explicit entry asset.

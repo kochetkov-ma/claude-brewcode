@@ -55,7 +55,9 @@ Owner token saved to <project-root>/.claude/brewpage-history.md
 | Existing local file | FILE | `POST /api/files` (multipart) |
 | Directory or `.zip` | SITE | `POST /api/sites` |
 
-SITE is checked first. Site entry: `--entry`, else `index.html`, else the first `.html` alphabetically.
+SITE is checked first. Site entry follows the server rule: `--entry`, else the root `index.html`, else the shallowest `.html` (ties by name). To start on another page, pass `--entry`.
+
+**Upload limits.** brewpage.app allows 25 MB per request, 200 files, 5 MB per file and 20 MB in total. Ask the skill to check the limits, or run `curl -s https://brewpage.app/api/limits`; the skill reads them itself before a big site.
 
 <Spoiler id="technical-details" title="Hosting modes and good to know">
 
@@ -73,6 +75,8 @@ SITE is checked first. Site entry: `--entry`, else `index.html`, else the first 
 
 - Eligible, unprotected HTML, sites and files in `public` can appear in the gallery and be indexed; everything else is `noindex`. Eligibility does not guarantee ranking.
 - Headless runs use the defaults: suggested private namespace, no password.
+- A rejected upload prints `FAILED: publish rejected (HTTP <status>: <message>)` with the server's reason. After a successful `OK` line, lines starting with `NOTICE:` say what the server skipped or adjusted.
+- Limits behind the headline numbers: a ZIP expands to at most 40 MB, paths stop at 380 characters (900 bytes) and names at 200 bytes. The skill's own read-only `limits` command prints the current values.
 - Do not publish `.env` files or secrets: pages are reachable by anyone with the link, and content expires after the TTL.
 
 </Spoiler>
@@ -138,7 +142,7 @@ Passwords and revocation cannot recall downloaded or cached copies.
 
 A directory is packed by `scripts/publish.mjs pack --dir <dir> --out <archive.zip>`: stale target removed, `zip` status checked, result verified with `unzip -t` and a non-zero size; any failure deletes the archive before `curl` runs.
 
-The pack is an allowlist: only web-asset extensions (`.html .css .js .json .svg .png .woff2 .pdf .md` and similar) go in; dotfiles, `.env`, `.git/`, `node_modules/` and symlinks are dropped. A supplied `.zip` is inspected, never rewritten: an entry matching `.env`, `id_rsa`, `secret`, `credential`, `password`, `token`, `.pem`, `.key`, `.p12`, `.crt` or `.map` blocks the upload until you confirm.
+The pack is an allowlist: only web-asset extensions (`.html .css .js .json .svg .png .woff2 .pdf .md` and similar) go in. System files (`.DS_Store`, `__MACOSX/`, `Thumbs.db`, `desktop.ini`) are dropped and listed under `SKIPPED`, never flagged and never counted toward the server's file limit. Hidden files and folders (`.env`, `.git/`) are dropped too, except the root `.well-known/`, which ships with its files, extension-less ones included (such as `apple-app-site-association`); `node_modules/` and symlinks are dropped as well. A supplied `.zip` is inspected, never rewritten: system entries are left alone (the server drops them), hidden entries are flagged, and an entry matching `.env`, `id_rsa`, `secret`, `credential`, `password`, `token`, `.pem`, `.key`, `.p12`, `.crt` or `.map` blocks the upload until you confirm.
 
 Tests: `bash brewdoc/skills/publish/tests/run.sh` (no network, no real upload; they do not prove server rollout).
 

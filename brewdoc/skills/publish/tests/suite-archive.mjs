@@ -236,6 +236,8 @@ try {
   for (const [name, files, kept, entry] of [
     ['wellknown', { 'index.html': 'i', '.well-known/security.txt': 's', '.well-known/.hidden.txt': 'h',
       'sub/.well-known/x.txt': 'x', '__MACOSX/._index.html': 'm' }, ['.well-known/security.txt', 'index.html'], 'index.html'],
+    ['wellknownbare', { 'index.html': 'i', '.well-known/apple-app-site-association': '{}', 'sub/README': 'r' },
+      ['.well-known/apple-app-site-association', 'index.html'], 'index.html'],
     ['shallowest', { 'a/deep/first.html': 'a', 'z.html': 'z', 'b/page.html': 'b' }, ['a/deep/first.html', 'b/page.html', 'z.html'], 'z.html'],
     ['tie', { 'docs/b.html': 'b', 'app/a.htm': 'a', 'x/y/c.html': 'c' }, ['app/a.htm', 'docs/b.html', 'x/y/c.html'], 'app/a.htm'],
     ['upperindex', { 'INDEX.HTML': 'i', 'about.html': 'a' }, ['INDEX.HTML', 'about.html'], 'INDEX.HTML'],

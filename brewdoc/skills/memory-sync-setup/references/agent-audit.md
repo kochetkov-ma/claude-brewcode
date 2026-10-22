@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=6.11.1 content_version=6.5.0 generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=6.12.0 content_version=6.5.0 generated_by=brewdoc:memory-sync-setup -->
 # Agent and Skill Re-Audit
 
 Every `/memory-sync` run audits every agent and skill at every scope/depth. The emitted agents and skills

@@ -26,6 +26,9 @@ const SYSTEM_RE = /^(__MACOSX|\.Spotlight-V100|\.Trashes|\.fseventsd)\/|(^|\/)(\
 /** True when a dot-named segment, outside the root `.well-known/`, keeps the path out of a site. */
 const isHidden = (rel) => rel.split('/').some((s, i) => s.startsWith('.') && !(i === 0 && s === TRUSTED_DOT_DIR));
 
+/** Extension-less files ship only inside the root `.well-known/` (e.g. `apple-app-site-association`). */
+const isWellKnownBare = (rel) => rel.startsWith(`${TRUSTED_DOT_DIR}/`) && extname(rel) === '';
+
 /** Entries that still need a human OK if they survive the allowlist. */
 const SENSITIVE_RE = /(^|\/)(\.env|id_rsa|id_ed25519)|secret|credential|password|token|\.(pem|key|p12|pfx|crt|map)$/i;
 
@@ -73,7 +76,7 @@ function collect(root) {
       if (st.isSymbolicLink()) { skipped.push(rel); continue; }
       if (st.isDirectory()) { walk(abs); continue; }
       if (!st.isFile()) { skipped.push(rel); continue; }
-      if (!ALLOWED_EXT.has(extname(name).toLowerCase())) { skipped.push(rel); continue; }
+      if (!ALLOWED_EXT.has(extname(name).toLowerCase()) && !isWellKnownBare(rel)) { skipped.push(rel); continue; }
       if (/[\r\n]/.test(rel)) { skipped.push(rel); continue; }
       kept.push(rel);
     }
@@ -200,7 +203,7 @@ function inspect(args) {
 
   // A supplied ZIP is not rewritten: entries outside the allowlist or hidden go to a human decision;
   // system entries the server drops itself are left alone.
-  const unexpected = listed.filter((n) => !SYSTEM_RE.test(n) && (!ALLOWED_EXT.has(extname(n).toLowerCase()) || isHidden(n)));
+  const unexpected = listed.filter((n) => !SYSTEM_RE.test(n) && ((!ALLOWED_EXT.has(extname(n).toLowerCase()) && !isWellKnownBare(n)) || isHidden(n)));
   report(listed, bytes, entry, [], zipPath, unexpected);
 }
 

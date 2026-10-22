@@ -20,8 +20,8 @@ Every shell step is ONE command of the exact shape in the fences below, run with
 - Never prefix or chain the command (`cd`, `VAR=…`, `;`, `&&`, `|`, `$(…)`) and never inline the text in
   any other form: single-quoted argv is what keeps the content inert.
 - Text longer than 6,000 characters goes through `stage` (Step 6).
-- The script prints one decisive line: `OK {url}`, `OK {url} | Files: N`, `CONFIRM: …` (exit 2,
-  nothing uploaded) or `FAILED: …`, then any `NOTICE: …` lines (what the server skipped or adjusted).
+- The script prints one decisive line: `OK {url}` or `OK {url} | Files: N` (then any `NOTICE: …` lines:
+  what the server skipped or adjusted), `CONFIRM: …` (exit 2, nothing uploaded) or `FAILED: …` (server reason `HTTP <status>: <message>`).
   It removes its private run directory on every exit.
 
 ## Workflow
@@ -232,7 +232,7 @@ a value that still cannot be stored is a 400, not a 409.
 - To **update a published site**, `PUT` the replacement bundle to its apex owner API with `X-Owner-Token`; retain the host and omit `X-Delivery-Mode` on ordinary PUT/update.
 - Only NEW publications without a required subdomain allow owner-only `PATCH /api/{type}/{ns}/{id}/hosting` with `{"deliveryMode":"subdomain","expectedVersion":1}` from current identity metadata. OLD, sites and non-public HTML pages keep their mode (200 with a notice). Use the returned URL/version afterward.
 - NEW password-protected links stay clean: never generate or append `?p=`. API requests still use `X-Password`; OLD password behavior remains unchanged.
-- **SITE bundles are allowlisted**: the directory build drops dot-entries (`.env`, `.git/`, `.DS_Store`; the root `.well-known/` stays), `node_modules/`, `__MACOSX/`, symlinks and unknown types (`*.map`, `*.log`, `Thumbs.db`), flags kept names that look sensitive (`secret`, `token`, `password`, `credential`) for confirmation, and verifies the archive (`unzip -t`, name set) before upload. A supplied ZIP is never rewritten; anything unexpected, hidden or sensitive inside it needs confirmation (system files the server drops are left alone).
+- **SITE bundles are allowlisted**: the directory build drops dot-entries (`.env`, `.git/`, `.DS_Store`; the root `.well-known/` stays, extension-less files included), `node_modules/`, `__MACOSX/`, symlinks and unknown types (`*.map`, `*.log`, `Thumbs.db`), flags kept names that look sensitive (`secret`, `token`, `password`, `credential`) for confirmation, and verifies the archive (`unzip -t`, name set) before upload. A supplied ZIP is never rewritten; anything unexpected, hidden or sensitive inside it needs confirmation (system files the server drops are left alone).
 - Preserve `.link` exactly: NEW subdomain roots retain `/`; OLD links retain their existing form. Never reconstruct a host from IDs.
 - Verify NEW native sites at the exact returned URL and asset paths; a browser proves rendering. OLD sites may still use the landing-page redirect; verify those in a browser or fetch their explicit entry asset.
 

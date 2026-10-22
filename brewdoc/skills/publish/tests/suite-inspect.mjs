@@ -110,6 +110,8 @@ for (const [name, files, want] of [
   ['system', { 'site/page.html': 'p', 'top.html': 't', '.DS_Store': 'd', '__MACOSX/._top.html': 'm', '.well-known/a.json': '{}' },
     [0, 'ok', 'top.html', '']],
   ['hidden', { 'index.html': 'i', '.cache/app.js': 'c', 'css/.draft.css': 'd' }, [2, 'confirm', 'index.html', '.cache/app.js, css/.draft.css']],
+  ['wellknownbare', { 'index.html': 'i', '.well-known/apple-app-site-association': '{}', 'sub/README': 'r' },
+    [2, 'confirm', 'index.html', 'sub/README']],
 ]) {
   const r = inspect(['--zip', makeZip(name, files)]);
   check(`precheck.${name}`, [r.status, r.field('RESULT'), r.field('ENTRY'), r.field('UNEXPECTED')], want,

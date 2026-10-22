@@ -4,7 +4,7 @@ description: Detailed description of all brewdoc plugin commands
 
 # Brewdoc Plugin Commands
 
-> **Version:** 6.11.1 | **Author:** Maksim Kochetkov | **License:** MIT
+> **Version:** 6.12.0 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Quick Reference
 
@@ -187,7 +187,7 @@ reportlab: pip only, good quality, no CSS. weasyprint: pip + brew, excellent qua
 | Flag | Default | Does |
 |------|---------|------|
 | `--ttl N` | `15` days | Time to live |
-| `--entry filename` | auto-detect | SITE entry: flag > `index.html` > first `.html`/`.htm` |
+| `--entry filename` | auto-detect | SITE entry: flag > root `index.html` > shallowest `.html` (ties: name order) |
 | `--delivery-mode path\|subdomain` | server default | Sent only as `X-Delivery-Mode`. NEW SITE and non-public publications lock to `subdomain`; public text, JSON or file allows `path` or `subdomain` |
 
 OLD publications keep their links. Use the exact returned `link`, cohort and mode; never infer a mode from the address or build a hostname from an ID. Namespace `public` makes unprotected content gallery-eligible; a private namespace is unlisted, not secret, unless a password is set.
