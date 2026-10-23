@@ -19,16 +19,16 @@ skill-name/
 
 | Pattern | When | Effect |
 |---|---|---|
-| **Progressive Disclosure** | Always | 3 levels: L1 listing metadata (~100 words when offered; DMI SKs excluded), L2 SKILL.md (<500 lines, on invocation), L3 refs/scripts/agents (on demand, bounded by context) |
+| **Progressive Disclosure** | Always | 3 levels: L1 listing metadata (~100 tokens when offered; DMI SKs excluded), L2 SKILL.md (<500 lines, on invocation), L3 refs/scripts/agents (on demand, bounded by context) |
 | **REF Splitting** | Multi-mode: 2+ modes, >50 lines/mode, >300 lines total | Detect mode -> Read `references/{mode}.md`. Guard: "not found -> ERROR + STOP" |
 | **Agents-as-REFs** | SK-coordinator + multi-step workflow + 2+ roles needing context isolation | Prompt `.md` in SK `agents/`; coordinator passes path, SA reads body. Coordinator pays path/brief tokens, not the prompt body. `agents/` is convention, NOT native |
 | **Dynamic CTX** | Need live data before launch (git diff, PR info, env) | `` !`command` `` executes BEFORE content reaches Claude |
 | **Skill fork** | Standalone task, no conversation history; 1-4 phases is a BC heuristic | `context: fork` -> regular isolated SA, background by DEF since v2.1.218 (`execution-model.md` Context modes); !=a conversation fork. 5+ phases suggests durable state, !=a platform memory-loss threshold |
 | **Executable Bash** | Bash blocks must execute | Template under Executable Bash below. Without the `**EXECUTE**` keyword, bash is examples only |
-| **SK Chaining** | SK invokes another SK | `Skill(skill="name", args="...")`; no `allowed-tools` needed for availability. Runtime SA skills supported upstream; DMI SKs cannot be model-invoked. BC chains distributed SKs from main |
+| **SK Chaining** | SK invokes another SK | `Skill(skill="name", args="...")`; no `allowed-tools` needed for availability. Runtime SA skills supported upstream; DMI SKs cannot be model-invoked on their own initiative (a user-typed mid-message `/name` permits it). BC chains distributed SKs from main |
 | **Background Knowledge** | Claude needs context, user needs no slash cmd | `user-invocable: false`. Description stays in context |
 | **Pushy Description** | LLM-invocable skills | Action verb + `Triggers: "phrase1", "phrase2"`. Best odds of auto-load; no published rate |
-| **Preloaded Skills** | SA must follow conventions/patterns | `skills: [name]` in agent frontmatter: full SK injected at startup, first 32 names. Only `disable-model-invocation: false` SKs — a DMI SK (every distributed brewcode SK but `brewdoc:publish`, `brewtools:text-optimize`, `brewtools:text-human`) is skipped with a debug-log warning, nothing else |
+| **Preloaded Skills** | SA must follow conventions/patterns | `skills: [name]` in agent frontmatter: full SK injected at startup, first 32 names. Only `disable-model-invocation: false` SKs — a DMI SK (every distributed brewcode SK but `brewdoc:publish`, `brewtools:text-optimize`, `brewtools:text-human`) can't be preloaded (docs; a missing/disabled entry is skipped with a debug warning) |
 
 ## Agents-as-REFs detail
 
@@ -90,7 +90,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/my-skill/references/rules.md then...")`.
 ## Executable Bash
 
 Template: `**EXECUTE** using Bash tool:` label, a fenced bash block ending
-`&& echo "OK" || echo "FAIL"`, then `> **STOP if FAIL**` with recovery steps.
+`&& echo "✅" || echo "❌ FAILED"`, then `> **STOP if ❌** — fix before continuing.` (root CLAUDE.md form).
 
 | Rule | Bad | Good |
 |---|---|---|
@@ -110,9 +110,11 @@ Priority: Enterprise > Personal > Project. Plugin skills invoke as `/plugin-name
 bundled skills via `disableBundledSkills` setting or `CLAUDE_CODE_DISABLE_BUNDLED_SKILLS` env
 (v2.1.169+).
 
-> **BC output policy:** SK outputs -> project `.claude/<subdir>/`. Upstream treats sensitive
-> `~/.claude/**` writes as permission ASK, not a universal block: bypass can approve; headless
-> `-p` cannot answer prompts. Carve-outs: `commands|agents|skills|worktrees|scheduled_tasks.json`.
+> **BC output policy:** SK outputs -> project `.claude/<subdir>/`. A Write/Edit into any `.claude/` dir
+> (incl. `.claude/skills|commands|agents`) is a protected-path write: prompts in default/acceptEdits,
+> classifier in auto, denied in dontAsk and `-p`, allowed in bypassPermissions; `allow` rules never
+> pre-approve. Exempt: `.claude/worktrees/`, session plan files, auto-memory `*.md`, `.claude/agent-memory/`
+> markdown (permission-modes#protected-paths; `.claude/rules/avoid.md` #6; probe 2.1.309).
 
 ## Unit test skeleton (Step 8)
 

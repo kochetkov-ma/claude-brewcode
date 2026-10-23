@@ -54,7 +54,7 @@ const HANDLER_TYPES = ['agent', 'command', 'http', 'mcp_tool', 'prompt'];
 
 const SESSIONSTART_SOURCES = ['clear', 'compact', 'fork', 'resume', 'startup'];
 
-/** 12 values -- 2.1.267 added `account_on_hold` + `cloud_credential_error` (was 10). */
+/** 12 values -- `cloud_credential_error` matcher needs 2.1.267; `account_on_hold` floor not stated. */
 const STOPFAILURE_TYPES = [
   'account_on_hold', 'authentication_failed', 'billing_error', 'cloud_credential_error',
   'invalid_request', 'max_output_tokens', 'model_not_found', 'oauth_org_not_allowed',
@@ -306,7 +306,7 @@ function runHookTemplate(source, stdin) {
     'hooks-events.md SessionStart sources must include `fork` (N1)');
   check('matcher.StopFailure.types',
     tokens(row(/^\| StopFailure \|/)), STOPFAILURE_TYPES,
-    'hooks-events.md StopFailure must carry all 12 error types (N2, 2.1.267)');
+    'hooks-events.md StopFailure must carry all 12 error types (N2)');
   check('matcher.Notification.types',
     tokens(row(/^\| Notification \|/)), NOTIFICATION_TYPES,
     'hooks-events.md Notification must carry all 13 notification types (N3, 2.1.234)');

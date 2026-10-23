@@ -93,13 +93,13 @@ File names below are the references under Read on demand.
 1. **Understand.** Resolve from the spawn brief: functionality, trigger phrases, any captured
    workflow (tools used, sequence, corrections, I/O formats, edge cases), and scope (personal
    `~/.claude/skills/` | project `.claude/skills/` | plugin `<plugin>/skills/`; enterprise is admin
-   deployment only, never a local `mkdir`). Unclear who invokes -> default `DMI: true` and say so
+   deployment only, never a local `mkdir`; personal/project SKs are absent from cloud sessions -> plugin). Unclear who invokes -> default `DMI: true` and say so
    in the report.
 2. **Plan contents.** Scripts for tasks needing deterministic reliability; `references/` for
    schemas, API specs, policies (thresholds in `design-patterns.md`); `assets/` for templates and
    icons.
 3. **Create structure.** `mkdir -p <scope-root>/<name>/{references,scripts,assets}` -- only the
-   planned subdirs, scope root per the Location priority table in `design-patterns.md`.
+   planned subdirs, scope root per the Location priority table in `design-patterns.md`. Write/Edit into `.claude/skills/` is a protected-path write (denied in dontAsk/`-p`): unattended -> Bash-run script.
 4. **Configure frontmatter.** `context`/`agent`/`model` from `execution-model.md`; the field
    catalog in `frontmatter-fields.md`; invocation type, description style and budget, criticality
    tiers in `activation-and-troubleshooting.md`. Declare `hooks:` only for behavior that must hold
@@ -108,17 +108,15 @@ File names below are the references under Read on demand.
    `frontmatter-fields.md` Hooks.
 5. **Write SKILL.md.** FM -> `## Prompt contract` -> overview (1-2 sentences) -> instructions in
    imperative form -> resource refs. Keep the body under 500 lines; move excess to `references/`.
-   Bash fences follow the safe spellings named under Scope and never.
+   Bash fences follow the safe spellings named under Scope and never. Standing instructions, key rules first (compaction keeps 5,000 tokens).
 6. **Validate.** `bash "${CLAUDE_PLUGIN_ROOT}/skills/skills/scripts/validate-skill.sh" path/to/skill && echo OK || echo FAIL`,
    then the Validation checklist in `activation-and-troubleshooting.md`. Its Validation tools
    (`claude plugin eval`, `claude plugin validate <dir>`, `/doctor prompt-audit [path]`, `/skill-doctor`) are optional and never
    replace the validator -- name in the report any you ran or could not run.
-7. **Quick eval.** Write 3-5 realistic user prompts (real file paths, casual phrasing). It is a
-   paired baseline: run each in a fresh session with the skill available and again disabled, then
-   compare -- leftover authoring context masks gaps. `DMI: true` skips the trigger half (model
-   invocation and SA preloading are disabled) -- measure the output half only, via `claude -p`
-   invoking `/name` explicitly. `DMI: true`/`false` branch table and the heavyweight-eval pointer:
-   `activation-and-troubleshooting.md`.
+7. **Quick eval.** Write 3-5 realistic user prompts (real file paths, casual phrasing). Paired
+   baseline: run each in a fresh session with the skill available and again disabled, then compare.
+   `DMI: true` skips the trigger half -- measure the output half only, via `claude -p` invoking
+   `/name`. Branch table and heavyweight-eval pointer: `activation-and-troubleshooting.md`.
 8. **Unit tests + README.** Scripts present -> generate `tests/test-{script}.sh` per the skeleton in
    `design-patterns.md`, run them, fix up to 2 cycles. Then generate `README.md` from
    `readme-template.md`.
@@ -155,6 +153,7 @@ Do not report accepted before main returns gate evidence; return requested/pendi
 | `${CLAUDE_PLUGIN_ROOT}/skills/skills/references/prompt-contract.md` | Every SK you create or improve -- mandatory |
 | `${CLAUDE_PLUGIN_ROOT}/skills/skills/references/review-prompt.md` | Spawned to review, or applying review findings |
 | `${CLAUDE_PLUGIN_ROOT}/skills/skills/references/readme-template.md` | Step 8 README generation |
+| `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-types-config.md`, `hooks-events.md`, `hooks-io-contract.md` | Writing the skill `hooks:` block: handler fields, events, output schema |
 | `${CLAUDE_PLUGIN_ROOT}/skills/skills/references/e2e-template.md` | Brief asks for E2E scenarios (Deep testing depth) |
 
 <!-- Copyright (c) 2025-2026 Maksim Kochetkov, https://github.com/kochetkov-ma/claude-brewcode. SPDX-License-Identifier: MIT -->

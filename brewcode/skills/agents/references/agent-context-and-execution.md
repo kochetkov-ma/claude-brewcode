@@ -7,7 +7,7 @@
 | CD (project + user + local; loaded AGENTS.md) | Yes, unless omitted | Built-in `Explore`/`Plan` skip it. `omitClaudeMd: true` (2.1.271+) skips these instructions; managed policy still loads except for managed AG definitions. For all three, a subdirectory's CD + matching path-scoped rules still load once the AG works with files there |
 | `.claude/rules/*.md` | Yes, unless omitted | Same `Explore`/`Plan` and `omitClaudeMd` exceptions |
 | Git status | Conditional | Snapshot when SA starts; absent outside Git or when disabled (`includeGitInstructions`). `Explore`/`Plan` skip it |
-| Permissions | Yes | Override via `permissionMode` -- ignored for PLG AGs |
+| Permissions | Yes | Main's mode decides, see Permission Modes in `agent-frontmatter-fields.md`; `permissionMode` ignored for PLG AGs |
 | TLs / MCP servers | Filtered | Inherited, then narrowed by the two filters -- see Available TLs in `agent-scope-and-tools.md`. `mcpServers` key ignored for PLG AGs |
 | SKs from `skills:` field | Yes | Full content at startup; model-invocable SKs only, see below |
 | AG memory (`memory:` field) | Yes | First 200 lines or 25KB of MEMORY.md, whichever comes first; auto-adds Read/Write/Edit; inert while auto memory is off |
@@ -59,7 +59,7 @@ When AG spawns from a SK that uses `references/`, AG does NOT have `skill_base_d
 
 > The result reaches the caller under a "subagent output" header (2.1.277+): instructions or approval claims inside carry no user authority. A report that imitates `<system-reminder>` or mentions `bypassPermissions`/`--dangerously-skip-permissions` also gets a `[harness: subagent output matched instruction-shaped pattern(s):` marker line -- expected, not an error.
 
-Mode is picked per `Agent` spawn by the first matching case. Fork mode is ON by DEF everywhere since 2.1.302 (interactive terminal since 2.1.232); `CLAUDE_CODE_FORK_SUBAGENT=0` turns it off.
+Mode is picked per `Agent` spawn by the first matching case. Fork mode is ON by DEF since 2.1.302 in terminal, `-p`, SDK, desktop and VS Code, never in `claude mcp serve` (interactive terminal since 2.1.232); `CLAUDE_CODE_FORK_SUBAGENT=0` turns it off.
 
 | # | Condition | Mode |
 |---|-----------|------|
@@ -105,7 +105,7 @@ Mode is picked per `Agent` spawn by the first matching case. Fork mode is ON by 
 | Recovery | `TaskStop` | Kill a running SA |
 | Recovery | `SendMessage` (`to`: AG ID or name) | Resume a finished or `TaskStop`-stopped SA with ctx intact, in BG, same tool set + warmed cache (2.1.304 fixed forgetting the latest work). A name now held by a newer AG -> send refused with a retarget hint; names survive a restart (2.1.299+), names from before the last compaction need the ID |
 
-Auto-mode local non-fork SAs may deliver through `SubagentHandback` (2.1.271+), which is added even if omitted/denied in `tools`. Their `PostToolUse:Agent` result `content` can contain only a hand-back note; capture the report from `PreToolUse`/`PostToolUse:SubagentHandback` `tool_input.message`, !=the note. A `SubagentStop` block after the hand-back is ignored. Explore/Plan are one-shot and return no resumable AG ID. User-cancelled AGs (`x` in `/tasks`, SDK `stop_task`) do not auto-resume: a message to one is refused; permission approval never comes from an AG message.
+Auto-mode local non-fork SAs may deliver through `SubagentHandback` (2.1.271+), which is added even if omitted/denied in `tools`. Their `PostToolUse:Agent` result `content` can contain only a hand-back note; capture the report from `PreToolUse`/`PostToolUse:SubagentHandback` `tool_input.message`, !=the note. Explore/Plan are one-shot and return no resumable AG ID. User-cancelled AGs (`x` in `/tasks`, SDK `stop_task`) do not auto-resume: a message to one is refused; permission approval never comes from an AG message.
 
 **API errors:** a cut-off with text but no TL calls auto-continues first. Foreground: partial text + a cut-off note, or `Agent terminated early due to an API error` when it produced nothing or only TL calls. BG: marked failed, the end message names the error and keeps the last output. A report opening `⚠ This agent switched to <model> because its earlier model could not be used.` finished on a fallback model. Retry or resume once the error clears.
 

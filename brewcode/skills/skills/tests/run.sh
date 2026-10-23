@@ -115,5 +115,18 @@ a--b|1|❌ name 'a--b' $KEBAB_HINT
 -a|1|❌ name '-a' $KEBAB_HINT
 ROWS
 
+# Frontmatter shape: variants of a valid fixture (leading blank line; unquoted description with ': ').
+mk_variant() {
+  local dir="$WORK/$1"; mkdir -p "$dir"; cp "$(make_skill "src-$1" 'проверь' 'исправь')/SKILL.md" "$dir/SKILL.md"
+  sed -i.bak "s/^name: src-$1/name: $1/" "$dir/SKILL.md"; rm -f "$dir/SKILL.md.bak"
+  printf '%s\n' "$dir"
+}
+LB="$(mk_variant lead-blank)"; { printf '\n'; cat "$LB/SKILL.md"; } > "$LB/t" && mv "$LB/t" "$LB/SKILL.md"
+UQ="$(mk_variant unq-desc)"; sed -i.bak 's/^description: .*/description: Creates things. Triggers: make a, make b/' "$UQ/SKILL.md"; rm -f "$UQ/SKILL.md.bak"
+for shell in sh bash; do
+  expect "lead-blank" "$LB" '❌ Opening --- must be line 1 of SKILL.md (else CC drops all frontmatter fields)' 1 "$shell"
+  expect "unquoted-desc-warn" "$UQ" "⚠️  description is unquoted and holds ': ' or ' #' -- strict YAML parsers reject it, quote it" 0 "$shell"
+done
+
 printf '=== validate-skill regression (Cyrillic, standalone, name): %s passed, %s failed ===\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

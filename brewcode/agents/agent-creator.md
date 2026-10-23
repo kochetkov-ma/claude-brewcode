@@ -55,7 +55,7 @@ Never: emit a FM key outside the field table in `agent-frontmatter-fields.md` (a
 ignored without an error; 2.1.296+ `claude --debug` logs it as `does not recognize or apply`);
 put `once` in AG hooks (ignored in any AG, SK-only; skill hooks:
 `${CLAUDE_PLUGIN_ROOT}/skills/skills/references/frontmatter-fields.md`); set `isolation: remote` in FM (invocation-level only); leave
-`background: true` on a definition an in-process teammate may spawn (that spawn errors, 2.1.269+);
+`background: true` on a definition an in-process teammate may spawn (that spawn errors);
 write an "ask/confirm" step for an ordinary SA (it returns the question to its caller); ship a
 generic AG without its `## Return Contract` block.
 
@@ -73,8 +73,9 @@ Generate against these (details in the reference named):
   AGs), and is ignored for main-session agents.
 - Plugin AGs ignore `hooks`, `mcpServers`, `permissionMode`, and `initialPrompt`; use project/user
   agents when those fields are required. Never move credentials or runtime state.
-- `permissionMode` never widens: main in plan keeps the SA in plan, and FM `bypassPermissions`
-  under a default/dontAsk main keeps main's mode (2.1.267+) -- narrow with `tools:` instead.
+- `permissionMode` is decided by main's mode: bypass/acceptEdits/auto main -> FM ignored; plan main
+  -> SA stays plan; default/dontAsk main -> FM applies, except FM `bypassPermissions` (2.1.267+) and
+  unavailable `auto`, which keep main's mode. FM is no grant and no restriction: narrow with `tools:`.
 
 ## Scope Fit
 
@@ -126,7 +127,7 @@ turn samples: SA Resource Limits in `agent-context-and-execution.md`).
 | docs / generator | 80 |
 | developer / orchestrator | 120 |
 
-~10-20 s/turn -> 120 turns ~= 20-30 min ceiling. `maxTurns` != time limit: an AG stuck in one
+~10-20 s/turn -> 120 turns ~= 20-40 min ceiling. `maxTurns` != time limit: an AG stuck in one
 long `Bash` call (up to `BASH_MAX_TIMEOUT_MS`, 10 min by default) is 1 turn -> use
 `BASH_MAX_TIMEOUT_MS` + `PreToolUse` soft-deadline hook.
 
@@ -140,7 +141,7 @@ and add only domain-specific persistence requirements under `Unique invariants` 
 
 | File | Read when |
 |---|---|
-| `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/agent-frontmatter-fields.md` | Writing or checking any FM field: file format, field table with per-scope support, plugin-AG parse failure, permission modes, FM hook events |
+| `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/agent-frontmatter-fields.md` | Writing or checking any FM field: file format, field table with per-scope support, plugin-AG parse failure, permission modes, FM hook events (handler types, trust, policy: `hooks-types-config.md`, output contract: `hooks-io-contract.md`, same dir) |
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/agent-scope-and-tools.md` | Deciding `tools:` (pool per launch mode, `Glob`/`Grep` vs `Bash`), where the file lives (scope precedence, walk-up discovery), Agent tool call options, model precedence, main-only spawn patterns |
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/agent-context-and-execution.md` | What a SA inherits from its parent, `skills:` preload vs runtime `Skill`, execution modes (foreground/background), turn/token/concurrency limits, partial-result recovery |
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/agent-template.md` | Writing the FM `description`, the SP structure + emit-verbatim Guardrails block, teams-setup compact exception, colors, running the Validation Checklist |

@@ -2,7 +2,7 @@
 
 The 5 hook types and every handler field, plus the declaration-locations matrix (where a hook lives, merge, trust, reload, policy switches). Env vars: `hooks-env.md`.
 
-Verified against Claude Code 2.1.309: [official configuration](https://code.claude.com/docs/en/hooks#configuration), [prompt hooks](https://code.claude.com/docs/en/hooks#prompt-based-hooks), [hook settings keys](https://code.claude.com/docs/en/settings-reference#hook-and-skill-settings). `src`: `docs` (also every row without `src`) | `probe` = observed live on CLI 2.1.296 only, undocumented: re-check on a newer one.
+Verified against Claude Code 2.1.309: [official configuration](https://code.claude.com/docs/en/hooks#configuration), [prompt hooks](https://code.claude.com/docs/en/hooks#prompt-based-hooks), [hook settings keys](https://code.claude.com/docs/en/settings-reference#hooks-and-automation). `src`: `docs` (also every row without `src`) | `probe` = observed live on CLI 2.1.296 only, undocumented: re-check on a newer one.
 
 ## Hook Types
 
@@ -23,7 +23,7 @@ Verified against Claude Code 2.1.309: [official configuration](https://code.clau
 
 | Supported types | Events |
 |---|---|
-| all five | PermissionDenied, PostToolBatch, PostToolUse, PostToolUseFailure, PreToolUse, Stop, SubagentStop, TaskCompleted, TaskCreated, TeammateIdle, UserPromptExpansion, UserPromptSubmit |
+| all five (PermissionDenied: prompt/agent output discarded, only a `command` hook returns `retry`) | PermissionDenied, PostToolBatch, PostToolUse, PostToolUseFailure, PreToolUse, Stop, SubagentStop, TaskCompleted, TaskCreated, TeammateIdle, UserPromptExpansion, UserPromptSubmit |
 | command/http/mcp_tool/prompt | PermissionRequest; agent hooks are skipped (v2.1.280+); prompt `ok:false` has no effect there |
 | command/mcp_tool | SessionStart, Setup (`mcp_tool` skips: note above) |
 | command/http/mcp_tool | all other events in `hooks-events.md` |
@@ -62,7 +62,7 @@ Group level, under each event key: `{"matcher": "<pattern>", "hooks": [<handler>
 |-------|:---:|-------------|
 | `type` | yes | `"command"`,`"http"`,`"mcp_tool"`,`"prompt"`,`"agent"` |
 | `if` | no | ONE permission rule, tool events only: rules under "Conditional `if` field" below |
-| `timeout` | no | seconds before cancellation; per-type DEF in Hook Types. UserPromptSubmit/PreModelSwitch/PostModelSwitch lower the 600 to 30, MessageDisplay to 10; SessionEnd hooks share a 1.5 s budget (raised to your `timeout`, max 60 s, or via `$CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS`). Not enforced on `async: true`; enforced on `asyncRewake` |
+| `timeout` | no | seconds before cancellation; per-type DEF in Hook Types. UserPromptSubmit/PreModelSwitch/PostModelSwitch lower the 600 to 30, MessageDisplay to 10; SessionEnd hooks share a 1.5 s budget (raised to the highest settings-file `timeout`, max 60 s, or via `$CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS`; plugin hook timeouts never raise it). Not enforced on `async: true`; enforced on `asyncRewake` |
 | `statusMessage` | no | spinner text while the hook runs |
 | `once` | no | de-register after first successful run only; failure, exit-2 block, or timeout retains it for the next event. Honored ONLY in skill frontmatter; ignored in settings files and agent frontmatter |
 
@@ -75,6 +75,8 @@ Group level, under each event key: `{"matcher": "<pattern>", "hooks": [<handler>
 | `async` | no | `true` = background, never blocks; its `AC`/`systemMessage` reach Claude next turn (see hooks-events.md, Async Hooks) |
 | `asyncRewake` | no | `true` = runs in the background and wakes Claude on exit code 2, even when idle (what Claude then sees: same section) |
 | `shell` | no | `"bash"` (DEF; `"powershell"` on Windows without Git Bash) or `"powershell"`, shell form only; IGNORED when `args` is set |
+
+A present-but-empty `args:[]` also selects exec form: `command` is the executable script itself (shebang + `chmod +x`).
 
 Exec form (`args` present) -- the safe way to pass a placeholder path:
 ```json
@@ -89,6 +91,13 @@ Shell form (`args` absent) -- only for pipes/`&&`/globs; double-quote `${CLAUDE_
 > PowerShell shell form: `${CLAUDE_PROJECT_DIR}`, `${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PLUGIN_DATA}` are rewritten to `${env:NAME}` (expand in double quotes only); a bare `$CLAUDE_PROJECT_DIR` resolves to `$null`.
 > BREAKING (v2.1.207): a shell-form PLUGIN hook whose `command` references `${user_config.*}` FAILS instead of running. Use exec form (`args`; `${user_config.*}` still substitutes there) or read `$CLAUDE_PLUGIN_OPTION_<KEY>` from the environment.
 
+| Field (`http`) | Req | Description |
+|-------|:---:|-------------|
+| `url` | yes | POST target |
+| `headers` | no | extra headers |
+| `allowedEnvVars` | no | env names `headers` may interpolate |
+| `onFailure` | no | see below |
+
 HTTP hook example (v2.1.63+); `headers` interpolate `$VAR`/`${VAR}` only for names in `allowedEnvVars` (and in `httpHookAllowedEnvVars` when set), unlisted -> empty string:
 ```json
 {"type":"http","url":"http://localhost:8080/hooks/pre-tool-use","timeout":30,"headers":{"Authorization":"Bearer $MY_TOKEN"},"allowedEnvVars":["MY_TOKEN"]}
@@ -98,20 +107,21 @@ HTTP hook example (v2.1.63+); `headers` interpolate `$VAR`/`${VAR}` only for nam
 
 ## Declaration locations
 
-Hooks MERGE across every location: no override chain, every matching handler runs, in parallel. Only `disableAllHooks` follows settings precedence (Policy switches).
+Hooks MERGE across user/project/local/plugin/frontmatter: no override chain, every matching handler runs, in parallel. Managed: only the highest-ranked managed source applies (managed row). `disableAllHooks` follows settings precedence (Policy switches).
 
 | Location | Scope + lifetime | Registered / edits | Workspace trust | Stopped by |
 |---|---|---|---|---|
-| `~/.claude/settings.json` (`$CLAUDE_CONFIG_DIR/settings.json`) | all your projects, not shareable; cloud sessions don't read it | at load; edits apply live (file watcher) | interactive: held until the folder (or a parent) trust dialog is accepted, even this file; `-p`/SDK: treated as trusted | `disableAllHooks`, `allowManagedHooksOnly`, `strictPluginOnlyCustomization` (`hooks`), `--safe-mode` |
-| `.claude/settings.json` | project, committable | same | same: `-p` runs a repo's hooks in a never-trusted folder | same + `--bare`, `--setting-sources user` |
+| `~/.claude/settings.json` (`$CLAUDE_CONFIG_DIR/settings.json`) | all your projects, not shareable; cloud sessions don't read it | at load; edits apply live (file watcher, normally) | interactive: held until the folder (or a parent) trust dialog is accepted, even this file; `-p`/SDK: treated as trusted | `disableAllHooks`, `allowManagedHooksOnly`, `strictPluginOnlyCustomization` (`hooks`), `--safe-mode`, `--bare`/`CLAUDE_CODE_SIMPLE=1` |
+| `.claude/settings.json` | project, committable | same | same: `-p` runs a repo's hooks in a never-trusted folder | same + `--setting-sources user` |
 | `.claude/settings.local.json` | project, personal (gitignored) | same | same | same |
 | `~/.claude/settings.local.json` | local scope of `~`: read only in sessions started in `~` itself | same | same | same |
-| managed: `managed-settings.json`, `managed-settings.d/`, MDM, server-managed | org; lower levels can't remove it | at load; a server-managed hook change waits for user approval | docs silent | only managed `disableAllHooks`; still runs under `--safe-mode` |
-| plugin `hooks/hooks.json` + manifest `hooks` | while the plugin is enabled | when a session loads the plugin, not on first skill use; edits -> `/reload-plugins` | docs silent (marketplace); project `@skills-dir` plugin: exact folder trust | `disableAllHooks`, `allowManagedHooksOnly` (both spare plugins force-enabled in managed `enabledPlugins`); `strictPluginOnlyCustomization` only for skills-dir plugins; `--safe-mode` |
-| skill / custom-command frontmatter `hooks:` | rest of the session once invoked, later turns too; `once: true` honored only here | on invocation; `/hooks` lists them only after | project skill: settings-file rule, registers even in an untrusted `-p` run | `strictPluginOnlyCustomization` `hooks` (kept for plugin, bundled, managed-dir skills); `disableAllHooks`; per source (repo, own folder, each plugin) <=1,024 hooks + 16,384 matcher chars per session (v2.1.304+), over -> the skill registers none (debug `registers none of its hooks`) |
-| subagent frontmatter `hooks:` | while that agent runs, also as the main session (`--agent`, `agent` setting); `Stop` -> `SubagentStop` as a SA; `once` ignored | on spawn, removed at finish | project agent: exact folder trust, parent trust and `-p` don't count (v2.1.218+); `~/.claude/agents/` + `--agents` exempt; an `--add-dir` folder needs its own | IGNORED in plugin agents (ship `hooks/hooks.json`); `allowManagedHooksOnly`; `strictPluginOnlyCustomization` `hooks`; `disableAllHooks` |
-| `/goal` | session-scoped prompt `Stop` hook | `/goal` | -- | `allowManagedHooksOnly`, disabled hooks |
+| managed: `managed-settings.json` + `managed-settings.d/` (one source), MDM, server-managed | org; lower levels can't remove it; only the highest-ranked source's hooks apply (default `first-wins`; `managedSourcesBehavior:"merge"`, v2.1.242+, unions them) | at load; a server-managed hook change waits for user approval | docs silent | only managed `disableAllHooks`; still runs under `--safe-mode`; `--bare`: docs silent |
+| plugin `hooks/hooks.json` + manifest `hooks` | while the plugin is enabled | when a session loads the plugin, not on first skill use; edits -> `/reload-plugins` | docs silent (marketplace); project `@skills-dir` plugin: exact folder trust | `disableAllHooks`, `allowManagedHooksOnly` (both spare plugins force-enabled in managed `enabledPlugins`); `strictPluginOnlyCustomization` only for skills-dir plugins; `--safe-mode`; `--bare` |
+| skill / custom-command frontmatter `hooks:` | rest of the session once invoked, later turns too; `once: true` honored only here | on invocation; `/hooks` lists them only after | project skill: settings-file rule, registers even in an untrusted `-p` run | `strictPluginOnlyCustomization` `hooks` (kept for plugin, bundled, managed-dir skills); `disableAllHooks`; `--bare`; `allowManagedHooksOnly`: docs silent; per source (repo, own folder, each plugin) <=1,024 hooks + 16,384 matcher chars per session (v2.1.304+), over -> the skill registers none (debug `registers none of its hooks`) |
+| subagent frontmatter `hooks:` | while that agent runs, also as the main session (`--agent`, `agent` setting); `Stop` -> `SubagentStop` as a SA; `once` ignored | on spawn, removed at finish | project agent: exact folder trust, parent trust and `-p` don't count (v2.1.218+); `~/.claude/agents/` + `--agents` exempt; an `--add-dir` folder needs its own | IGNORED in plugin agents (ship `hooks/hooks.json`); `--bare`; `allowManagedHooksOnly`; `strictPluginOnlyCustomization` `hooks`; `disableAllHooks` |
+| `/goal` | session-scoped prompt `Stop` hook | `/goal` | same rule as settings-file hooks | `allowManagedHooksOnly`, disabled hooks |
 | Agent SDK callbacks | embedding app, in process | SDK registration | -- | spared by `allowManagedHooksOnly` and `disableAllHooks` (managed file: v2.1.242+); a timeout on PTU/UserPromptSubmit BLOCKS. SDK docs |
+| `--settings <file-or-json>` | that session only; wins over project/local for `disableAllHooks`, below managed | at launch | -- (`src`: settings docs + probe 2.1.309) | `disableAllHooks`, `--safe-mode` |
 | mods: `modules` key in `hooks/hooks.json` | plugin | plugin load | -- | `disableAllHooks`, `allowManagedHooksOnly`, `allowManagedModsOnly`. JS function hooks: `mods-*.md` |
 
 | Rule | Detail |
@@ -123,14 +133,15 @@ Hooks MERGE across every location: no override chain, every matching handler run
 | manifest `hooks` | `.json` path, inline event map (no wrapper), or an array of both; merges with `hooks/hooks.json` |
 | marketplace entry `hooks` | no `plugin.json`: inline object only; `plugin.json` + `strict` unset/true: entry matchers REPLACE the manifest's per event; `strict: false`: `has conflicting manifests`, plugin fails to load |
 | same-name plugins | one copy registers hooks (managed-enabled, else first loaded); `/plugin` Errors: `Its hooks.json hooks do not run` (v2.1.296+) |
-| unknown event name | only that entry is dropped |
+| unknown event name | settings files: only that entry is dropped; other locations: docs silent |
+| mods present | non-managed PTU hooks run after the last mod calls `next`; a mod answering `tool.call` without `next` skips them; managed PTU hooks run first (a gate that must survive a user-installed mod: managed hook or permission rule) |
 | `-p` over a foreign repo | `--bare`, `--setting-sources user`, or `--settings '{"disableAllHooks":true}'`; a user-file `disableAllHooks` alone loses to the project's `false` |
 
 ### Live / reload / restart
 
 | Change | Takes effect |
 |--------|--------------|
-| settings-file `hooks` blocks | live (file watcher), no restart |
+| settings-file `hooks` blocks | live (watcher, normally); not in `/hooks` after a few seconds -> restart |
 | a skill's `SKILL.md` body | immediately, same session |
 | plugin `hooks/`, `.mcp.json`, `agents/`, `output-styles/` | `/reload-plugins` or restart |
 | plugin monitors | session restart only |

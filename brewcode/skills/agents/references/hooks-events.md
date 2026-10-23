@@ -2,18 +2,18 @@
 
 Session lifecycle order, the full 33-event table, per-event notes, matcher pattern syntax, and sync/async behavior.
 
-Verified against Claude Code 2.1.309: [official hooks](https://code.claude.com/docs/en/hooks), [hooks guide](https://code.claude.com/docs/en/hooks-guide). `src`: `docs` (default) | `probe` = observed live on CLI 2.1.296 only, undocumented: re-check on a newer one.
+Verified against Claude Code 2.1.309: [official hooks](https://code.claude.com/docs/en/hooks), [hooks guide](https://code.claude.com/docs/en/hooks-guide). `src`: `docs` (default) | `probe` = observed live on the CLI version named in the row, undocumented: re-check on a newer one.
 
 ## Session Lifecycle
 
 ```
-Setup (--init-only/-p --init/-p --maintenance only) -> InstructionsLoaded -> SS
+Setup (--init-only/-p --init/-p --maintenance only) -> SS
 UserPromptSubmit (before skill/command expansion) -> UserPromptExpansion (when a typed command expands)
   -> PTU -> PR (if permission needed) -> [Tool] -> POT/PostToolUseFailure
   -> PostToolBatch (once per parallel batch) -> next model call -> Stop
 Branches: PermissionDenied (auto-mode denial), StopFailure (API error), MD (display)
 Lifecycle: PreCompact -> PCD; SessionEnd
-Independent events: Notification, CwdChanged, FileChanged, ConfigChange, DirectoryAdded,
+Independent events: Notification, InstructionsLoaded, CwdChanged, FileChanged, ConfigChange, DirectoryAdded,
   WorktreeCreate/Remove, PreModelSwitch/PostModelSwitch
 Subagent: PTU:Agent -> SubagentStart (also on resume) -> [work] -> SubagentStop -> POT:Agent
 TaskCreated: TaskCreate only, not every Agent invocation
@@ -22,7 +22,7 @@ Teams: exit 2 prevents idle/completion; exit 0 alone does not stop a teammate
 
 ## All 33 Hook Events
 
-> NOT a hooks.json event: post-session lifecycle hook (v2.1.169) = self-hosted runner hook, runs after session ends + before workspace deleted. Configure on runner.
+> NOT a hooks.json event: post-session lifecycle hook = self-hosted runner hook, runs after session ends + before workspace deleted. Configure on runner.
 > `?` = optional field. Exit-2 stderr routing + output channels per event: `hooks-io-contract.md`.
 
 | # | Event | Blocking? | Matcher | Key stdin fields | Ver |
@@ -48,11 +48,11 @@ Teams: exit 2 prevents idle/completion; exit 0 alone does not stop a teammate
 | 19 | InstructionsLoaded | No (async, output discarded) | load_reason: `session_start`,`nested_traversal`,`path_glob_match`,`include`,`compact` | `file_path`,`memory_type` (`User`/`Project`/`Local`/`Managed`),`load_reason`,`globs`?,`trigger_file_path`?,`parent_file_path`? | 2.1.69 |
 | 20 | Elicitation | Yes (exit 2 / decision:block = decline, no dialog) | MCP server name | `mcp_server_name`,`message`,`mode`?,`url`?,`elicitation_id`?,`requested_schema`? | 2.1.76 |
 | 21 | ElicitationResult | Yes (exit 2 / decision:block = decline) | MCP server name | `mcp_server_name`,`action`,`mode`?,`elicitation_id`?,`content`? | 2.1.76 |
-| 22 | StopFailure | No -- output + exit code IGNORED except `terminalSequence` | error type (12): `rate_limit`,`overloaded`,`authentication_failed`,`oauth_org_not_allowed`,`account_on_hold`,`billing_error`,`invalid_request`,`model_not_found`,`server_error`,`max_output_tokens`,`cloud_credential_error`,`unknown` | `error`,`error_details`?,`last_assistant_message`? (API error text) | 2.1.78; `account_on_hold`/`cloud_credential_error` added 2.1.267 |
+| 22 | StopFailure | No -- output + exit code IGNORED except `terminalSequence` | error type (12): `rate_limit`,`overloaded`,`authentication_failed`,`oauth_org_not_allowed`,`account_on_hold`,`billing_error`,`invalid_request`,`model_not_found`,`server_error`,`max_output_tokens`,`cloud_credential_error`,`unknown` | `error`,`error_details`?,`last_assistant_message`? (API error text) | 2.1.78; `cloud_credential_error` matcher needs 2.1.267; `account_on_hold` floor not stated for the matcher (errors page: code exists from 2.1.235) |
 | 23 | CwdChanged | No | No | `old_cwd`,`new_cwd` | 2.1.83 |
 | 24 | FileChanged | No | filename (basename) | `file_path`,`event` (`change`/`add`/`unlink`) | 2.1.83 |
 | 25 | TaskCreated | Yes (exit 2 / `decision:"block"`; `continue:false` ignored) | No | `task_id`,`task_subject`,`task_description`?,`teammate_name`?,`team_name` (deprecated),`agent_id`? | 2.1.84; `agent_id` 2.1.290 |
-| 26 | PermissionDenied | No -- exit code + stderr IGNORED; `hookSpecificOutput.retry` only | **tool name regex** (same values as PTU) | `tool_name`,`tool_input`,`tool_use_id`,`reason`,`mcp_server`? | 2.1.89 |
+| 26 | PermissionDenied | No -- exit code + stderr IGNORED; `hookSpecificOutput.retry` only | **tool name** (same values as PTU) | `tool_name`,`tool_input`,`tool_use_id`,`reason`,`mcp_server`? | 2.1.89 |
 | 27 | MD | No -- display only | No | `turn_id`,`message_id`,`index`,`final`,`delta` | 2.1.152 |
 | 28 | Setup | No -- any exit code continues | trigger: `init`,`maintenance` | `trigger` | -- |
 | 29 | UserPromptExpansion | **Yes** (`decision:"block"` / exit 2) -- blocks the expansion | command name (`command_name`) | `expansion_type` (`slash_command`/`mcp_prompt`),`command_name`,`command_args`,`command_source`,`prompt` | -- |
@@ -71,7 +71,7 @@ Teams: exit 2 prevents idle/completion; exit 0 alone does not stop a teammate
 | UserPromptExpansion | covers the path PTU cannot: a PTU hook on the `Skill` tool never fires when the user types `/skillname` directly |
 | PTU | `@`-mentioned files are inlined without a tool call: no PTU, incl. `Read` matchers. `EndConversation` fires no PTU/POT/PR. File paths in `tool_input` are absolute (`~`/relative expanded; Windows: backslashes, normalize before comparing) |
 | PR | fires at once; Notification `permission_prompt` only after ~6 s idle. Not run for a sandboxed command's network request (use `permission_prompt`) |
-| POT | `tool_response` = the tool's structured `Output` (`Write`: `{filePath, type:"create"}`). Foreground `Agent`: `status`,`agentId`,`content`,`resolvedModel`,`modelsUsed`,`totalTokens`+`usage` (final request only),`totalDurationMs`,`totalToolUseCount`; background: `status:"async_launched"`,`agentId`,`description`,`prompt`,`outputFile`,`resolvedModel`. `Bash` `bashEditDiff` (beta): `changedFiles`,`files`,`moreFiles`,`unavailable`,`skipped`,`shared`. `ExitPlanMode`: `plan`,`filePath` |
+| POT | `tool_response` = the tool's structured `Output` (`Write`: `{filePath, type:"create"}`). Foreground `Agent`: `status`,`agentId`,`content`,`resolvedModel`,`modelsUsed`,`totalTokens`+`usage` (final request only),`totalDurationMs`,`totalToolUseCount`; background: `status:"async_launched"`,`agentId`,`description`,`prompt`,`outputFile`,`resolvedModel`. `Bash` `bashEditDiff` (beta, 2.1.269+; best effort, never a policy gate; only with `bashEditDiffEnabled` or in auto/`bypassPermissions`; none for background/read-only): `changedFiles`,`files`,`moreFiles`,`unavailable`,`skipped`,`shared`. `ExitPlanMode`: `plan`,`filePath` |
 | PostToolBatch | `tool_response` = the serialized `tool_result` the model sees (`Read`: line-numbered text), NOT POT's structured object -- never reuse a POT parser |
 | PostToolUseFailure | not fired for calls rejected before execution: unknown tool, failed schema/validation (`tool_use_error`), permission denial (PTU fires, this does not). Key on `tool_name`, `is_interrupt`, the `Exit code N` first line of `error` |
 | Notification | `permission_prompt`, `elicitation_dialog`, `elicitation_url_dialog`: ~6 s without typing; `idle_prompt`: ~60 s after the response, not while a background agent runs. `plugin_notification` = a mod's `$.ui.notify`. Floors: sandbox-network `permission_prompt` 2.1.246, teammate `agent_needs_input` 2.1.248 |
@@ -84,7 +84,7 @@ Teams: exit 2 prevents idle/completion; exit 0 alone does not stop a teammate
 | CwdChanged, FileChanged | `CLAUDE_ENV_FILE` vars they write are cleared at the next CwdChanged. The file watcher starts only once something names a file: a named FileChanged matcher, or `watchPaths` from SS/CwdChanged/FileChanged |
 | DirectoryAdded | not for `--add-dir` at startup (SS covers those), the `/permissions` Workspace tab, nested dirs; the add completes at once, the hook runs in the background (600 s DEF) |
 | WorktreeCreate | replaces git (`.worktreeinclude` not processed: copy `.env` yourself). Fires for `--worktree`, `EnterWorktree`, SA `isolation:"worktree"`, workflow agents, background sessions, `claude remote-control` worktree mode -- NOT Bash `git worktree add` (gate that with PTU `Bash`). Absolute path with `.`/`..` or via a repo-internal symlink refused |
-| WorktreeRemove | not run for SA/workflow worktrees (remove them yourself); no hook -> git fallback; never deletes a hook-made branch (delete it in the hook) |
+| WorktreeRemove | not run for SA/workflow worktrees (remove them yourself); no hook -> git fallback (removes only git-recognised worktrees; non-git ones and `claude remote-control` cleanup stay); hook exit 0 = counted removed, so delete the dir yourself; never deletes a hook-made branch (delete it in the hook) |
 | PreModelSwitch | gates user/client-requested changes; automatic fallback and resume restoration reach PostModelSwitch only. Unknown canonical target runs every hook -> validate `to_model` in the handler. `ask` only on interactive `/model`, elsewhere = refusal |
 | PostModelSwitch | output not ready 5 s after the next prompt -> rides the following request; several switches -> only the last one's output; not fired when a fallback-chain model serves one turn |
 | Elicitation, ElicitationResult | Elicitation: a decline from any hook beats `accept`/`cancel` from others. ElicitationResult is skipped when an Elicitation hook answered; it also runs on a user decline/cancel and its `action` replaces theirs -> check input `action` before returning `accept` |
@@ -100,7 +100,7 @@ Teams: exit 2 prevents idle/completion; exit 0 alone does not stop a teammate
 
 `permission_mode` is one of 6 confirmed values: `default`,`plan`,`acceptEdits`,`auto`,`dontAsk`,`bypassPermissions`; the mode labeled Manual arrives as `"default"`, never `"manual"`.
 
-Optional shared fields: `prompt_id` (2.1.196+, absent before first input), `scratchpad_dir` (2.1.257+, absent when unavailable), `effort:{level}` (tool-use contexts such as PTU/POT/Stop/SubagentStop, only when the model supports effort: low/medium/high/xhigh/max = the level actually run; also `$CLAUDE_EFFORT`). Not every event includes `permission_mode` (none on SubagentStart: probe). `model` appears only on SS and may be absent; switch events use `from_model`/`to_model`. Transcripts are written asynchronously and can lag: use Stop `last_assistant_message` for final text.
+Optional shared fields: `prompt_id` (absent before first input), `scratchpad_dir` (2.1.257+, absent when unavailable), `effort:{level}` (tool-use contexts such as PTU/POT/Stop/SubagentStop, only when the model supports effort: low/medium/high/xhigh/max = the level actually run; also `$CLAUDE_EFFORT`). Not every event includes `permission_mode` (none on SubagentStart: probe). `model` appears only on SS and may be absent; switch events use `from_model`/`to_model`. Transcripts are written asynchronously and can lag: use Stop `last_assistant_message` for final text.
 
 PTU `tool_input` per tool: Bash/PowerShell `command`,`description`,`timeout`,`run_in_background`; Write `file_path`,`content`; Edit `file_path`,`old_string`,`new_string`,`replace_all`; Read `file_path`,`offset`,`limit`; Glob `pattern`,`path`; Grep `pattern`,`path`,`glob`,`output_mode`,`-i`,`multiline`; WebFetch `url`,`prompt`,`offset`; WebSearch `query`,`allowed_domains`,`blocked_domains`; Agent `prompt`,`description`,`subagent_type`,`model`; AskUserQuestion `questions`,`answers`; ExitPlanMode `plan`,`planFilePath` (both injected), `allowedPrompts` (deprecated, ignored).
 
@@ -110,7 +110,7 @@ Stop/SubagentStop `background_tasks[]`: `id`,`type` (`shell`,`subagent`,`monitor
 
 | Fact | Hook consequence | src |
 |------|------------------|-----|
-| auto mode, non-fork subagent: the report is its `SubagentHandback` tool call, text in `tool_input.message` (PTU/POT). After it SubagentStop has no `last_assistant_message` and ignores `decision:"block"` | size or gate the report on PTU `SubagentHandback` | docs + probe |
+| auto mode, non-fork subagent: the report is its `SubagentHandback` tool call, text in `tool_input.message` (PTU/POT). After it SubagentStop `last_assistant_message` holds only closing text (if any), never the report (docs); ignoring `decision:"block"` = probe | size or gate the report on PTU `SubagentHandback` | docs + probe |
 | a PTU `deny` on `SubagentHandback` gives one more turn; the parent gets the resend | deny at most once per `agent_id` (own state: PTU has no `stop_hook_active`) -- after repeated denies the harness withholds the report | probe |
 | default mode, and forks even in auto mode: classic path, report = SubagentStop `last_assistant_message` | guard both paths; never branch on `permission_mode` | probe |
 | `agent_id` is identical on SubagentStart, PTU/POT, every SubagentStop, after block-and-continue and after a `SendMessage` resume | safe key for per-agent state | probe |
@@ -127,7 +127,7 @@ Stop/SubagentStop `background_tasks[]`: `id`,`type` (`shell`,`subagent`,`monitor
 | `decision` fields | `decision`, `permissionDecision`, `continue`: no effect; `classifierContext` ignored |
 | output | the JSON alone on stdout (multi-line v2.1.295+) or on one line of its own (`jq -c`); validated, wrong-typed fields dropped (`--debug` names them) |
 | `systemMessage`, `AC` | delivered together on the NEXT conversation turn; neither field is shown to the user; idle session -> waits for the next user interaction |
-| `asyncRewake:true` | implies `async`; exit 2 wakes Claude immediately, even when idle, with the hook's stderr (or stdout when stderr is empty) as a system reminder -- the only channel a background hook has for a late failure |
+| `asyncRewake:true` | runs in the background (no separate `async` needed); exit 2 wakes Claude immediately, even when idle, with the hook's stderr (or stdout when stderr is empty) as a system reminder -- the only channel a background hook has for a late failure |
 | policy gates | keep synchronous; `async:true` cannot veto an action or rewrite its inputs/output |
 | timeout | unenforced after `async:true` starts; still enforced for `asyncRewake` |
 | teardown | `-p` kills unfinished async hooks at teardown (outcome `cancelled`); work that must outlive the session -> start a fully detached process |

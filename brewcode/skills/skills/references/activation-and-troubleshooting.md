@@ -121,6 +121,7 @@ of this loop (evals.json, per-case isolation, grading, A/B): `skill-creator@clau
 | Sometimes activates | Weak keywords | Add explicit "Trigger keywords:" |
 | Was working, stopped | Context compaction | Re-attaches the latest invocation of each SK: first 5K tokens each, 25K combined, newest first; the listing is re-sent (2.1.304+). Re-invoke `/name` if evicted; an identical render adds only an "already loaded" note, a changed one the full text |
 | New/edited SK missing | Not watched | Watched: `~/.claude/skills`, project and `--add-dir` `.claude/skills` (SKILL.md text only; not bare mode). New top-level dir -> `/reload-skills` (2.1.304+: re-sends only new/changed SKs). SK installed by a SessionStart hook -> hook returns `reloadSkills: true` |
+| Skill hooks never fire | Not invoked yet, plugin-only lock, cap, or FM not parsed | `/hooks` after invoking; none listed -> move SK into a plugin / see `registers none of its hooks` (debug) / `claude plugin validate`; `frontmatter-fields.md` Hooks |
 | Claude ignores the instruction | Attention competition | Fewer skills, explicit `/name` |
 
 Debug: inspect `/skills`, discovery path, DMI/UI settings, overrides, description/paths and listing
@@ -135,7 +136,7 @@ Beyond `validate-skill.sh` (the gate; the tools below never replace it):
 | Tool | Since | Use |
 |---|---|---|
 | `/doctor prompt-audit [path]` (alias `/checkup prompt-audit`) | v2.1.283 | Audits skills, agents, commands and CLAUDE.md for prompting patterns written for older models — run it on every new or changed SK |
-| `/skill-doctor` | v2.1.252, needs feature-flag fetching | Reports unused loaded skills and their context cost, for pruning |
+| `/skill-doctor` | v2.1.252 (changelog lists 2.1.261), needs feature-flag fetching | Reports unused loaded skills and their context cost, for pruning |
 | `claude plugin eval` | v2.1.269 | Scored plugin eval suite, JSON+HTML report |
 | `claude plugin validate <dir>` (`.claude/skills`, `~/.claude/skills`, a plugin) | v2.1.233 | Finds `SKILL.md` whose frontmatter does not parse (such a SK loads with no fields) |
 
@@ -146,8 +147,8 @@ Re-check a state: `gh api repos/anthropics/claude-code/issues/<N> --jq '[.state,
 | # | Bug | Impact | Status | Workaround |
 |---|---|---|---|---|
 | [#39686](https://github.com/anthropics/claude-code/issues/39686) | claude.ai skills silently injected (~6000 tokens in report) | Reported 37% listing-budget use | Closed NOT PLANNED | Opt out with `syncClaudeAiSkills: false`; check the listing budget |
-| [#22345](https://github.com/anthropics/claude-code/issues/22345) | PLG skills ignore DMI | Reported ~4400 tokens; contradicts supported DMI contract | Open; runtime unverified | Reproduce on installed version before copying/moving a skill |
-| [#17688](https://github.com/anthropics/claude-code/issues/17688) | SK-scoped hooks don't fire in PLGs | Historical skill-hook failure | Closed completed | Docs verified 2.1.309: skill hooks register on invoke, last the session; probe 2.1.306 fired a plugin-skill PreToolUse hook. Use PLG `hooks.json` for plugin-wide behavior |
+| [#22345](https://github.com/anthropics/claude-code/issues/22345) | PLG skills ignore DMI | Reported ~4400 tokens; contradicts supported DMI contract | Open; plugin DMI honored in listing (probe 2.1.309) | Reproduce on installed version before copying/moving a skill |
+| [#17688](https://github.com/anthropics/claude-code/issues/17688) | SK-scoped hooks don't fire in PLGs | Historical skill-hook failure | Closed completed | Docs verified 2.1.309: skill hooks register on invoke, last the session; probes 2.1.306 and 2.1.309 fired a plugin-skill PreToolUse hook. Use PLG `hooks.json` for plugin-wide behavior |
 | [#35641](https://github.com/anthropics/claude-code/issues/35641) | `/reload-plugins` doesn't load new PLG skills | Historical reload failure | Closed duplicate | `/reload-skills` (v2.1.152); 2.1.246 fixed same-symptom "0 skills" case; verify installed version |
 | [#33080](https://github.com/anthropics/claude-code/issues/33080) | Same-name skill resolution surprises users | Non-bundled skill overrides bundled skill | Closed NOT PLANNED | Namespace prefix (e.g. `my-`) if collision unwanted |
 | [#17417](https://github.com/anthropics/claude-code/issues/17417) | `skill.md` lowercase ignored | SK not discovered; uppercase remains required | Closed completed | Use `SKILL.md` uppercase |
@@ -161,8 +162,8 @@ Re-check a state: `gh api repos/anthropics/claude-code/issues/<N> --jq '[.state,
   works if unclaimed). 2.1.273+: terminal sessions sync them at session start, then check about
   every 10 minutes (40 when idle); use the reserved synced namespace for permission rules, not an
   assumed plugin source.
-- 2.1.295+: a skill's `allowed-tools` and `effort` are no longer dropped in `-p` runs — headless
-  evals that drive a skill through `claude -p` are meaningful only from this version.
+- 2.1.295 fixed a race that dropped a skill's `allowed-tools`/`effort` in `-p` runs; re-run older
+  headless evals.
 - 2.1.299-2.1.304: skill-frontmatter hooks, see `frontmatter-fields.md` Hooks field detail (first-prompt `UserPromptSubmit`, `[skill]` ask label, per-source caps, `once` isolation, hooks-from-plugins-only policy drops the skill's `allowed-tools`: Policy row).
 - 2.1.299: names with hidden/direction-changing/blank-like chars or `<`/`>` refused; every
   `UserPromptSubmit` hook runs before a SK expands (a block stops its `!` commands); "Unknown skill"
@@ -180,7 +181,7 @@ set, `argument-hint` prompt-first, Prompt Contract): `description` third-person,
 triggers, no filler; body <500 lines, imperative form; `context: fork` if standalone; `agent` an appropriate type; `model` matched to complexity;
 `allowed-tools` pre-approval only, bare `Bash`/`Write`/`Edit` only per `execution-model.md` Rules; `disallowed-tools` present
 when the invoking turn must exclude a tool (autonomous -> `AskUserQuestion`; reapply next invocation); examples actually work; no
-hardcoded secrets; Bash blocks carry the `EXECUTE` keyword + `&& OK || FAIL` + dynamic (CSD/BPR)
+hardcoded secrets; Bash blocks carry the `EXECUTE` keyword + `&& echo "✅" || echo "❌ FAILED"` + dynamic (CSD/BPR)
 paths, and pass the three spelling checks of `execution-model.md` String substitutions (no bare
 `$N` in a fence, no `$ARGUMENTS` spliced into shell, exact-brace path tokens).
 

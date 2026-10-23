@@ -75,6 +75,13 @@ else
     check fail "Frontmatter missing --- delimiters (found $FM_COUNT, need 2+)"
 fi
 
+# CC reads frontmatter only when the opening --- is line 1; else the whole file is skill content.
+if [ "$(head -n 1 "$SKILL_FILE" | tr -d '\r')" = "---" ]; then
+    check ok "Opening --- is line 1"
+else
+    check fail "Opening --- must be line 1 of SKILL.md (else CC drops all frontmatter fields)"
+fi
+
 # Frontmatter = the lines between the FIRST two --- delimiters, by line number: a sed range
 # (`/^---$/,/^---$/`) reopens on every `---` divider in the body and pulls body text in.
 FM_CLOSE=$(grep -n '^---$' "$SKILL_FILE" 2>/dev/null | sed -n '2s/:.*//p')
@@ -118,6 +125,13 @@ else
             check fail "description is empty"
         else
             check ok "description: ${#DESC} chars"
+            # CC tolerates it; strict YAML consumers (claude.ai upload, Skills API) reject `: ` / ` #` in a plain scalar.
+            case "$DESC_LINE" in
+                "description: \""*|"description: '"*) ;;
+                *) if printf '%s\n' "${DESC_LINE#description:}" | grep -qE ': | #'; then
+                    warn "description is unquoted and holds ': ' or ' #' -- strict YAML parsers reject it, quote it"
+                fi ;;
+            esac
         fi
     fi
 fi
@@ -383,7 +397,7 @@ NR <= s { next }
     }
     if (want_slot && line ~ /[^ \t]/) want_slot = 0
     r = line
-    while (match(r, /\$\{CLAUDE_(PLUGIN_ROOT|PLUGIN_DATA|SKILL_DIR|PROJECT_DIR|SESSION_ID)\}/)) {
+    while (match(r, /\$\{CLAUDE_(PLUGIN_ROOT|PLUGIN_DATA|SKILL_DIR|PROJECT_DIR|SESSION_ID|EFFORT)\}/)) {
         tok = substr(r, RSTART, RLENGTH)
         if (substr(r, RSTART + RLENGTH, 1) != "/" && (plug || tok !~ /PLUGIN/)) { hit("23"); break }
         r = substr(r, RSTART + RLENGTH)

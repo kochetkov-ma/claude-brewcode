@@ -17,7 +17,7 @@ Fork/background caveats — decide `background` on these, not on phase count:
 |---|---|
 | Background forks get the **narrower background tool set** — the fork exemption does not widen it | A step needing a tool outside that pool silently has no tool -> set `background: false` |
 | A backgrounded fork's edits land **outside session checkpoints** — `/rewind` does not undo them, only git does | Fork that writes -> `background: false`, or state that git is the only undo |
-| CC waits anyway, whatever `background` says, in 5 cases: `-p`/Agent SDK; `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`; a second invocation while the first still runs; a scheduled task firing the SK; a dynamic-workflow agent invoking it (2.1.295+: the result returns to that agent, not to main) | Never design a SK around "it returns immediately" |
+| CC waits anyway, whatever `background` says, in 5 cases: `-p`/Agent SDK; `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`; a second invocation while the first still runs; a session-scoped scheduled task firing the SK; a dynamic-workflow agent invoking it (2.1.295+: the result returns to that agent, not to main) | Never design a SK around "it returns immediately" |
 
 ```yaml
 ---
@@ -56,7 +56,7 @@ House preference (not a platform limit): spawn from the main conversation.
 |---|---|---|
 | SK with FORK from **main conversation** | Use this | Session binding + hook context injection intact |
 | FORK SK, inline SK (no `context`) or `Agent` tool from a **SA** | Avoid | Nested spawn bypasses both |
-| `Skill` tool from **SA** | Avoid in BC | Upstream supports runtime skills; BC distributed SKs use `DMI: true` (except `brewdoc:publish`, `brewtools:text-optimize`, `brewtools:text-human`) and cannot be model-invoked — use the twin agent. This is house policy, !=a platform ban |
+| `Skill` tool from **SA** | Avoid in BC | Upstream supports runtime skills; BC distributed SKs use `DMI: true` (except `brewdoc:publish`, `brewtools:text-optimize`, `brewtools:text-human`) and cannot be model-invoked on their own initiative — use the twin agent. This is house policy, !=a platform ban |
 
 ## Agent field
 
@@ -79,7 +79,7 @@ With `context: fork`, `agent` selects the SA type.
 
 | Model | Use case |
 |---|---|
-| `fable` | Mythos-class tier above Opus (alias -> `claude-fable-5-1`). Hardest reasoning/orchestration |
+| `fable` | Mythos-class tier above Opus (alias -> `claude-fable-5-1`; Fable 5 in gateway sessions). Hardest reasoning/orchestration |
 | `opus` | Complex orchestration, multi-phase |
 | `sonnet` | Medium complexity, optimization |
 | `haiku` | Simple, fast, cleanup |
@@ -136,7 +136,7 @@ FORK body. Multi-line -> a fenced block opened with ` ```! `.
 ## String substitutions
 
 Complete set (table); nothing else is substituted. Each is TEXT spliced into the whole SKILL.md at load
-(prose, inline code, every fence), never a variable the Bash tool can read: all are unset there, in main and SAs.
+(prose, inline code, every fence), never a variable the Bash tool can read: all unset there, in main and SAs (the separate env var `CLAUDE_EFFORT` IS set in Bash and hooks).
 Hooks and agents have no CSD; hook-command path rules (exec form substitutes, shell form reads env): `frontmatter-fields.md` Hooks Paths row. In agent bodies use `${CLAUDE_PLUGIN_ROOT}`.
 
 | Variable | Description | Since |

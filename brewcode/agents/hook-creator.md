@@ -52,7 +52,7 @@ UserPromptSubmit (silently ignored); reference a dollar-brace `user_config.<KEY>
 `stop_hook_active` check on Stop/SubagentStop (infinite block loop).
 
 Fail-open `{}` is suitable only for advisory hooks: on a hook enforcing a hard invariant it is
-silent approval, so hard gates must deny/block malformed input, exceptions, and invalid output
+silent pass-through (no veto), so hard gates must deny/block malformed input, exceptions, and invalid output
 using the event's supported schema/exit code. Unsupported events cannot enforce a gate. Ordinary
 nonzero errors, timeouts and a hook that cannot start can fail open: test those paths rather than
 assuming rejection, and on a `command`/`http` hard gate set `onFailure: "block"` (2.1.295+; rules
@@ -80,14 +80,14 @@ conventions/rules/docs, !=a replacement.
    `hooks-types-config.md`.
 3. **Implement.** Bash or JS/mjs from the templates in `hooks-templates.md`: one event-appropriate
    stdout result on every path. Use `args` (exec form, no shell) whenever the command references a
-   path placeholder (the braced plugin-root token); never interpolate it into a shell-form string.
-4. **Configure.** Location per "Where and when" below; hooks merge across locations (no override
-   chain), trust, reload and policy switches in `hooks-types-config.md` (Declaration locations);
+   path placeholder (the braced plugin-root token); never interpolate it into a shell-form string. A directly executable script: `args: []` selects exec form.
+4. **Configure.** Location per "Where and when" below; hooks merge across user/project/local/plugin/frontmatter (no override
+   chain; managed: highest-ranked source only), trust, reload and policy switches in `hooks-types-config.md` (Declaration locations);
    every env var the hook process sees in `hooks-env.md`.
    `if` = one rule, one tool, tool events only (Conditional `if` field, same file).
 5. **Test.** Fire each path (pass, deny/block, malformed) with sample stdin; check the exit code
    and the single stdout result. In a session `claude --debug` logs a `Hooks:` line per command hook
-   (2.1.296+; Test in `hooks-templates.md`), Ctrl+O shows verbose mode; isolate a suspected hook
+   (2.1.296+; most events; Test in `hooks-templates.md`), Ctrl+O shows verbose mode; isolate a suspected hook
    with `claude --safe-mode` / `CLAUDE_CODE_SAFE_MODE=1` (managed hooks still run).
 6. **Validate.** Run the Validation Checklist in `hooks-templates.md` before calling a hook done.
 7. **Report.** Emit the Return contract block above; update the checkpoint file per hook.
@@ -95,7 +95,7 @@ conventions/rules/docs, !=a replacement.
 ## Where and when
 
 Goal -> location -> type. Scope, trust, reload and policy switches per location: `hooks-types-config.md`
-(Declaration locations). Hooks merge across locations; only `disableAllHooks` follows precedence.
+(Declaration locations). Hooks merge across non-managed locations; managed: highest-ranked source only; `disableAllHooks` follows precedence.
 
 | Goal | Declare in | Type |
 |---|---|---|
@@ -104,14 +104,15 @@ Goal -> location -> type. Scope, trust, reload and policy switches per location:
 | personal rule for one repo | `.claude/settings.local.json` | `command` |
 | org policy users cannot switch off | managed settings (+ `allowManagedHooksOnly` to run nothing else) | `command` + `onFailure:"block"` |
 | behaviour shipped with a plugin, incl. its agents | plugin `hooks/hooks.json` (plugin-agent FM `hooks` is ignored) | `command`, exec form (`args`) |
-| guard tied to one skill's workflow | skill FM `hooks:` (rest of session; `once: true` = one-shot) | `command` |
+| guard that must hold from a skill's first use to session end | skill FM `hooks:` (`once: true` = one-shot) | `command` |
 | guard only while one agent runs | agent FM `hooks:` (project agent: exact folder trust) | `command` |
-| decision from the hook input alone | any | `prompt` |
-| decision that must read files/tests | any | `agent` (experimental, no `onFailure`) |
-| shared remote service, audit | any (+ `allowedHttpHookUrls`) | `http` |
+| decision from the hook input alone | any (event support: `hooks-types-config.md`, Type support by event) | `prompt` |
+| decision that must read files/tests | any (same limit) | `agent` (experimental, no `onFailure`) |
+| shared remote service, audit | any (+ `allowedHttpHookUrls`; not SS/Setup) | `http` |
 | reuse an MCP tool | any; not SS at launch, not Setup | `mcp_tool` |
-| hard allow/deny | permission rules first; hook gate = PTU exit 2 + `onFailure:"block"` | `command` |
+| hard allow/deny | permission rules first; hook gate = PTU exit 2 + `onFailure:"block"`; must survive a user-installed mod: managed hook or permission rule | `command` |
 | static context | CLAUDE.md, not an SS hook | -- |
+| UI, in-process tool gate, effort/model rewrite, Team-org-proof injection | not a classic hook: mod, `brewcode:mod-creator`, `mods-api.md` Mod Or Classic Hook | -- |
 
 ## Read on demand
 
@@ -120,6 +121,7 @@ Goal -> location -> type. Scope, trust, reload and policy switches per location:
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-events.md` | Choosing an event or matcher -- 33-event table, lifecycle order, subagent report + synthetic prompts, async behavior, matcher syntax |
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-io-contract.md` | Choosing an output schema or routing channel -- routing matrix, exit codes, failed-hook rules, every output schema, the 10,000-char cap |
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-types-config.md` | Choosing a hook type or config location -- type/field catalog (`onFailure`, `if`), declaration-locations matrix (merge, trust, reload, policy switches) |
+| `${CLAUDE_PLUGIN_ROOT}/skills/skills/references/frontmatter-fields.md` / `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/agent-frontmatter-fields.md` | Hook in a skill FM (`Hooks field detail`) / agent FM (`Hook Events`) |
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-env.md` | Referencing an env var, or resolving the project root inside a hook |
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-templates.md` | Writing a new hook -- bash/JS skeletons, fail-safe design, common patterns, Test, Validation Checklist |
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-changes.md` | Updating a hook written for an older CLI -- changes 2.1.270 -> 2.1.309, older floors still in force, probe limits |

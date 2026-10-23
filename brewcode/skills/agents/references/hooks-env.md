@@ -10,26 +10,26 @@ Set by Claude Code in the hook process:
 | Variable | Description | Available |
 |----------|-------------|-----------|
 | `$CLAUDE_PROJECT_DIR` | project root where the session started; exported UNCONDITIONALLY into every hook child process (exec + shell form), and into stdio MCP / plugin LSP subprocesses. Stays put when Claude enters a worktree or runs `cd` (input `cwd` follows Claude). Empty in an interactive or Bash-tool shell -- that is expected, NOT evidence it is unset for hooks | all hooks |
-| `$CLAUDE_PLUGIN_ROOT` | plugin install dir, moves on every plugin update (never keep state there); also exported into a plugin SK's frontmatter-hook process. Exec form (`args`) substitutes the braced token; shell form expands the env var (double-quote it; single quotes stay literal) | plugin hooks, plugin-SK hooks |
-| `${CLAUDE_SKILL_DIR}` | NOT available to hooks: not substituted in a hook command, empty in env (docs + probe 2.1.306) | none |
+| `$CLAUDE_PLUGIN_ROOT` | plugin install dir, moves on every plugin update (never keep state there); also exported into a plugin SK's frontmatter-hook process. The braced token is substituted inline in `command` + `args` (both forms) and also exported; shell form: double-quote it | plugin hooks, plugin-SK hooks |
+| `${CLAUDE_SKILL_DIR}` | NOT available to hooks: docs list only skill content + `allowed-tools`; non-substitution in a hook command + empty env = probe 2.1.306 | none |
 | `$CLAUDE_PLUGIN_DATA` | persistent per-plugin data dir, survives updates (v2.1.78+); `~/.claude/plugins/data/<plugin-id>/`, created on first reference, deleted on the last uninstall unless `--keep-data` | plugin hooks |
-| `$CLAUDE_PLUGIN_OPTION_<KEY>` | plugin `userConfig` values, one per option, `<KEY>` uppercased (v2.1.78+); the shell-form way to read an option | plugin hooks |
+| `$CLAUDE_PLUGIN_OPTION_<KEY>` | plugin `userConfig` values, one per option, `<KEY>` uppercased (v2.1.83+); the shell-form way to read an option | plugin hooks |
 | `$CLAUDE_ENV_FILE` | append shell `export` statements; persists into subsequent Bash commands; vars written by CwdChanged/FileChanged hooks are cleared at the next CwdChanged. Not given to a hook running in PowerShell. PowerShell COMMANDS get the vars (v2.1.296) only when every line is a plain assignment (no `$PATH` expansion, `source`, `$'...'`), else none (`--debug`: `Session environment is not all plain assignments`) | SS, Setup, CwdChanged, FileChanged |
 | `$CLAUDE_CODE_REMOTE` | `"true"` in cloud (web) sessions, unset locally | all hooks |
 | `CLAUDE_CODE_BRIDGE_SESSION_ID` | Remote Control session ID (`session_...` form, as in the `claude.ai/code` URL) while a Remote Control connection is active; removed when it ends | v2.1.199+ |
 | `CLAUDE_CODE_SESSION_ID` | = input `session_id`; updated on `/clear` | hooks, Bash, PowerShell |
-| `CLAUDE_EFFORT` | effort level in effect when the process starts (`low`/`medium`/`high`/`xhigh`/`max`) = input `effort.level`; set only when the model supports effort. A signal, not an override | v2.1.199+ |
+| `CLAUDE_EFFORT` | effort level in effect when the process starts (`low`/`medium`/`high`/`xhigh`/`max`) = input `effort.level`; set only when the model supports effort. A signal, not an override | v2.1.133+ |
 | `CLAUDECODE` | `1` in every subprocess Claude Code spawns (IDE terminals set it too) | all hooks |
 | `CLAUDE_CODE_CHILD_SESSION` | `1`, set only by Claude Code itself (v2.1.172+); not in stdio MCP servers | all hooks |
-| `CLAUDE_PID` | Claude Code's own process ID | all hooks |
-| `CLAUDE_CODE_MESSAGING_SOCKET`, `CLAUDE_CODE_MESSAGING_TOKEN` | cross-session inbox socket path + per-session token, when the session binds an inbox socket | hooks, Bash |
+| `CLAUDE_PID` | Claude Code's own process ID | v2.1.214+ |
+| `CLAUDE_CODE_MESSAGING_SOCKET`, `CLAUDE_CODE_MESSAGING_TOKEN` | cross-session inbox socket path + per-session token, when the session binds an inbox socket | hooks, Bash; socket v2.1.224+, token v2.1.228+ |
 | `TRACEPARENT` | W3C trace context; by default only when connected directly to the Anthropic API, behind a custom proxy with `CLAUDE_CODE_PROPAGATE_TRACEPARENT=1` (v2.1.152+) | hooks, Bash, PowerShell |
 
 Set by you (controls):
 
 | Variable | Effect | Scope |
 |----------|--------|-------|
-| `$CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS` | SessionEnd budget in ms (DEF 1.5 s, v2.1.78+; auto-raised to the highest per-hook `timeout` in settings files, <=60 s; plugin hook timeouts never raise it); also the timeout of each hook lacking its own `timeout` only on v2.1.268+ | SessionEnd hooks |
+| `$CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS` | SessionEnd budget in ms (DEF 1.5 s, v2.1.74+; auto-raised to the highest per-hook `timeout` in settings files, <=60 s; plugin hook timeouts never raise it); also the timeout of each hook lacking its own `timeout` only on v2.1.268+ | SessionEnd hooks |
 | `$CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` | max consecutive Stop/SubagentStop blocks before CC force-ends the turn regardless (DEF 8, `0` disables the cap) | Stop, SubagentStop |
 | `$CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` | `1` = strip credentials (matched by name or value; GitHub tokens + proxy settings kept) from Bash, hooks, stdio MCP (v2.1.83+) | all hooks |
 | `CLAUDE_CODE_SHELL_PREFIX` | wraps shell-form hook commands (and Bash, status line, stdio MCP startup); PowerShell and exec-form hooks run without it | shell-form hooks |
@@ -60,12 +60,12 @@ Runtime path tokens in config and actual child env variables are separate: exec-
 | type-field tokens | `$ARGUMENTS` (`prompt`/`agent`), `${tool_input.*}` (`mcp_tool` `input`), `$VAR` in `http` `headers` (`allowedEnvVars`): `hooks-types-config.md` |
 
 > Protected paths (2.1.296, [permission-modes](https://code.claude.com/docs/en/permission-modes#protected-paths)):
-> a Write/Edit TOOL call into project `.claude/` or `~/.claude/` is never auto-approved:
+> a Write/Edit TOOL call into a protected dir (`.git` `.config/git` `.vscode` `.idea` `.husky` `.cargo` `.devcontainer` `.yarn` `.mvn` `.claude`, a `--plugin-dir` dir, `~/.claude/dev-mods/`) is never auto-approved:
 > `default`/`acceptEdits` -> prompt; `plan` -> allowed in an interactive terminal with bypass available,
 > else classifier (auto available) or prompt; `auto` -> classifier; `dontAsk` -> denied;
 > `bypassPermissions` -> allowed. `permissions.allow` never pre-approves. Exempt: `.claude/worktrees/`,
-> the session's plan files, `~/.claude/jobs/<id>/tmp/`, auto-memory and `.claude/agent-memory/` Markdown (not under `--restricted`).
-> `plugins/` is not exempt, so `$CLAUDE_PLUGIN_DATA` Write/Edit calls prompt. Bash `>`/`tee` targets
+> the session's plan files (also in `plansDirectory`), `~/.claude/jobs/<id>/tmp/`, auto-memory and `.claude/agent-memory/` Markdown (not under `--restricted`, v2.1.248+; the classifier cannot approve protected-path writes there).
+> `plugins/` is not in the exemption list, so `$CLAUDE_PLUGIN_DATA` Write/Edit calls likely prompt (inferred, not stated). Bash `>`/`tee` targets
 > are checked the same; a hook or a script opening the file itself is not.
 > Consequence: `$CLAUDE_PLUGIN_DATA` is a fully supported persistent WRITE target (official
 > `project-artifact` skill Writes there), but only interactively or from a hook/script -- never

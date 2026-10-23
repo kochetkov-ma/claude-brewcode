@@ -132,7 +132,7 @@ If the agent-return guard is installed, a return over ~2500 est-tokens (chars/4)
 
 ## Validation Checklist
 
-- [ ] `name`: lowercase-hyphens only (`[a-z0-9-]+`), <=256 chars, no `:`, no leading `-`
+- [ ] `name`: <=256 chars, no `:`, no leading `-` (platform); lowercase-hyphens `[a-z0-9-]+` (BC house convention)
 - [ ] `description`: within the **Description Budget** above -- single line + role + `Triggers:` keywords by DEF; `<example>` blocks only under the example-block exception
 - [ ] Placement: file sits in a `.claude/agents/` dir on the walk-up path from the intended launch cwd -- warn if placed under a module subfolder while sessions launch from repo root
 - [ ] PLG AG: `claude plugin validate <plugin-dir>` exits 0 (unparseable FM still loads -- with ALL tools); no `permissionMode`/`hooks`/`mcpServers`/`initialPrompt`

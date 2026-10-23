@@ -51,8 +51,8 @@ Plan-vs-live (loud): plan said stubs cannot reject. On 2.1.300 a stub CAN (`{ de
 | `command.run` | typed call needs whole input: `{ command, args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } }` | T:1828-1854; X |
 | `prompt.attachment` | `$.prompt.attachment({ type: 'plan_mode_exit', text, origin: { kind: 'engine' } } as never)` (union needs `detail` for declared types) | T:8370; X |
 | `prompt.edit/change/autocomplete` | not typed on test `$`; run at run time: `await ($.prompt as any).edit({ origin: { kind: 'composer' }, text, cursor, start, end, inputText })` | T:4888-4897; X |
-| `tool.call` | `await $.tool.call({ tool: 'Bash', command })`; a `{ deny }` ends call with errored result; 2.1.309 `agentId: 'a1'` = a subagent's loop (`EngineToolCall`) | T:15861-15868, 16121-16136 (D309) |
-| `tool.check` (2.1.309) | query `$.tool.check({ tool, input })`: no `approver`, the mod's ask reads `{ decision: 'ask', reason, plugin: '<mod>' }` (a test's own ask: `plugin: ''`); on a real `$.tool.call` a hooked check runs as for a background subagent: a plugin ask -> errored `Permission to use Bash has been denied ...` (`isError: true`) unless a bottom `on('classic.PermissionRequest', () => ({ decision: { behavior: 'allow' } }))` answers it (call runs); `isReadOnly` only on `$.tool.check` | T:16121-16136, 7696; R:81; SX |
+| `tool.call` | `await $.tool.call({ tool: 'Bash', command })`; a `{ deny }` ends call with errored result; 2.1.307+ `agentId: 'a1'` = a subagent's loop (`EngineToolCall`) | T:15861-15868, 16121-16136 (D309) |
+| `tool.check` (2.1.307+) | query `$.tool.check({ tool, input })`: no `approver`, the mod's ask reads `{ decision: 'ask', reason, plugin: '<mod>' }` (`plugin: ''` only when no mod hook sits above the test's ask; a mod hook that relays it with `next(e)` stamps its own name); on a real `$.tool.call` a hooked check runs as for a background subagent: a plugin ask -> errored `Permission to use Bash has been denied ...` (`isError: true`) unless a bottom `on('classic.PermissionRequest', () => ({ decision: { behavior: 'allow' } }))` answers it (call runs); `isReadOnly` only on `$.tool.check` | T:16121-16136, 7696; R:81; SX |
 
 ## `ui.mount`
 
@@ -61,7 +61,7 @@ Plan-vs-live (loud): plan said stubs cannot reject. On 2.1.300 a stub CAN (`{ de
 | Fact | src |
 |------|-----|
 | AbovePrompt props for mount: `{ hasSurvey, isWorking, maxRows, bodyColumns, scroll: { bodyRows, offset, total }, view: {} }` (all read-only) | T:10794-10841; X |
-| tree surface refuses fails mount with reason, e.g. `drew nothing on the terminal surface: ... refused: Box hover is scoped to a keyed Box drawn display "none"`: this catches keyed hidden hover Box | X |
+| tree surface refuses fails mount with reason, e.g. 2.1.309 `drew nothing on the terminal surface: <plugin>'s ui.render hook was skipped: <plugin>: returned a tree Pane refuses: Box prop "hover" ...` (hover scoped to a keyed Box drawn display "none"`: this catches keyed hidden hover Box | X |
 | `$.state` persists across mounts inside one test: press back or reset before next surface | X |
 | hover and paint untestable (kit never paints): assert `props.hover` on found element and prove reveal in TTY check | T:29-47 header; PLAN T2.7 |
 | `press` resolves after handler, chain and unawaited work settle: assert right after the `await` | R:81 |

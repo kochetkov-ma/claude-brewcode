@@ -75,7 +75,7 @@ Each is sourced in `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/mods-lifecycl
 | `plugin.json` has `author`, `version`, `description` | `--strict` fails |
 | `.claude-plugin/types/` and engine-written mod-root `tsconfig.json` never committed (gitignore both) | engine files in git |
 | never write under `~/.claude/dev-mods/` unless asked (person's hot-reload folder); repo mods go in repo PLG dir | consent breach |
-| module `classic.*`, `session.append` attachment doors and `prompt.section/context/compose/attachment`, `skill.prompt`, `attribution.text`, `session.compact` hooks do not run for a user-installed mod on Team/Enterprise orgs (validate prints no note since 2.1.304): bundle a classic COMMAND hook in `hooks/hooks.json` next to `modules` (`mods-patterns.md` #1, #2); live-test on a Team profile | silent no-op, gates stay green |
+| module `classic.*`, `session.append` attachment doors and `prompt.section/context/compose/attachment`, `skill.prompt`, `attribution.text`, `session.compact` hooks (last two per GH, not exercised live) do not run for a user-installed mod on Team/Enterprise orgs (validate prints no note since 2.1.304): bundle a classic COMMAND hook in `hooks/hooks.json` next to `modules` (`mods-patterns.md` #1, #2); live-test on a Team profile | silent no-op, gates stay green |
 | every interactive affordance (band Button, toggle, focusable row, hidden feature) shows its key sequence in its label or a dim hint row (`<Label>  ctrl+x → tab → enter`); prove the sequence live key by key (PNG per key: focus, toggle, prompt not submitted, return) before writing it (`mods-lifecycle.md` Hard Rules); a chord Button in the band proved unusable for real users: prefer caret focus + a slash command printing the full text (`mods-patterns.md` #12 lesson) | undiscoverable feature, wrong hint |
 | broken module still exits `claude -p` rc 0: grep stderr/debug for `hooks module did not load` | red gate read as green |
 
@@ -99,6 +99,7 @@ Directory `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/`:
 | `mods-api.md` | Choosing events or `$` nouns, mod vs classic hook ("Mod Or Classic Hook"), writing manifest, checking budget; holds symbol index drift check reads |
 | `mods-patterns.md` | Building behaviour: bundled command hook (context injection), plan mode via state file, `turn.step` rewrite, decorations/band (`prompt.change`, budget), autocomplete, slash command, status-first command with own /config option + model hand-off + mod tool (#11), toast/status/key hints (#12), userConfig, fail-open guards, `$.fs` defaults, `rm` after realpath |
 | `mods-testing.md` | Writing tests: `claude-code/testing` kit, stub bottoms, raising events, `ui.mount`, latency, CI wiring, headless A/B and tmux checks |
+| `hooks-io-contract.md`, `hooks-templates.md`, `hooks-env.md` | Writing the bundled classic command hook: output schema, skeleton, `CLAUDE_PLUGIN_ROOT`/`CLAUDE_PLUGIN_OPTION_*` |
 | `mods-changes.md` | A new CC build, or mod written for older one: per-version changes, "Did Not Reproduce", self-update procedure |
 
 <!-- Copyright (c) 2025-2026 Maksim Kochetkov, https://github.com/kochetkov-ma/claude-brewcode. SPDX-License-Identifier: MIT -->

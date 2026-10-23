@@ -34,7 +34,7 @@ Swap the `DECISION=$(jq -n ...)` line per event -- the shape changes, the single
 
 | Event | `DECISION=$(jq -n ...)` payload |
 |-------|--------------------------------|
-| PTU inject context | `'{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","additionalContext":$ctx}}'` |
+| PTU inject context | `'{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":$ctx}}'` |
 | Stop block | `'{"decision":"block","reason":$reason}'` |
 | POT block | `'{"decision":"block","reason":$reason}'` |
 | SS context | `'{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":$ctx}}'` |
@@ -89,14 +89,14 @@ Other verdicts are a different `decide()` return, never a second `output()`:
 
 | Event | `decide()` returns |
 |-------|--------------------|
-| PTU inject context | `{hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'allow',additionalContext:'...'}}` |
-| PTU modify input | `{hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'allow',updatedInput:{...input.tool_input,prompt:'...'}}}` |
+| PTU inject context | `{hookSpecificOutput:{hookEventName:'PreToolUse',additionalContext:'...'}}` |
+| PTU modify input | `{hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'allow',updatedInput:{...input.tool_input,prompt:'...'}}}` (`allow` auto-approves the rewritten call; `ask` shows it; never add `allow` to a context-only hook) |
 | Stop / SubagentStop block | `{decision:'block',reason:'Task incomplete'}` |
 | POT block | `{decision:'block',reason:'Lint failed'}` |
 | PermissionDenied retry | `{hookSpecificOutput:{hookEventName:'PermissionDenied',retry:true}}` |
 | PreModelSwitch gate | `{hookSpecificOutput:{hookEventName:'PreModelSwitch',permissionDecision:'ask',permissionDecisionReason:'...'}}` |
 
-> Multi-hook plugin: reuse `lib/utils.mjs`. Advisory context hooks may use `output({})` on error; this hard-gate example must deny. Stop/SubagentStop templates separately check `stop_hook_active` and return `{}` before blocking again.
+> Multi-hook plugin: reuse `lib/utils.mjs`. Advisory context hooks may use `output({})` on error; this hard-gate example must deny. Stop/SubagentStop: guard first, before any block -- bash `[ "$(jq -r '.stop_hook_active // false' <<<"$INPUT")" = true ] && { printf '{}\n'; exit 0; }`; JS `if (input.stop_hook_active) return {};` (placed before the event check).
 
 ## Best Practices
 
@@ -108,11 +108,11 @@ Other verdicts are a different `decide()` return, never a second `output()`:
 | All logging/diagnostics to stderr (`console.error`) | stdout reserved for the JSON contract |
 | `stop_hook_active` check in Stop/SubagentStop | prevents infinite block loop |
 | keep injected context under 10,000 chars per field | `AC`, `systemMessage`, `initialUserMessage`, and plain stdout spill to a file with preview; `decision.reason` is not listed in this cap |
-| choose fail-open vs fail-closed from the invariant | fail-open (`output({})` on error) is right for advisory/context hooks -- a broken hook then has no effect, !=trap user in broken state. A hook enforcing a HARD invariant must instead emit the deny/block with the exception text as its `reason`, because `{}` on an enforcement hook is silent approval |
+| choose fail-open vs fail-closed from the invariant | fail-open (`output({})` on error) is right for advisory/context hooks -- a broken hook then has no effect, !=trap user in broken state. A hook enforcing a HARD invariant must instead emit the deny/block with the exception text as its `reason`, because `{}` on an enforcement hook is a silent pass-through (no veto) |
 | hard gate on `command`/`http`: also set `onFailure:"block"` | a hook that cannot start never emits its deny. A registered but missing script then blocks EVERY matching call (docs); `probe` (CLI 2.1.296): subagents included, also the Bash that would repair it -- install the script before the registration, uninstall the registration before the script. The `catch` must still print a valid deny (not-covered case: `hooks-io-contract.md`, Failed hook) |
 | background child: print the decision first, then start it with stdout/stderr redirected (`>/dev/null 2>&1 &`) | a deny the child prints after the hook exits does not block; an allow followed by an unredirected child BLOCKS the call (`refusing to honor the suspect capture`) |
 
-> Infinite loop protection (Stop/SubagentStop): check `stop_hook_active` and short-circuit to `{}` -- see both templates above. CC also force-ends the turn after 8 consecutive Stop-hook blocks (`$CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` raises it, `0` disables the cap); a broken loop-brake wastes turns, it doesn't hang the session.
+> Infinite loop protection (Stop/SubagentStop): check `stop_hook_active` and short-circuit to `{}` -- guard lines under the JS table. CC also force-ends the turn after 8 consecutive Stop-hook blocks (`$CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` raises it, `0` disables the cap); a broken loop-brake wastes turns, it doesn't hang the session.
 > `exit 1` is a non-blocking error nearly everywhere: the action proceeds. Enforce with `exit 2` or JSON, never `exit 1`. A mistyped script path exits 127 and, without `onFailure:"block"`, leaves the gate silently disabled -- watch for the `<hook name> hook error` notice on a policy hook's first run.
 
 ## Common Hook Patterns
@@ -120,13 +120,13 @@ Other verdicts are a different `decide()` return, never a second `output()`:
 | Pattern | matcher | hooks[0] | Mechanism |
 |---------|---------|----------|-----------|
 | Inject context into all SAs | `SubagentStart` / none | `{"type":"command","command":"node inject-context.mjs"}` | returns `AC`, accumulates across hooks -- prefer over `UI` on PTU `Agent` (single-writer/last-wins) |
-| Log all tool calls | `PostToolUse` / none | `{"type":"command","command":"node logger.mjs","async":true}` | fire-and-forget, no output needed |
+| Log tool calls | `PostToolUse` + `PostToolUseFailure` (PostToolUse alone = successes only) / none | `{"type":"command","command":"node logger.mjs","async":true}` | fire-and-forget, no output needed |
 
 Gate, Stop-block and SS-context patterns are the two templates above with the payload from their tables.
 
 ## Test
 
-`claude --debug` (log `~/.claude/debug/<session-id>.txt`, nothing printed to the terminal), `--debug-file <path>`, or `/debug` mid-session: on v2.1.296+ every command hook leaves a `Hooks:` line with its command, plugin, outcome and duration -- the proof it fired. Isolate a suspected hook with `claude --safe-mode`/`CLAUDE_CODE_SAFE_MODE=1` (customizations off, managed hooks still run: `hooks-env.md`).
+`claude --debug` (log `~/.claude/debug/<session-id>.txt`, nothing printed to the terminal), `--debug-file <path>`, or `/debug` mid-session: on v2.1.296+ a command hook on most events leaves a `Hooks:` line with its command, plugin, outcome and duration -- the proof it fired (Notification/SessionEnd/PreCompact: `completed with status`, no duration). Isolate a suspected hook with `claude --safe-mode`/`CLAUDE_CODE_SAFE_MODE=1` (customizations off, managed hooks still run: `hooks-env.md`).
 
 | Symptom | Check |
 |---------|-------|
@@ -154,6 +154,6 @@ Gate, Stop-block and SS-context patterns are the two templates above with the pa
 | 15 | exactly ONE JSON object on structured paths; exit-2 gates may print stderr only; WorktreeCreate command: path on the last non-empty stdout line, house rule absolute path only. Test each path |
 | 16 | hard gate on `command`/`http`: `onFailure:"block"` set, script installed before its registration |
 | 17 | injected context fields under 10,000 chars; verify routing and disk-spill behavior separately from gate reason |
-| 18 | `args` (exec form) whenever the command references a path placeholder |
+| 18 | `args` (exec form) whenever the command references a path placeholder; a directly executable script (shebang + `chmod +x`): `"command":"<path>","args":[]` |
 | 19 | UserPromptSubmit hook that matches user text: early return on synthetic prompts (`hooks-events.md`, Subagent report) |
 | 20 | PTU allow-list or `*` guard: lets `SubagentHandback` and the agent-hook verdict call through (`hooks-events.md`, `hooks-types-config.md`) |

@@ -2,13 +2,13 @@
 
 Common stdin fields, the message-routing matrix (which channel Claude actually sees), stdout parsing, universal fields, exit codes, and every output schema.
 
-Verified against Claude Code 2.1.309: [official I/O](https://code.claude.com/docs/en/hooks#hook-input-and-output), [hooks guide](https://code.claude.com/docs/en/hooks-guide). Abbreviations follow `hooks-events.md`; `probe` = observed live on CLI 2.1.296 only, undocumented.
+Verified against Claude Code 2.1.309: [official I/O](https://code.claude.com/docs/en/hooks#hook-input-and-output), [hooks guide](https://code.claude.com/docs/en/hooks-guide). Abbreviations follow `hooks-events.md`; `probe` = observed live on the CLI version named in the row, undocumented.
 
 Common input fields + `permission_mode`'s 6 values: "Common input" in `hooks-events.md`. Validate only fields required by the current event. `prompt`/`agent` hooks return `{ok, reason}` instead: `hooks-types-config.md`.
 
 ## Message Routing Matrix
 
-Consult BEFORE choosing output -- wrong channel = silently ignored, no error (`--debug` logs `Hook JSON output had unrecognized keys`). `UI`=`updatedInput`. `hookSpecificOutput` needs `hookEventName`; `AC` at the top level is ignored; top-level `decision` takes only `"block"` (omit it to allow).
+Consult BEFORE choosing output -- wrong channel = silently ignored, no error (`--debug` logs `Hook JSON output had unrecognized keys`). `UI`=`updatedInput`. `hookSpecificOutput` needs `hookEventName`; `AC` at the top level is ignored; top-level `decision` takes only `"block"` (omit it to allow); PreToolUse legacy `decision` approve/block still maps to allow/deny (deprecated, use `permissionDecision`).
 
 | Event | `AC` (Claude sees) | `decision`/reason | IGNORED (do not use) |
 |-------|---------------------|--------------------|------------------------|
@@ -34,7 +34,7 @@ Consult BEFORE choosing output -- wrong channel = silently ignored, no error (`-
 | MD | NO -- display only | `hookSpecificOutput.displayContent` replaces the on-screen text; transcript + Claude keep the original | `systemMessage`, `continue` |
 | Elicitation, ElicitationResult | NO | `hookSpecificOutput.action` accept/decline/cancel + `content`, applied only on exit 0; top-level `decision:"block"` = decline | `reason`, `systemMessage`, `continue` |
 | WorktreeCreate, WorktreeRemove | NO | path return / exit code: Exit codes below | `systemMessage`, `continue`; WorktreeRemove all JSON |
-| PR | deny `decision.message` reaches Claude | `decision.behavior`: `allow\|deny`; deny `interrupt:true` stops Claude; no hook decides in a session that cannot prompt -> denied; runs alongside `--permission-prompt-tool`/`canUseTool`, first decision wins | exit 2 (stderr discarded); `prompt` hook `ok:false` |
+| PR | deny `decision.message` reaches Claude | `decision.behavior`: `allow\|deny`; deny `interrupt:true` stops Claude; no hook decides in a session that cannot prompt -> denied (`-p`: PR hooks do not run under `dontAsk`); runs alongside `--permission-prompt-tool`/`canUseTool`, first decision wins | exit 2 (stderr discarded); `prompt` hook `ok:false` |
 | PermissionDenied | via `hookSpecificOutput` only | `{"hookSpecificOutput":{"hookEventName":"PermissionDenied","retry":true}}` -> model may retry; auto-mode denials only (v2.1.89+) | exit code, stderr, top-level `retry`, `prompt`/`agent` output |
 | TeammateIdle, TaskCompleted | exit-2 feedback reaches Claude | `continue:false` stops teammate; TaskCompleted ignores it for TaskUpdate-triggered completion | -- |
 | TaskCreated | block reason returned to Claude | exit 2 or top-level `decision:"block"` cancels creation | `continue:false` |
@@ -48,7 +48,7 @@ Consult BEFORE choosing output -- wrong channel = silently ignored, no error (`-
 | several lines each valid JSON, first `{`, last `}` | plain text; a parse failure when one line is an output object that sets a field |
 | anything else `{...}` that is not valid JSON | parse failure = non-blocking error |
 
-Plain stdout becomes Claude-visible context only on SS, UserPromptSubmit, UserPromptExpansion, PostModelSwitch (stdout that failed to parse is not added); elsewhere debug log only. stderr of an exit-0 hook never reaches Claude. WorktreeCreate command: the path is the LAST non-empty stdout line (ANSI stripped; earlier banners ignored; a relative path resolves against the hook's dir); send everything else to stderr.
+Plain stdout becomes Claude-visible context only on SS, UserPromptSubmit, UserPromptExpansion, PostModelSwitch (stdout that failed to parse is not added); elsewhere debug log only. stderr of an exit-0 hook never reaches Claude. WorktreeCreate command: the path is the LAST non-empty stdout line (ANSI stripped; earlier banners ignored; a relative path resolves against the directory the hook ran in); send everything else to stderr.
 
 ### Universal fields
 
@@ -68,7 +68,7 @@ Write `AC` as facts ("This repo uses `bun test`"), not commands: text framed as 
 
 ### UI (PTU only)
 
-Silently modifies tool params. Claude unaware of change. `UI` also rewrites on PR. `UI` is single-writer/last-wins -- every hook on the event sees the same original input, runner keeps only the last edit -- reserve for ONE owning hook; for SA prompt injection prefer SubagentStart `AC` instead (accumulates across hooks, no clobbering). Validated like Claude's own input (2.1.300): unknown keys dropped, input the tool rejects denies the call.
+Silently modifies tool params (also on PR); whole-input replace rules: Decision details. Single-writer/last-wins -- reserve for ONE owning hook; for SA prompt injection prefer SubagentStart `AC` instead (accumulates across hooks, no clobbering). Validated like Claude's own input (2.1.300): unknown keys dropped, input the tool rejects denies the call.
 
 ### Exit codes
 
@@ -110,7 +110,7 @@ Default `"continue"`: a hook that fails, cannot start or times out lets the acti
 | blocks on | exit 1 or any code other than 0/2 (even with allow JSON), crash, missing script or binary, timeout, unparseable/schema-invalid JSON; HTTP: non-2xx, connection failure, non-empty non-JSON 2xx body | docs + probe 2.1.296 |
 | not covered | plain-text stdout, incl. `{not json` (no closing `}`): plain text = success | docs + probe 2.1.296 |
 | no effect | Stop, SubagentStop, TaskCompleted, TeammateIdle; `async`/`asyncRewake` hooks | docs |
-| Windows, no Git Bash | shell-form PTU/PR command hooks with `onFailure` unset fail CLOSED (any exit but 0/2 blocks); fix: `"continue"`, or `"block"` + `"shell":"powershell"` | docs |
+| Windows, no Git Bash | shell-form PTU/PR command hooks with `onFailure` unset fail CLOSED (any exit but 0/2 blocks); fixes: install Git for Windows / set `CLAUDE_CODE_GIT_BASH_PATH`; or `"continue"`; or `"block"` + `"shell":"powershell"` | docs |
 
 ## Output Schemas
 
@@ -118,12 +118,12 @@ Single-field schemas (compact):
 
 | Event -- purpose | Schema |
 |---|---|
-| PTU -- allow w/ context | `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","additionalContext":"..."}}` |
+| PTU -- inject context (no decision: `allow` would auto-approve the call) | `{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"..."}}` |
 | PTU -- deny | `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"..."}}` |
 | Stop / SubagentStop -- block | `{"decision":"block","reason":"Task not complete. Continue with phase 3."}` |
 | UserPromptSubmit -- block | `{"decision":"block","reason":"Reason shown to USER only (Claude does NOT see this)","hookSpecificOutput":{"hookEventName":"UserPromptSubmit","suppressOriginalPrompt":true}}` |
 | POT -- block (feedback next to the result) | `{"decision":"block","reason":"Lint failed; fix before continuing."}` -- top-level, NOT `hookSpecificOutput` |
-| POT -- replace what Claude sees | `{"hookSpecificOutput":{"hookEventName":"PostToolUse","updatedToolOutput":{"stdout":"[redacted]","stderr":"","interrupted":false,"isImage":false}}}` -- value MUST match the tool's output shape or it is ignored |
+| POT -- replace what Claude sees | `{"hookSpecificOutput":{"hookEventName":"PostToolUse","updatedToolOutput":{"stdout":"[redacted]","stderr":"","interrupted":false,"isImage":false}}}` -- built-in tools: value must match the tool's output shape or it is ignored; MCP tools: passed through unvalidated |
 | SubagentStart (into the SA, not the parent), POT, PostToolBatch (once), PostModelSwitch -- inject context | `{"hookSpecificOutput":{"hookEventName":"<full event name>","additionalContext":"..."}}`; PostToolBatch `{"decision":"block","reason":"..."}` stops the agentic loop |
 | UserPromptExpansion -- block | `{"decision":"block","reason":"Shown to the USER","hookSpecificOutput":{"hookEventName":"UserPromptExpansion","additionalContext":"..."}}` |
 | PreModelSwitch -- gate a switch | `{"hookSpecificOutput":{"hookEventName":"PreModelSwitch","permissionDecision":"ask","permissionDecisionReason":"Switching now re-sends ~180k tokens. Continue?"}}` |
@@ -146,7 +146,7 @@ Elicitation/ElicitationResult also accept top-level `{"decision":"block","reason
 
 | Item | Rule |
 |------|------|
-| `allow` limits | deny/ask rules still apply; never skips actions no mode auto-approves, network-path reads, MCP tools marked `requiresUserInteraction` (even with `UI`); plan mode: no effect on a non-read-only call except `ExitPlanMode` (`UI` still applied) |
+| `allow` limits | deny/ask rules still apply; never skips actions no mode auto-approves, network-path reads, MCP tools marked `requiresUserInteraction` (even with `UI`), connector tools your organization set to `ask`; plan mode: no effect on a non-read-only call except `ExitPlanMode` (`UI` still applied) |
 | `permissionDecisionReason` | `ask` -> user (prompt labelled `[settings]`/`[plugin:<name>]`/`[skill]`); `deny` -> Claude; `-p` auto-deny of an `ask` -> Claude; `allow`/`defer` -> debug log only |
 | `deny` / exit 2 | holds in every mode incl. `bypassPermissions` and `dontAsk` (PTU fires before any mode check), beats allow rules. Exception: no managed settings and no Team/Enterprise login -> a user mod's `tool.check` can approve a call a PTU hook blocked |
 | `ask` | forces a prompt even in auto mode (the classifier may still deny) |
