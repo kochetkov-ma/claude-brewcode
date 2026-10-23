@@ -116,7 +116,7 @@ Report: per-target table (File, Lines before → after, Fixed, Deleted, Added, K
 | Prefix | Used by | Holds |
 |--------|---------|-------|
 | `agent-*` (5) | agent-creator | File format, frontmatter fields, scope and tools, context and execution, template and checklist, known issues |
-| `hooks-*` (6) | hook-creator | 33-event table, stdin and output contract, 5 handler types, env vars, templates, changes through 2.1.296 |
+| `hooks-*` (6) | hook-creator | 33-event table, stdin and output contract, 5 handler types, env vars, templates, changes through 2.1.309 |
 | `mods-*` (5) | mod-creator | API index, mod lifecycle, patterns, testing kit, per-version changes |
 
 **Drift check:** `scripts/mods-ref-check.mjs <types.d.ts> <refs dir>` compares every symbol-index row of `mods-api.md` with the Claude Code types file. Exit 0 = clean, 1 = drift, 2 = error; the verdict is the first stdout line. `tests/run.sh` runs the offline suite and adds a live check when `MODS_TYPES=<types.d.ts>` is set.

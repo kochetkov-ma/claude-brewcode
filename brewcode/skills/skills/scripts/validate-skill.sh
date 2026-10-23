@@ -441,11 +441,11 @@ else
     check ok "No braced CLAUDE_PROJECT_DIR token meant as a literal"
 fi
 
-# 23. Warning: a braced CLAUDE_* token in prose with no `/` after it renders as a path at load; fine
+# 23. Warning: a braced CLAUDE_* token in prose with no `/` after it is substituted at load (path or value); fine
 # for a location, wrong when it names the variable or a literal to write (drop the dollar-brace).
 L=$(scan_lines 23)
 if [ -n "$L" ]; then
-    warn "Braced CLAUDE_* token in prose at line(s) $L renders as a path at load -- if it names the variable or a literal to write, drop the dollar-brace"
+    warn "Braced CLAUDE_* token in prose at line(s) $L is substituted at load (path or value) -- if it names the variable or a literal to write, drop the dollar-brace"
 else
     check ok "No braced CLAUDE_* token named in prose"
 fi

@@ -187,7 +187,7 @@ claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools -
 
 | Component | Version | Purpose |
 |-----------|---------|---------|
-| Claude Code CLI | 2.1.296 reference for the plugins; mods 2.1.301+ | Plugin runtime |
+| Claude Code CLI | 2.1.309 reference for the plugins; mods 2.1.301+ | Plugin runtime |
 | Node.js | 20+ | Hook runtime |
 | macOS | 13+ | Supported OS (Linux and Windows planned) |
 

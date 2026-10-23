@@ -22,7 +22,7 @@ import { Callout, Card, CardGrid, SourceLink, Spoiler, Steps, UpdateNotice } fro
 | Tools | Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch |
 | Output | Agent file path, validation verdict, assumptions |
 
-Describe the role, allowed files and expected result. Agent Creator drafts frontmatter and a system prompt, validates them, and returns paths and a verdict. Its references were checked against Claude Code documentation through 2.1.296.
+Describe the role, allowed files and expected result. Agent Creator drafts frontmatter and a system prompt, validates them, and returns paths and a verdict. Its references were checked against Claude Code documentation through 2.1.309.
 
 ## When to use
 
@@ -91,10 +91,10 @@ disallowedTools: Write, Edit  # OPT: explicit deny list
 skills: skill1, skill2        # OPT: full content injected at startup
 color: cyan                   # OPT: 8 valid values, magenta is NOT one
 memory: project               # OPT: user|project|local, auto-adds Read/Write/Edit
-background: true              # OPT: errors on a teammate-spawned agent since CC 2.1.269
+background: true              # OPT: errors when an in-process teammate spawns it
 omitClaudeMd: true            # OPT: skips CLAUDE.md and project rules; ignored as main
 isolation: worktree           # OPT: `worktree` only; `remote` is invocation-level
-permissionMode: default       # LOCAL-ONLY: ignored + warn in plugin agents
+permissionMode: default       # LOCAL-ONLY: ignored + warn in plugin agents; main's mode may override
 mcpServers: [server1]         # LOCAL-ONLY: ignored + warn in plugin agents
 initialPrompt: "..."          # LOCAL-ONLY: first prompt for a main-session agent
 hooks: {}                     # LOCAL-ONLY: ignored for plugin agents
@@ -105,14 +105,20 @@ experimental: {cacheTtl: "5m"} # OPT: file definitions only
 | Scope | Fields |
 |-------|--------|
 | Local + plugin | `model`, `effort`, `maxTurns`, `tools`, `disallowedTools`, `skills`, `memory`, `background`, `omitClaudeMd`, `isolation: worktree` |
-| Local only | `permissionMode`, `hooks`, `mcpServers`, `initialPrompt` (`once` inside a hook is ignored in any agent; it works only in skills) |
+| Local only | `permissionMode` (main's mode may still override), `hooks`, `mcpServers`, `initialPrompt` (`once` inside a hook is ignored in any agent; it works only in skills) |
 | File definitions only | `color`, `experimental.cacheTtl` (ignored in `--agents` JSON) |
 | Unconfirmed | Any field the references do not list: do not emit |
 
 `omitClaudeMd: true` still loads managed policy; pass essential constraints in the delegation prompt.
 
+| What a subagent really gets | Rule |
+|-----------------------------|------|
+| Permission mode | The main session's mode decides. Main in `bypassPermissions`, `acceptEdits` or auto: the frontmatter `permissionMode` is ignored, even for local agents. Main in `plan`: the agent stays in plan. Main in `default` or `dontAsk`: the frontmatter value applies, except `bypassPermissions` (2.1.267+) and `auto` where auto mode is unavailable, which keep main's mode. It is no grant and no restriction: narrow with `tools:`. |
+| Fork mode | On by default in the interactive terminal since 2.1.232, and in `-p`, the Agent SDK, desktop and VS Code since 2.1.302. Never in `claude mcp serve`. `CLAUDE_CODE_FORK_SUBAGENT=0` turns it off. A fork keeps its parent's permission mode. |
+| Empty `tools:` | An empty list (or `disallowedTools` removing every entry) launches the agent with no tools and no refusal. Omitting `tools:` inherits all. A non-empty list where nothing resolves is refused. |
+
 <Callout type="caution">
-**Do not set `isolation` or `permissionMode: bypassPermissions` by default.** A worktree per spawn costs setup and disk, with a known data-loss bug alongside `bypassPermissions` ([#29110](https://github.com/anthropics/claude-code/issues/29110)). `bypassPermissions` equals `--dangerously-skip-permissions`: use it only in sandboxed CI. `permissionMode` is local-only anyway.
+**Do not set `isolation` or `permissionMode: bypassPermissions` by default.** A worktree per spawn costs setup and disk, with a known data-loss bug alongside `bypassPermissions` ([#29110](https://github.com/anthropics/claude-code/issues/29110)). `bypassPermissions` equals `--dangerously-skip-permissions`: use it only in sandboxed CI. `permissionMode` is local-only, and the main session's mode can override it (table above).
 </Callout>
 
 House description budget: at most 150 tokens (~600 characters), lead sentence at most 160 characters, 3-7 English trigger terms.
@@ -123,7 +129,7 @@ House description budget: at most 150 tokens (~600 characters), lead sentence at
 | 1-2 other agents | Single line + detailed Triggers | `"Creates bash scripts. Triggers: create script, bash script, shell script"` |
 | High | Block scalar plus one `<example>` (a second needs the budget exception) | See `agent-template.md` |
 
-Plugin agent paths resolve through `${CLAUDE_PLUGIN_ROOT}`. The [known-issues reference](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/agent-known-issues.md) lists changes 2.1.234-2.1.296 and debugging steps.
+Plugin agent paths resolve through `${CLAUDE_PLUGIN_ROOT}`. The [known-issues reference](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/agent-known-issues.md) lists changes 2.1.234-2.1.309 and debugging steps.
 
 </Spoiler>
 
@@ -176,7 +182,7 @@ All under `brewcode/skills/agents/references/`:
 | `agent-scope-and-tools.md` | Deciding `tools:`, file location, model precedence, delegation patterns |
 | `agent-context-and-execution.md` | What a subagent inherits, execution modes, turn/token/concurrency limits |
 | `agent-template.md` | Description budget, prompt structure, Guardrails block, Validation Checklist |
-| `agent-known-issues.md` | Changes 2.1.234-2.1.296, architectural limits, debugging |
+| `agent-known-issues.md` | Changes 2.1.234-2.1.309, architectural limits, debugging |
 
 </Spoiler>
 

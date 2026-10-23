@@ -2,6 +2,44 @@
 
 ---
 
+## v6.12.2 (2026-10-23)
+
+> Docs: [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [mod-creator](https://doc-claude.brewcode.app/brewcode/agents/mod-creator/) | [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | [reminders](https://doc-claude.brewcode.app/mods/reminders/)
+
+**What changed for you**
+
+- The hook, skill, agent and mod authoring agents now follow Claude Code 2.1.309. [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) picks where a hook belongs (settings, plugin, skill or agent frontmatter, mod) and no longer suggests an inject-context template that auto-approves the tool call.
+- [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) validation catches three more mistakes: `SKILL.md` not starting with `---` on line 1, an unquoted description with `: ` or ` #` (warning), and a name with a trailing or double hyphen.
+- [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) knows which permission mode a subagent really gets, and [mod-creator](https://doc-claude.brewcode.app/brewcode/agents/mod-creator/) reads references re-checked on 2.1.309. See the [agents skill](https://doc-claude.brewcode.app/brewcode/skills/agents/).
+- The three brewcode mods ([placeholders](https://doc-claude.brewcode.app/mods/placeholders/), [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/), [reminders](https://doc-claude.brewcode.app/mods/reminders/)) start their bundled hook scripts without a shell. Nothing changes in how they behave.
+
+### brewcode
+
+#### Changed
+
+- **hook-creator:** reference version 2.1.309; new "Where and when" table (goal -> declaration location -> hook type); declaration-locations matrix in `hooks-types-config.md`; `args: []` selects exec form for a directly executable script; the PreToolUse inject-context template drops `permissionDecision: allow`; refs `hooks-events`, `hooks-io-contract`, `hooks-env`, `hooks-changes` re-verified.
+- **skill-creator / `validate-skill.sh`:** new checks: opening `---` must be line 1 (fail), name must be `a-z`/`0-9` words joined by single hyphens (fail on trailing or double hyphen), unquoted description holding `: ` or ` #` (warning); `${CLAUDE_EFFORT}` recognized as a load-time substitution token; refs `frontmatter-fields`, `execution-model`, `activation-and-troubleshooting`, `design-patterns` re-verified.
+- **agent-creator:** subagent `permissionMode` matrix (the main session's mode decides), fork mode on by default in the terminal since 2.1.232 and in `-p`, SDK, desktop and VS Code since 2.1.302, empty `tools:` launches with no tools; changes table extended to 2.1.309; known-issues rows for a file without `name` or without `---` on line 1, the 15,000-token description warning and agent hot-reload.
+- **mod-creator:** refs `verified_on` 2.1.309; `mods-patterns` documents the `.state/` rendezvous (old cache dir kept 14 days, new root starts empty after `/reload-plugins`) and the exec-form hook example.
+
+### brewmod-placeholders
+
+#### Changed
+
+- **hooks.json:** bundled command hooks use exec form (`"command": "node"` plus `"args": ["${CLAUDE_PLUGIN_ROOT}/hooks/inject.mjs"]`) instead of a shell string. No behaviour change.
+
+### brewmod-plan-effort
+
+#### Changed
+
+- **hooks.json:** bundled command hooks use exec form (`"command": "node"` plus `"args": ["${CLAUDE_PLUGIN_ROOT}/hooks/mode.mjs"]`) instead of a shell string. No behaviour change.
+
+### brewmod-reminders
+
+#### Changed
+
+- **hooks.json:** bundled command hooks use exec form (`"command": "node"` plus `"args": ["${CLAUDE_PLUGIN_ROOT}/hooks/remind.mjs"]`) instead of a shell string. No behaviour change.
+
 ## v6.12.1 (2026-10-22)
 
 > Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)

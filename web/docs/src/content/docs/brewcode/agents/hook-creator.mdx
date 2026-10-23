@@ -19,7 +19,7 @@ import { Badge, Card, CardGrid, Spoiler, Steps, UpdateNotice } from '../../../..
 | Tools | Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch |
 | Output | Hook or handler configuration, registration snippet, verification evidence, limits |
 
-Hook Creator creates, debugs or validates a lifecycle hook against the real event contract. It selects event, handler type, input schema, output channel, matcher and failure policy, following an existing well-built hook and project rules. References are refreshed through Claude Code 2.1.296; the skill-scoped hook facts (`hooks:` in `SKILL.md`, `once`, command paths) are checked on 2.1.306.
+Hook Creator creates, debugs or validates a lifecycle hook against the real event contract. It selects event, handler type, input schema, output channel, matcher and failure policy, following an existing well-built hook and project rules. References are refreshed through Claude Code 2.1.309.
 
 ## When to use
 
@@ -45,7 +45,7 @@ Verify the Stop output contract and stop_hook_active guard.
 ## How it works
 
 <Steps>
-  <li><div><strong>Resolve behavior and ownership</strong><p>Gating, context, modification, logging or cleanup; project settings, user settings or plugin <code>hooks.json</code>. Unrelated registrations stay.</p></div></li>
+  <li><div><strong>Resolve behavior and ownership</strong><p>Gating, context, modification, logging or cleanup; settings file, plugin <code>hooks.json</code>, skill or agent frontmatter, or a mod when the need is not a classic hook. Unrelated registrations stay.</p></div></li>
   <li><div><strong>Choose event and handler</strong><p>Handler support and blocking differ per event; a nonzero exit does not guarantee a block.</p></div></li>
   <li><div><strong>Implement the contract</strong><p>Emit the event's output shape; pick fail-open advisory or fail-closed gate on purpose.</p></div></li>
   <li><div><strong>Register and verify</strong><p>Exact matcher, type, path and timeout; test success, denial, malformed input and failure.</p></div></li>
@@ -74,7 +74,22 @@ Prompt and agent handlers return decisions and do not inject context. SessionSta
 }
 ```
 
-With `args`, the command resolves on PATH and runs without shell parsing; use shell form only for pipes. `args`, `shell`, `async` and `asyncRewake` are command-only.
+Prefer exec form (`command` plus `args`, Claude Code 2.1.139+): the command resolves on PATH and runs without shell parsing, and `args: []` alone also selects it for a directly executable script. Use shell form only for pipes. `args`, `shell`, `async` and `asyncRewake` are command-only.
+
+</Spoiler>
+
+<Spoiler id="where-to-declare" title="Where to declare a hook">
+
+| Goal | Declare in |
+|------|------------|
+| Rule for every project, one repo, or the team | `~/.claude/settings.json`, `.claude/settings.local.json`, `.claude/settings.json` |
+| Org policy users cannot switch off | Managed settings, with `onFailure: "block"` |
+| Behavior shipped with a plugin | Plugin `hooks/hooks.json`, exec form |
+| Guard that must hold from a skill's first use to session end | Skill frontmatter `hooks:` (`once: true` = one-shot) |
+| Guard only while one project or user agent runs | Agent frontmatter `hooks:` (plugin agents ignore it; declare plugin-agent hooks in `hooks/hooks.json`) |
+| UI, in-process tool gate, effort or model rewrite | Not a classic hook: a mod ([Mod Creator](/brewcode/agents/mod-creator/)) |
+
+Hooks merge across non-managed locations. For managed hooks only the highest-ranked source applies (first wins; `managedSourcesBehavior: "merge"`, 2.1.242+, unions them). With mods installed, non-managed PreToolUse hooks run after the mods call `next`; a gate that must survive a mod is a managed hook or a permission rule.
 
 </Spoiler>
 
@@ -82,7 +97,7 @@ With `args`, the command resolves on PATH and runs without shell parsing; use sh
 
 | Goal | Correct contract |
 |------|------------------|
-| Add context on a supported event | `hookSpecificOutput.additionalContext` |
+| Add context on a supported event | `hookSpecificOutput.additionalContext`; on PreToolUse send only `hookEventName` and `additionalContext` (`permissionDecision: "allow"` silently auto-approves the call) |
 | Deny a tool before execution | PreToolUse `permissionDecision=deny` |
 | Modify tool parameters | Supported `updatedInput`; one owner only |
 | Stop feedback or continue work | Stop/SubagentStop context or `decision=block` with reason |
@@ -99,7 +114,7 @@ UserPromptSubmit cannot rewrite the prompt via `updatedInput`. Setup discards JS
 
 - Valid JSON takes effect even on a nonzero exit for standard decision events; exit 2 still blocks where supported.
 - A failed command is not a denial. A policy gate emits an explicit denial; never reuse an advisory fail-open template for a hard requirement.
-- Hard gate on `command` or `http`: set `onFailure: "block"` (Claude Code 2.1.295+; older versions ignore it). Without it a crash, timeout or missing script lets the action through. One `if` rule per tool; test-fire each path.
+- Hard gate on `command` or `http`: set `onFailure: "block"` (Claude Code 2.1.295+; older versions ignore it). Without it a crash, timeout or unstartable script lets the action through: a working gate denies with exit 2; only `onFailure: "block"` covers a crash. One `if` rule per tool; test-fire each path.
 - Async handlers never gate; `asyncRewake` reports a later result only.
 
 </Spoiler>

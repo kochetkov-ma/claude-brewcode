@@ -70,18 +70,18 @@ The distributed-product rule is repository policy, stricter than upstream defaul
 
 - A skill with `context: fork` starts an ordinary subagent, not a conversation fork: tools are filtered and `AskUserQuestion` is unavailable.
 - The agent carries no `Agent` tool; split and optimization requests go back to the caller.
-- `allowed-tools` preapproves calls; it is not a sandbox. Grants clear on the next user message, skill instructions persist.
+- `allowed-tools` preapproves calls; it is not a sandbox. Grants clear on the next user message, skill instructions persist. Under managed `allowManagedPermissionRulesOnly`, marketplace plugin skills lose `allowed-tools` since 2.1.284 unless the source is official or vouched by managed settings.
 - Scope permissions to the needed calls. Bare `Bash`, `Write` or `Edit` fits only a user-invoked skill with open-ended shell or write paths.
 - `${CLAUDE_SKILL_DIR}` is a load-time substitution, not an environment variable for hooks or agents.
-- A `hooks:` block in `SKILL.md` stays registered for the rest of the session, so declare it only for behavior that must always hold; a one-shot hook takes `once: true` on the hook entry. A hook command is not substituted: write `"$CLAUDE_PLUGIN_ROOT/..."` or `${CLAUDE_PROJECT_DIR}`, never `${CLAUDE_SKILL_DIR}` or the braced plugin-root token.
+- A `hooks:` block in `SKILL.md` stays registered for the rest of the session, so declare it only for behavior that must always hold; a one-shot hook takes `once: true` on the hook entry. Prefer exec form (`command` plus `args`); `if` works only on tool events. Exec form substitutes the braced `${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PROJECT_DIR}` and `${CLAUDE_PLUGIN_DATA}` in `command` and in each arg; shell form receives them as exported environment variables, so double-quote them (`"$CLAUDE_PLUGIN_ROOT/x.sh"`; single quotes stay literal). `${CLAUDE_SKILL_DIR}` is unavailable in a hook command.
 
 </Spoiler>
 
 <Spoiler id="validation-and-references" title="Validation and references">
 
-The bundled validator checks frontmatter, naming, prompt contract and structure; a pass complements evaluation but does not prove the workflow works. Confirmed fixes need another run.
+The bundled validator checks frontmatter (opening `---` on line 1), naming (no trailing or double hyphen), prompt contract and structure, and warns on an unquoted description holding `: ` or ` #` and on braced `CLAUDE_*` tokens named in prose; a pass complements evaluation but does not prove the workflow works. Confirmed fixes need another run.
 
-References under `brewcode/skills/skills/references/` hold the frontmatter catalog, execution model, design patterns, activation troubleshooting, prompt contract and review checklist, refreshed through Claude Code 2.1.296. The agent checkpoints artifact paths in its report directory; `maxTurns` is a loop stop, so partial work resumes from evidence.
+References under `brewcode/skills/skills/references/` hold the frontmatter catalog, execution model, design patterns, activation troubleshooting, prompt contract and review checklist, refreshed through Claude Code 2.1.309. A typed mid-message `/name` lets the model run a user-only skill for that message; personal and project skills are absent from cloud sessions. The agent checkpoints artifact paths in its report directory; `maxTurns` is a loop stop, so partial work resumes from evidence.
 
 </Spoiler>
 

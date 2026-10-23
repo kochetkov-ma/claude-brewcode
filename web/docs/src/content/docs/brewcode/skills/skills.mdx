@@ -103,7 +103,7 @@ Description: one line, what and when, 3-5 early trigger terms; combined descript
 
 <Spoiler id="validate-skill" title="Validation: validate-skill.sh">
 
-Every create/improve pass ends with `validate-skill.sh path/to/skill`. Checks 1-10 cover structure: YAML delimiters, `name` casing and dir-match, `description` caps, body size, `EXECUTE` on bash blocks, Prompt Contract shape. The rest:
+Every create/improve pass ends with `validate-skill.sh path/to/skill`. Checks 1-10 cover structure: YAML delimiters with the opening `---` on line 1, `name` as bare kebab-case (no leading, trailing or double hyphen) matching the directory, `description` caps (an unquoted description holding `: ` or ` #` only warns), body size, `EXECUTE` on bash blocks, Prompt Contract shape. The rest:
 
 | Check | Severity | Catches |
 |-------|----------|---------|
@@ -111,6 +111,15 @@ Every create/improve pass ends with `validate-skill.sh path/to/skill`. Checks 1-
 | 12 | fail | A bare top-level `once:` (it belongs under a hook entry) |
 | 13 | warning | `agent:` outside `Explore`, `Plan`, `general-purpose` |
 | 14 | fail | A UTF-8 BOM at the start of `SKILL.md` |
+| 15 | fail | A bare positional `$N` in the body (substituted at load) |
+| 16 | fail | A plugin-root token other than the exact braced `CLAUDE_PLUGIN_ROOT` form |
+| 17 | fail | `context:` with any value but `fork` |
+| 18 | warning | `SKILL.md` over 500 lines |
+| 19 | fail | `$ARGUMENTS` in a shell fence outside the canonical quoted heredoc |
+| 20 | fail | `$ARGUMENTS` in prose outside the one canonical slot under `## Prompt contract` |
+| 21 | fail | A `node -e "..."` program cut by a double quote or backtick |
+| 22 | fail | A braced `CLAUDE_PROJECT_DIR` token meant as a literal (single quotes, quoted heredoc, JSON/JS/YAML fence) |
+| 23 | warning | A braced `CLAUDE_*` token in prose with no `/` after it (incl. `${CLAUDE_EFFORT}`) is substituted at load: drop the dollar-brace when it names the variable |
 
 The summary line reports `N passed, N failed, N warned`. Every managed skill follows the house prompt contract: prompt-first `argument-hint`, a `## Prompt contract` section, one five-label PLAN, and a multi-mode keyword table with `Mutates?` and a Russian keyword. Static validation proves structure, not activation: test user-only skills with `/name` and model-invocable ones with positive and negative prompts in fresh sessions.
 
