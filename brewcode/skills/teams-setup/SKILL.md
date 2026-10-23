@@ -8,7 +8,7 @@ allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Ski
 model: opus
 license: MIT
 ---
-<!-- brewcode-meta: version=6.12.1 content_version=6.10.0 generated_by=brewcode:teams-setup -->
+<!-- brewcode-meta: version=6.12.2 content_version=6.10.0 generated_by=brewcode:teams-setup -->
 
 <instructions>
 

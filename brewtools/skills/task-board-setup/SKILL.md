@@ -8,7 +8,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion, Cro
 model: opus
 license: MIT
 ---
-<!-- brewcode-meta: version=6.12.1 content_version=6.10.0 generated_by=brewtools:task-board-setup -->
+<!-- brewcode-meta: version=6.12.2 content_version=6.10.0 generated_by=brewtools:task-board-setup -->
 
 [DICT: TT=task-tracker agent (generated), TB=task-board skill (generated), BRD=board.md, FEAT=.claude/features, EXCL=source-path exclusions, REL=release style (vX.Y.Z tag | commit SHA | no tag), DOM=domain id segment, FM=frontmatter, TS=task-spec skill (generated), SPEC_MODE=spec+design layer opt-in, PS=status phase, PU=upgrade phase, PR=uninstall/purge phase]
 

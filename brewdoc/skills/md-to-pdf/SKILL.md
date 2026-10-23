@@ -8,7 +8,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion]
 model: sonnet
 license: MIT
 ---
-<!-- brewcode-meta: version=6.12.1 content_version=6.5.3 generated_by=brewdoc:md-to-pdf -->
+<!-- brewcode-meta: version=6.12.2 content_version=6.5.3 generated_by=brewdoc:md-to-pdf -->
 
 # MD to PDF
 

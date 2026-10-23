@@ -1,6 +1,6 @@
 {
   "name": "brewtools",
-  "version": "6.12.1",
+  "version": "6.12.2",
   "description": "Brewtools - Claude Code utilities: text optimization and humanization, secrets scanning, SSH and GitHub Actions deploy, manager hard-wall guard, subagent deadline/return-size/routing guards, task board, context slimming, plugin updates, alternative API providers",
   "author": {
     "name": "Maksim Kochetkov",

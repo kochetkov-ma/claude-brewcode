@@ -8,7 +8,7 @@ allowed-tools: [Read, Edit, Glob, Grep, Bash, Agent, AskUserQuestion]
 model: opus
 license: MIT
 ---
-<!-- brewcode-meta: version=6.12.1 content_version=6.10.0 generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=6.12.2 content_version=6.10.0 generated_by=brewdoc:memory-sync-setup -->
 
 # Memory Sync Generator (brewdoc:memory-sync-setup)
 

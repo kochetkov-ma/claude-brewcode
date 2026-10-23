@@ -1,5 +1,5 @@
 #!/bin/sh
-# brewcode-meta: version=6.12.1 content_version=6.10.0 generated_by=brewcode:teams-setup
+# brewcode-meta: version=6.12.2 content_version=6.10.0 generated_by=brewcode:teams-setup
 # shellcheck disable=SC2016 # every node -e program is single-quoted on purpose
 set -eu
 
