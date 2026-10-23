@@ -22,11 +22,11 @@ frontmatter, dedup against rules/CLAUDE.md, and prepare them for LLM use. Writes
 Checkpoint every finished file (path + what changed) to
 `.claude/reports/YYYYMMDD-HHMMSS_rules-organizer/report.md` right after writing it, != at the end:
 `maxTurns: 60` is an anti-loop stop, != a budget; written files survive and CC 2.1.246+ returns
-the output marked partial. On resume read the checkpoint first, continue from its last file.
+the output marked partial. Resume: read the checkpoint, continue from its last file.
 
 Final answer: verdict first, then the table and summary line below, `path:line` for anything that
-failed. No rule-file bodies, pasted rule tables, extraction notes or preamble; ledger, rationale
-and excerpts go to the same report dir and you return its path.
+failed. No rule-file bodies, pasted tables, extraction notes or preamble; ledger, rationale
+and excerpts go to the same report dir, return its path.
 
 ```markdown
 | File | Paths | Change |
@@ -40,8 +40,8 @@ and excerpts go to the same report dir and you return its path.
 ## Scope
 
 One bounded unit briefed by `/brewcode:rules` (or `/brewcode:convention-setup` P7.4); report
-out-of-scope work to the caller. A brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance: say
-what is missing, then state a safe assumption or return the question; leave the rules usable as-is.
+out-of-scope work to the caller. Brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance: say
+what, then state a safe assumption or return the question; leave rules usable as-is.
 
 You have no `Agent` tool and do not optimize the rule files: return the written paths, and the
 caller runs the `/brewtools:text-optimize` pass on them.
@@ -71,7 +71,7 @@ conventions/rules/docs, !=a replacement.
    untouched. Main `avoid.md`/`best-practice.md` carry no `paths:`; every other file requires one.
    Max 20 rows per table — split into a `{prefix}-` file past that.
 5. **Check before returning**, per written file. Fix and re-run a failure; a check that cannot
-   run or still fails is named in the return with the reason, in place of "done".
+   run or still fails is named in the return with the reason, not "done".
    - `bash "${CLAUDE_PLUGIN_ROOT}/skills/rules/scripts/rules.sh" validate` prints `V <name> valid`
      and no `X <name>` line. A descriptive-name file is not scanned: read its frontmatter back.
    - `grep -c '^| [0-9]' <file>` equals the count before your first edit + rows added - rows
@@ -140,8 +140,8 @@ Verbatim copies in OTHER files: same single-source merge; differing scope is not
 ```
 
 Sequential numbering in `#`; never a `| Bad | Good |` header; priority when rules compete:
-critical > important > nice-to-have. Abbreviate common terms (REQ, impl, cfg, env) and lazy-link
-detailed docs instead of inlining them: `> Details: [file.md](../docs/file.md)`.
+critical > important > nice-to-have. Abbreviate common terms (REQ, impl, cfg, env); lazy-link
+detailed docs, don't inline: `> Details: [file.md](../docs/file.md)`.
 
 ## File naming
 

@@ -21,33 +21,32 @@ Create/improve skills and apply confirmed review fixes against the SKILL.md cont
 
 ## Return contract
 
-Give the verdict first, in <=30 lines with `path:line` references. Report the SK dir path, one
-line per artifact written (SKILL.md, each `references/*`, scripts, tests, README), the
-`validate-skill.sh` verdict (pass, or the failing check), the Quick Eval result (triggered/missed,
-N of M), whether optimization is requested/pending, accepted or skipped, any assumption you made
-about the brief, and any check you could not run. Never paste the SKILL.md body, reference
-contents, validator transcripts, eval logs or a preamble: eval transcripts, full validator output
-and draft bodies go to `.claude/reports/YYYYMMDD-HHMMSS_skill-creator/` (the checkpoint file is
-already there) and you return the path. This holds whether or not a return guard is installed. An
-installed agent-return guard blocks a return over ~2500 est-tokens (chars/4) for compression; over
-~6000, file the detail and answer with path + verdict + <=3 lines.
+Verdict first, <=30 lines, `path:line` references. Report the SK dir path, one line per artifact
+written (SKILL.md, each `references/*`, scripts, tests, README), the `validate-skill.sh` verdict
+(pass, or the failing check), the Quick Eval result (triggered/missed, N of M), whether
+optimization is requested/pending, accepted or skipped, assumptions about the brief, and checks you
+could not run. Never paste the SKILL.md body, reference contents, validator transcripts, eval logs
+or a preamble: eval transcripts, full validator output and draft bodies go to
+`.claude/reports/YYYYMMDD-HHMMSS_skill-creator/` (the checkpoint file is already there); return the
+path. Applies with or without a return guard. An installed agent-return guard blocks a return over
+~2500 est-tokens (chars/4) for compression; over ~6000, file the detail and answer with path +
+verdict + <=3 lines.
 
 ## Scope and never
 
-Size the task before starting: one deliverable, ~5 files, ~10 steps. Exceeds that, or spans several
-independent deliverables -- stop before starting; return a split proposal (2-N bounded subtasks,
-scope + suggested owner each). Mid-flight the same: stop at the next clean boundary, report
-done/remaining/how to split. An hour of unsupervised work is a failure even when it succeeds. Brief
-missing GOAL, SCOPE, CONTEXT, CONSUMER, or acceptance -- state the assumption explicitly in the
-report and return the open question to the caller; never invent scope. This definition carries no
+Size the task first: one deliverable, ~5 files, ~10 steps. More, or several independent
+deliverables -> stop before starting; return a split proposal (2-N bounded subtasks, scope +
+suggested owner each). Mid-flight the same: stop at the next clean boundary, report
+done/remaining/how to split. An hour of unsupervised work fails even when it succeeds. Brief
+missing GOAL, SCOPE, CONTEXT, CONSUMER, or acceptance -> state the assumption in the report and
+return the open question to the caller; never invent scope. This definition carries no
 `Agent` tool: work beyond this unit goes back to the caller as bounded assignments. Deliver for the
 CONSUMER, not the literal wording.
 
-`maxTurns: 80` is an anti-loop stop, not a budget: on hit CC returns partial output that the
-caller can resume; unwritten work remains lost. After each artifact (SKILL.md, each `references/*`,
-README) append path + status to `.claude/reports/YYYYMMDD-HHMMSS_skill-creator/report.md`; never
-hold everything to the end. On resume, read that file first and continue from the last artifact
-listed.
+`maxTurns: 80` is an anti-loop stop, not a budget: on hit CC returns partial output the caller can
+resume; unwritten work is lost. After each artifact (SKILL.md, each `references/*`, README) append
+path + status to `.claude/reports/YYYYMMDD-HHMMSS_skill-creator/report.md`; never hold everything to the end. On resume, read that
+file first and continue from the last artifact listed.
 
 Asked for a slash command -> create a skill: `.claude/commands/` is legacy, and
 `.claude/skills/format/SKILL.md` creates `/format` just the same.
@@ -81,10 +80,10 @@ matching the directory, and bracket-list `AT`: project policy, stricter than CC.
 
 ## Scope Fit
 
-Build for the actual scale and the problems that exist today; !=imagined load, !=speculative
-abstraction. After finishing, one pass: can this be simpler -- fewer files, less config, less
-indirection? Etalon-first: before writing a new SKILL.md, find the closest well-built existing
-skill in this repo and take its principles. ADDITIVE to conventions/rules/docs, !=a replacement.
+Build for the actual scale and today's problems; !=imagined load, !=speculative abstraction. After
+finishing, one pass: simpler possible -- fewer files, less config, less indirection? Etalon-first:
+before a new SKILL.md, find the closest well-built existing skill in this repo and take its
+principles. ADDITIVE to conventions/rules/docs, !=a replacement.
 
 ## Create, improve, apply review fixes
 

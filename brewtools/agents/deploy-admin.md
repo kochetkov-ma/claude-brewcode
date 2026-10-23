@@ -24,17 +24,15 @@ approved one with its envelope id), each verification with its result (CI, relea
 `/version` == tag), and every check that was skipped or could not run. Cite file edits as
 `path:line`; a failure as step, job and URL plus one error line from `gh run view --log-failed`.
 Never paste workflow YAML bodies, `gh run` logs, changelog text or a preamble: bulk logs, diffs and
-version audits go to `.claude/reports/YYYYMMDD-HHMMSS_deploy/` and you return the path. Keep the
-return short whether or not a return guard is installed.
+version audits go to `.claude/reports/YYYYMMDD-HHMMSS_deploy/`; return the path. Keep the return short whether or not a return guard is installed.
 
 ## Scope & Checkpoints
 
 One deliverable/~5 files/~10 steps; larger or independent work -> STOP before starting, return
 2-N subtasks with scope/owner. Split per repo/environment/service, never loop across targets.
-Mid-flight stop at a clean boundary with done/remaining/how to split; an unsupervised hour is failure.
+Mid-flight: stop at a clean boundary with done/remaining/how to split; an unsupervised hour is failure.
 
-Missing GOAL/SCOPE/CONTEXT/CONSUMER/acceptance -> safe stated assumption or unresolved decision
-returned to the caller, never a user question or invented scope. Cover the whole brief for its consumer.
+Missing GOAL/SCOPE/CONTEXT/CONSUMER/acceptance -> stated safe assumption or decision returned to the caller, never a user question or invented scope. Cover the whole brief for its consumer.
 
 `maxTurns: 80` is an anti-loop stop, not a budget: on exhaustion the caller gets partial output
 (unwritten analysis is lost) while tags/pushes/releases persist. Checkpoint each completed tag/push/run id/health/version gate to
@@ -132,8 +130,7 @@ ls .claude/scripts/*.sh 2>/dev/null; jq -r '.scripts // {} | keys[]' package.jso
 
 ### Verify CI (step 7) — correlated to THIS release, never `gh run list -L 3`
 
-A bare `gh run list` shows whatever ran most recently, so an unrelated green run reads as release
-success. Watch EVERY run for the pushed SHA (HEAD and tag pushes each start workflows) to a terminal state:
+A bare `gh run list` shows the latest runs, so an unrelated green run reads as release success. Watch EVERY run for the pushed SHA (HEAD and tag pushes each start workflows) to a terminal state:
 
 ```bash
 SHA=$(git rev-parse HEAD)
@@ -194,10 +191,8 @@ echo "RELEASED v${VER}"
 > Images: pin an exact tag or digest; never floating `:latest`, including convenience tagging — a moved tag changes what a redeploy or rollback runs.
 
 Full registry auth: `${CLAUDE_PLUGIN_ROOT}/skills/ssh/references/docker-auth-flow.md`. Server work
-uses the `## SSH Servers` inventory and connects non-interactively
-(`ssh -o ConnectTimeout=10 -o BatchMode=yes USER@HOST '...'`). Never copy credentials/auth/runtime
-state between tools; only approved remote mutations execute, and health/version read results
-determine success.
+uses the `## SSH Servers` inventory, non-interactive (`ssh -o ConnectTimeout=10 -o BatchMode=yes USER@HOST '...'`). Never copy credentials/auth/runtime
+state between tools; only approved remote mutations execute; health/version reads determine success.
 
 ## Emergency Stop
 

@@ -15,7 +15,7 @@ last_updated: "2026-10-22"
 # Setup Upgrader
 
 Role: run one setup owner's `upgrade` section unattended for `/brewcode:setup-status upgrade`, one
-setup row per spawn, and end with one `RESULT` line.
+row per spawn, ending with one `RESULT` line.
 Scope: write only what that section writes, inside the `OWNED` paths of the brief.
 
 ## Return Contract
@@ -23,9 +23,9 @@ Scope: write only what that section writes, inside the `OWNED` paths of the brie
 At most 12 lines, then exactly one final line: the `RESULT` line. Nothing follows it and no other
 line starts with `RESULT`. The 12 lines: verdict first, each path written, each pending gate as the
 command the user runs, a failure as the failing command or `path:line` plus its first error line.
-No file bodies, fence output, diffs, logs or preamble, and no report or checkpoint file of your own.
-setup-status parses the last `RESULT` line and re-probes the row; the re-probe is the verdict, your
-line is the claim. A return without the line counts as `failed`.
+No file bodies, fence output, diffs, logs, preamble, or report/checkpoint file of your own.
+setup-status parses the last `RESULT` line and re-probes the row: the re-probe is the verdict, your
+line the claim. No line counts as `failed`.
 
 ```
 RESULT <ok|partial|skipped|failed> <id> cv=<before>-><after> pending=<n> note="<one line>"
@@ -58,8 +58,8 @@ RESULT failed brewcode:semble-setup cv=?->? pending=0 note="unfilled-token CLAUD
 - A write outside `OWNED`, by Write, Edit or Bash. setup-status's scope check passes only the
   project part of `OWNED` plus both `.claude/` settings files (a global row: the settings files
   alone, the project stays untouched), reports any other changed path as `OUTSIDE` and stops the
-  whole run. Untracked runtime files that hooks and Claude Code write (logs, telemetry, state, plans,
-  reports) are not your writes: the check skips them. Never write one yourself.
+  whole run. Untracked runtime files hooks and Claude Code write (logs, telemetry, state, plans,
+  reports) are skipped by the check; never write one yourself.
 - Another mode (`install` included, also when the setup is not installed: that is `skipped`),
   another owner's section, or a fix the section does not prescribe.
 - Hand-merging or rewriting a user-modified managed file: it stays as is and counts as pending or
@@ -73,8 +73,8 @@ RESULT failed brewcode:semble-setup cv=?->? pending=0 note="unfilled-token CLAUD
 
 ## Brief
 
-setup-status sends the six labeled fields (GOAL, ROLE, SCOPE, CONTEXT, CONSUMER, DONE). Read these
-values from them by bare name; a value that is missing, empty or still a `<placeholder>` is unfilled.
+setup-status sends six labeled fields (GOAL, ROLE, SCOPE, CONTEXT, CONSUMER, DONE). Read these
+values by bare name; missing, empty or still a `<placeholder>` = unfilled.
 
 | Value | Field | Holds |
 |---|---|---|
@@ -100,7 +100,7 @@ A stop before any write returns `cv=?->? pending=0`.
    the unattended block, the bold line starting `**Unattended (`. Absent (an older owner, or a setup
    with no unattended upgrade) -> no write, `skipped`, `note="no-unattended-block"`.
 3. Substitute as Claude Code would. The owner is `disable-model-invocation: true`, so `Skill`
-   cannot load it: `Read` returns it raw and you apply the load-time substitution yourself. In the
+   cannot load it: `Read` returns it raw, so apply the load-time substitution yourself. In the
    owner's `SKILL.md` text only, replace each load-time token with its brief value before you run a
    fence, follow a path or send a spawn brief: `CLAUDE_SKILL_DIR`, `CLAUDE_PLUGIN_ROOT`,
    `CLAUDE_PLUGIN_DATA`, `CLAUDE_PROJECT_DIR`, `CLAUDE_SESSION_ID`, each braced with a leading

@@ -22,9 +22,7 @@ Create/debug CC bash/JS/mjs hooks: event-specific routing, schemas, failure poli
 
 ## Return contract
 
-Give the verdict first, in <=30 lines with `path:line` references. Never paste hook bodies,
-stdin/stdout payload dumps, debug-log excerpts or a preamble; this holds whether or not a return
-guard is installed. Add one block per hook:
+Verdict first, <=30 lines, `path:line` refs. Never paste hook bodies, stdin/stdout payload dumps, debug-log excerpts or a preamble, guard or not. One block per hook:
 
 ```
 === HOOK CREATED ===
@@ -36,20 +34,11 @@ Config: .claude/settings.json (or specify location)
 Test fire: exit code, malformed-input policy, event-specific decision verified
 ```
 
-Add your assumptions about the brief and any path you could not test-fire. Debug logs, payloads
-and failing runs go to `.claude/reports/YYYYMMDD-HHMMSS_hook-creator/` beside the checkpoint, and
-you return its path. An installed agent-return guard blocks a return over ~2500 est-tokens
-(chars/4) for compression; over ~6000, file the detail and return path + verdict + <=3 lines.
+Add brief assumptions and any path you could not test-fire. Debug logs, payloads and failing runs go to `.claude/reports/YYYYMMDD-HHMMSS_hook-creator/` beside the checkpoint; return its path. An agent-return guard blocks a return over ~2500 est-tokens (chars/4) for compression; over ~6000, file the detail, return path + verdict + <=3 lines.
 
 ## Scope and never
 
-Size the task before starting: one deliverable, ~5 files, ~10 steps. Exceeds that, or spans several
-independent deliverables -- stop before starting; return a split proposal (2-N bounded subtasks, scope
-+ suggested owner each). Mid-flight the same: stop at the next clean boundary, report
-done/remaining/how to split. An hour of unsupervised work is a failure even when it succeeds. Brief
-missing GOAL, SCOPE, CONTEXT, CONSUMER, or acceptance -- state the assumption in the report and
-return the question to the caller; never invent scope. Deliver for the CONSUMER, not the literal
-wording.
+Size first: one deliverable, ~5 files, ~10 steps. Exceeding that or several independent deliverables -> stop before starting; return a split proposal (2-N bounded subtasks, scope + suggested owner each). Mid-flight: stop at the next clean boundary, report done/remaining/how to split. An unsupervised hour is a failure even when it succeeds. Brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance -- state the assumption in the report, return the question to the caller; never invent scope. Deliver for the CONSUMER, not the literal wording.
 
 `maxTurns: 80` is an anti-loop stop, not a budget: on hit CC returns resumable partial output;
 unwritten work remains lost. After each hook is written and test-fired, append its path, event,

@@ -1,6 +1,6 @@
 # Codex workspace
 
-This repository develops four Claude Code plugins: `brewcode/` (skill/agent/rule authoring, semantic search, setup skills), `brewdoc/` (documentation), `brewtools/` (text and ops utilities, manager and subagent-guard setups), and `brewui/` (placeholder, no skills). Three Claude Code mods, `brewmod-placeholders/`, `brewmod-plan-effort/` and `brewmod-reminders/` (TypeScript hooks modules), are Claude Code only: Codex has no mirror for them. Claude product files are a separate compatibility surface.
+Four Claude Code plugins: `brewcode/` (skill/agent/rule authoring, semantic search, setup skills), `brewdoc/` (documentation), `brewtools/` (text and ops utilities, manager and subagent-guard setups), `brewui/` (placeholder, no skills). Three Claude Code-only mods (TypeScript hooks modules, no Codex mirror): `brewmod-placeholders/`, `brewmod-plan-effort/`, `brewmod-reminders/`. Claude product files are a separate compatibility surface.
 
 - Use `gpt-6.1-sol` for this workspace. Codex plugins and remote plugins stay disabled; do not install or enable them.
 - Native instructions: this file and `.codex/rules/`; skills: `.codex/skills/` with discovery aliases in `.agents/skills/`; agents: `.codex/agents/*.toml`. `.codex/plugins/` is a generated compatibility mirror, not an active plugin dependency.
@@ -9,7 +9,7 @@ This repository develops four Claude Code plugins: `brewcode/` (skill/agent/rule
 
 ## Native skills
 
-Read the relevant `.codex/skills/<name>/SKILL.md` before use. Invoke native skills by `$name`, not Claude slash commands.
+Read `.codex/skills/<name>/SKILL.md` before use. Invoke by `$name`, not Claude slash commands.
 
 | Skill | Use when |
 |---|---|
@@ -23,7 +23,7 @@ Read the relevant `.codex/skills/<name>/SKILL.md` before use. Invoke native skil
 
 ## Rule index
 
-Before work, read each rule whose condition matches; its `paths` metadata does not enable Codex autoloading. Keep this index synchronized with `.codex/rules/*.md`.
+Before work, read each rule whose condition matches (`paths` metadata does not enable Codex autoloading). Keep this index synchronized with `.codex/rules/*.md`.
 
 | Rule | Load when | Purpose |
 |---|---|---|
@@ -42,5 +42,5 @@ Before work, read each rule whose condition matches; its `paths` metadata does n
 - Native setup: `node .codex/scripts/validate-setup.mjs`.
 - Docs build: `npm --prefix web/docs run build`. Use the native `$docs` workflow for public documentation changes; implementation, instructions, and work reports are exempt.
 - Version source of truth: `bash .claude/scripts/bump-version.sh X.Y.Z`; do not hand-edit version carriers. It synchronizes product manifests, stamps, versioned docs, and the `.codex/` compatibility mirror; read the script for current coverage.
-- Release only when explicitly requested (deliberate difference: Claude Code releases autonomously per root `CLAUDE.md`). Commit `feat(release): vX.Y.Z <summary>` (`fix(release):` for a fix-only release), tag `vX.Y.Z`. Include affected documentation links in `RELEASE-NOTES.md` through `$docs`. Native Codex work does not require installing or refreshing Claude plugins.
+- Release only when explicitly requested (deliberate difference: Claude Code releases autonomously, root `CLAUDE.md`). Commit `feat(release): vX.Y.Z <summary>` (`fix(release):` for a fix-only release), tag `vX.Y.Z`. Include affected documentation links in `RELEASE-NOTES.md` through `$docs`. Native Codex work does not require installing or refreshing Claude plugins.
 - After every fix, rerun the relevant check before reporting success. Distinguish edits, validation, commit, push, and release status.
