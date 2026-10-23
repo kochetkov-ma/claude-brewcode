@@ -8,7 +8,8 @@
 
 **What changed for you**
 
-- The publish docs now say how BrewPage compares with GitHub Pages, Netlify Drop, Tiiny Host and others: see [brewpage.app/compare](https://brewpage.app/compare). BrewPage needs no account and keeps pages for 1 to 30 days. See [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/).
+- The [publish docs](https://doc-claude.brewcode.app/brewdoc/skills/publish/) now say how BrewPage compares with GitHub Pages, Netlify Drop, Tiiny Host and others: see [brewpage.app/compare](https://brewpage.app/compare).
+- BrewPage needs no account and keeps pages for 1 to 30 days. The standalone `skills/brewpage-publish` and `openclaw/brewpage-publish` copies carry the same [publish docs](https://doc-claude.brewcode.app/brewdoc/skills/publish/) link.
 
 ### brewdoc
 
