@@ -90,9 +90,6 @@ brewmod-*/.state/
 !/.claude/skills/claude-plugin-guide/
 /.claude/skills/claude-plugin-guide/*
 !/.claude/skills/claude-plugin-guide/LICENSE
-!/.claude/skills/update-overview/
-/.claude/skills/update-overview/*
-!/.claude/skills/update-overview/LICENSE
 !/.claude/skills/eurodns/
 /.claude/skills/eurodns/*
 !/.claude/skills/eurodns/LICENSE

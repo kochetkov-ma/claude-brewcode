@@ -36,7 +36,7 @@ for line in sys.stdin:
                   'agents': {'enabled': mode != 'disabled-agents', 'default_subagent_model': 'gpt-6.1-sol'},
                   'features': {'plugins': False, 'remote_plugin': False}}}
     if method == 'skills/list':
-        names = ['docs', 'superreview', 'brewcode-review', 'memory-sync', 'claude-plugin-guide', 'update-overview', 'eurodns']
+        names = ['docs', 'superreview', 'brewcode-review', 'memory-sync', 'claude-plugin-guide', 'eurodns']
         result = {'data': [{'skills': [{'name': name, 'path': root + '/.codex/skills/' + name + '/SKILL.md',
                                        'enabled': mode != 'disabled-skills'} for name in names], 'errors': []}]}
     if method == 'hooks/list':
@@ -69,7 +69,7 @@ class LoaderRegressionTests(unittest.TestCase):
         # WHEN: the real probe consumes them.
         result = loader.probe(self.root, self.root, timeout=1)
         # THEN: discovery succeeds and the producer is stopped.
-        self.assertEqual([item['enabled'] for item in result['project_skills']], [True] * 7, 'all project skills must be enabled')
+        self.assertEqual([item['enabled'] for item in result['project_skills']], [True] * 6, 'all project skills must be enabled')
         self.assertEqual(result['prompt_summary']['project_instructions_present'], True, 'root instructions must load')
         self.assert_producer_stopped()
 

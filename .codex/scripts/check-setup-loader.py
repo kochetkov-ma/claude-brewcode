@@ -57,7 +57,7 @@ def probe(root, home, timeout=20):
                     if path.is_relative_to(root):
                         project_skills.append(dict(name=skill['name'], path=str(path), enabled=skill.get('enabled')))
             names = sorted(item['name'] for item in project_skills)
-            expected = sorted(['docs', 'superreview', 'brewcode-review', 'memory-sync', 'claude-plugin-guide', 'update-overview', 'eurodns'])
+            expected = sorted(['docs', 'superreview', 'brewcode-review', 'memory-sync', 'claude-plugin-guide', 'eurodns'])
             if names != expected:
                 raise RuntimeError(f'project skill set mismatch: {names}')
             if any(item['enabled'] is not True for item in project_skills):

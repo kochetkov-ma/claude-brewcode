@@ -18,7 +18,6 @@ Read `.codex/skills/<name>/SKILL.md` before use. Invoke by `$name`, not Claude s
 | `$brewcode-review` | Reviewing Brewcode product changes |
 | `$memory-sync` | Explicitly requested instruction/memory synchronization |
 | `$claude-plugin-guide` | Looking up Claude Code plugin development contracts |
-| `$update-overview` | Reporting the native static Codex setup inventory |
 | `$eurodns` | Authorized DNS work through EuroDNS |
 
 ## Rule index

@@ -4,7 +4,7 @@ import { existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, realpat
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const SKILLS = ['docs', 'superreview', 'brewcode-review', 'memory-sync', 'claude-plugin-guide', 'update-overview', 'eurodns'];
+export const SKILLS = ['docs', 'superreview', 'brewcode-review', 'memory-sync', 'claude-plugin-guide', 'eurodns'];
 const RULES = ['avoid', 'best-practice', 'docs-workflow', 'semble-first', 'astro-avoid', 'astro-best-practice', 'web-accessibility', 'docker-avoid', 'docker-best-practice'];
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const inside = (root, path) => {
