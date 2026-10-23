@@ -28,8 +28,23 @@ methods, never quote a percentage. Known issue ([#10768](https://github.com/anth
 false` (hidden from `/`, not run when typed); a `skillOverrides` entry is `"off"` (invoking by
 full name returns the override error; plugin skills exempt); a higher-precedence same-name SK
 shadows it (enterprise > personal > project, any level overrides a bundled SK); the file is
-`skill.md` lowercase, so nothing is discovered. Malformed frontmatter does NOT break `/name` — the
-body loads with empty metadata and `/skill-name` still works, only description-matching dies.
+`skill.md` lowercase, so nothing is discovered; CC refused the folder name (2.1.299+:
+`frontmatter-fields.md` `name` row); a nested SK not yet loaded (lazy until a file there is touched).
+Malformed frontmatter does NOT break `/name` — the body loads with empty metadata and `/skill-name`
+still works, only description-matching dies. Only at message start does `/name` run; after plain
+text it only permits Claude to run it for that message.
+
+| `skillOverrides` value | Listed to Claude | In `/` menu |
+|---|---|---|
+| `"on"` (absent = on) / `"name-only"` | Name + description / name only | Yes |
+| `"user-invocable-only"` (`/skills` label `user-only`) / `"off"` | Hidden / hidden (full-name invoke -> override error) | Yes / no |
+
+Plugin SKs ignore `skillOverrides` (use `/plugin`). `/skills` Space/Enter cycles a state, Esc saves to
+`.claude/settings.local.json`; it can't cycle plugin SKs, DMI SKs or SKs overridden in managed/`--settings`.
+Alias keys (`checkup`) apply only in managed/`--settings` (2.1.260+), restrict-only.
+
+Stacking: `/a /b args` at the terminal expands the first SK plus up to 5 more (each gets the trailing
+text as `$ARGUMENTS`); stops at a fork SK or `/loop`. `claude -p`/SDK load only the first.
 
 ### Criticality strategy
 
@@ -61,8 +76,11 @@ description: "Creates presentations with company branding and animations. Trigge
 
 Rules beyond the Activation mistakes table: ONE line, no `|` multiline; front-load keywords;
 "proactively" has no effect; cap per the field reference (brewcode default <=400 chars). Listing
-budget is a dynamic **1% of the context window** (`skillListingBudgetFraction`, default `0.01`), not
-a fixed 2%/16K — beyond it some skills never appear in the listing.
+budget is a dynamic **1% of the context window** (`skillListingBudgetFraction`, default `0.01`;
+fallback 8,000 chars; `SLASH_COMMAND_TOOL_CHAR_BUDGET` = fixed char count), not a fixed 2%/16K.
+Every skill NAME is always listed; over budget, CC drops DESCRIPTIONS, least-invoked skills first
+(debug-log warning) — a dropped description loses its trigger keywords. Free budget: `"name-only"`
+in `skillOverrides` for low-priority SKs; `/doctor` estimates the listing cost.
 
 ### Trigger eval queries (optional but recommended)
 
@@ -91,22 +109,24 @@ of this loop (evals.json, per-case isolation, grading, A/B): `skill-creator@clau
 | First-person description | Third-person: "Deploys..." not "I deploy..." |
 | Second-person body | Imperative: "Do X" not "You should do X" |
 | CRIT without slash | `disable-model-invocation: true` for CRIT ops |
-| Too many skills | Beyond the dynamic listing budget -> some invisible |
+| Too many skills | Beyond the dynamic listing budget -> least-invoked descriptions dropped, names stay |
 
 ## Troubleshooting: SK not auto-activating
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Never activates | Beyond listing budget | Run `/skill-doctor` or check `/skills`; trim skill count or description length |
+| Never activates | Description dropped from the listing (over budget, least-invoked first) | `/doctor` listing estimate, `/skill-doctor`; trim descriptions, `name-only` for others, raise `skillListingBudgetFraction` |
 | Never activates | Description reads as a summary | Rewrite with triggers only |
+| Never activates | `paths` set, files outside cwd (sibling worktree via `/add-dir`) | Start in / `/cd` to that dir |
 | Sometimes activates | Weak keywords | Add explicit "Trigger keywords:" |
-| Was working, stopped | Context compaction | Reattaches under the 5K/skill, 25K combined budget; re-invoke `/name` if evicted |
+| Was working, stopped | Context compaction | Re-attaches the latest invocation of each SK: first 5K tokens each, 25K combined, newest first; the listing is re-sent (2.1.304+). Re-invoke `/name` if evicted; an identical render adds only an "already loaded" note, a changed one the full text |
+| New/edited SK missing | Not watched | Watched: `~/.claude/skills`, project and `--add-dir` `.claude/skills` (SKILL.md text only; not bare mode). New top-level dir -> `/reload-skills` (2.1.304+: re-sends only new/changed SKs). SK installed by a SessionStart hook -> hook returns `reloadSkills: true` |
 | Claude ignores the instruction | Attention competition | Fewer skills, explicit `/name` |
 
 Debug: inspect `/skills`, discovery path, DMI/UI settings, overrides, description/paths and listing
 budget. Missing from a list does not prove budget overflow. Check observable Skill calls; test
 `/skill-name`; separate discovery/configuration errors from task failures. Naming an LLM-invocable
-skill is the strongest hint short of `/name`.
+skill is the strongest hint short of `/name`. Refused names: `claude --debug`, search `[names]`.
 
 ## Validation tools
 
@@ -117,6 +137,7 @@ Beyond `validate-skill.sh` (the gate; the tools below never replace it):
 | `/doctor prompt-audit [path]` (alias `/checkup prompt-audit`) | v2.1.283 | Audits skills, agents, commands and CLAUDE.md for prompting patterns written for older models — run it on every new or changed SK |
 | `/skill-doctor` | v2.1.252, needs feature-flag fetching | Reports unused loaded skills and their context cost, for pruning |
 | `claude plugin eval` | v2.1.269 | Scored plugin eval suite, JSON+HTML report |
+| `claude plugin validate <dir>` (`.claude/skills`, `~/.claude/skills`, a plugin) | v2.1.233 | Finds `SKILL.md` whose frontmatter does not parse (such a SK loads with no fields) |
 
 ## Known bugs
 
@@ -126,13 +147,13 @@ Re-check a state: `gh api repos/anthropics/claude-code/issues/<N> --jq '[.state,
 |---|---|---|---|---|
 | [#39686](https://github.com/anthropics/claude-code/issues/39686) | claude.ai skills silently injected (~6000 tokens in report) | Reported 37% listing-budget use | Closed NOT PLANNED | Opt out with `syncClaudeAiSkills: false`; check the listing budget |
 | [#22345](https://github.com/anthropics/claude-code/issues/22345) | PLG skills ignore DMI | Reported ~4400 tokens; contradicts supported DMI contract | Open; runtime unverified | Reproduce on installed version before copying/moving a skill |
-| [#17688](https://github.com/anthropics/claude-code/issues/17688) | SK-scoped hooks don't fire in PLGs | Historical skill-hook failure | Closed completed | Docs verified 2.1.306: skill hooks register on invoke, last the session; probe 2.1.306 fired a plugin-skill PreToolUse hook. Use PLG `hooks.json` for plugin-wide behavior |
+| [#17688](https://github.com/anthropics/claude-code/issues/17688) | SK-scoped hooks don't fire in PLGs | Historical skill-hook failure | Closed completed | Docs verified 2.1.309: skill hooks register on invoke, last the session; probe 2.1.306 fired a plugin-skill PreToolUse hook. Use PLG `hooks.json` for plugin-wide behavior |
 | [#35641](https://github.com/anthropics/claude-code/issues/35641) | `/reload-plugins` doesn't load new PLG skills | Historical reload failure | Closed duplicate | `/reload-skills` (v2.1.152); 2.1.246 fixed same-symptom "0 skills" case; verify installed version |
 | [#33080](https://github.com/anthropics/claude-code/issues/33080) | Same-name skill resolution surprises users | Non-bundled skill overrides bundled skill | Closed NOT PLANNED | Namespace prefix (e.g. `my-`) if collision unwanted |
 | [#17417](https://github.com/anthropics/claude-code/issues/17417) | `skill.md` lowercase ignored | SK not discovered; uppercase remains required | Closed completed | Use `SKILL.md` uppercase |
 | [#36031](https://github.com/anthropics/claude-code/issues/36031) | User-level skills listed but not invoked in Desktop | Historical Desktop loading report | Closed NOT PLANNED; runtime unverified | Compare installed Desktop/CLI versions |
 
-## Version-dependent behavior (through 2.1.306)
+## Version-dependent behavior (through 2.1.309)
 
 - 2.1.257+: a symlinked command/agent/skill/hooks path that leaves the plugin's own directory is
   refused with an error.
@@ -143,6 +164,14 @@ Re-check a state: `gh api repos/anthropics/claude-code/issues/<N> --jq '[.state,
 - 2.1.295+: a skill's `allowed-tools` and `effort` are no longer dropped in `-p` runs — headless
   evals that drive a skill through `claude -p` are meaningful only from this version.
 - 2.1.299-2.1.304: skill-frontmatter hooks, see `frontmatter-fields.md` Hooks field detail (first-prompt `UserPromptSubmit`, `[skill]` ask label, per-source caps, `once` isolation, hooks-from-plugins-only policy drops the skill's `allowed-tools`: Policy row).
+- 2.1.299: names with hidden/direction-changing/blank-like chars or `<`/`>` refused; every
+  `UserPromptSubmit` hook runs before a SK expands (a block stops its `!` commands); "Unknown skill"
+  suggests the listed name when Claude adds a wrong `anthropic-skills:` prefix.
+- 2.1.301: `arguments` fills only the first 64 names x 64 chars; skills listed again after `/rewind`.
+- 2.1.302: fork mode on by default in `-p`, SDK, desktop, VS Code (`execution-model.md` Agent params).
+- 2.1.304: compaction re-sends the skill listing; `/reload-skills` sends only new or changed skills.
+- 2.1.305: Desktop path-mounted (`@inline`) plugins lose `allowed-tools` under `allowManagedPermissionRulesOnly`.
+- 2.1.309: a same-named `--add-dir` SK is reachable as `/<folder>:<name>`.
 
 ## Validation checklist (Step 6, alongside `validate-skill.sh`)
 

@@ -16,7 +16,7 @@ last_updated: "2026-10-22"
 
 # Agent Creator
 
-Create and improve CC AGs against the FM/SP contracts of CC 2.1.296. The contracts live in the
+Create and improve CC AGs against the FM/SP contracts of CC 2.1.309. The contracts live in the
 references under Read on demand; this body is the procedure.
 
 ## Return Contract
@@ -52,7 +52,8 @@ after writing it, != hold to the end. On resume: read that file first, continue 
 listed.
 
 Never: emit a FM key outside the field table in `agent-frontmatter-fields.md` (an unknown key is
-ignored without an error); put `once` in AG hooks (ignored in any AG, SK-only; skill hooks:
+ignored without an error; 2.1.296+ `claude --debug` logs it as `does not recognize or apply`);
+put `once` in AG hooks (ignored in any AG, SK-only; skill hooks:
 `${CLAUDE_PLUGIN_ROOT}/skills/skills/references/frontmatter-fields.md`); set `isolation: remote` in FM (invocation-level only); leave
 `background: true` on a definition an in-process teammate may spawn (that spawn errors, 2.1.269+);
 write an "ask/confirm" step for an ordinary SA (it returns the question to its caller); ship a
@@ -60,9 +61,11 @@ generic AG without its `## Return Contract` block.
 
 Generate against these (details in the reference named):
 - `tools:` -- `agent-scope-and-tools.md`. Background SAs have a narrower tool pool: verify the
-  launch mode before promising tools. A searching AG lists `Bash`, or `Glob, Grep` without `Bash`
-  (next to `Bash` both are dropped on macOS/Linux). `Agent` only for a genuine orchestrator: CC
-  permits depth-limited nested delegation, Brewcode spawns from the main conversation only.
+  launch mode before promising tools (fork mode is on by default since 2.1.302; a SA's own `Agent`
+  calls run foreground in `-p`/SDK/desktop/VS Code). An empty `tools:` list launches with no
+  tools. A searching AG lists `Bash`, or `Glob, Grep` without `Bash` (next to `Bash` both are
+  dropped on macOS/Linux). `Agent` only for a genuine orchestrator: CC permits depth-limited
+  nested delegation, Brewcode spawns from the main conversation only.
 - `skills:` preloads model-invocable skills only -- of the skills these plugins ship, only
   `brewdoc:publish`, `brewtools:text-optimize` and `brewtools:text-human`: for any other the AG
   `Read`s its files by path (`agent-context-and-execution.md`).
@@ -70,6 +73,8 @@ Generate against these (details in the reference named):
   AGs), and is ignored for main-session agents.
 - Plugin AGs ignore `hooks`, `mcpServers`, `permissionMode`, and `initialPrompt`; use project/user
   agents when those fields are required. Never move credentials or runtime state.
+- `permissionMode` never widens: main in plan keeps the SA in plan, and FM `bypassPermissions`
+  under a default/dontAsk main keeps main's mode (2.1.267+) -- narrow with `tools:` instead.
 
 ## Scope Fit
 
@@ -139,6 +144,6 @@ and add only domain-specific persistence requirements under `Unique invariants` 
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/agent-scope-and-tools.md` | Deciding `tools:` (pool per launch mode, `Glob`/`Grep` vs `Bash`), where the file lives (scope precedence, walk-up discovery), Agent tool call options, model precedence, main-only spawn patterns |
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/agent-context-and-execution.md` | What a SA inherits from its parent, `skills:` preload vs runtime `Skill`, execution modes (foreground/background), turn/token/concurrency limits, partial-result recovery |
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/agent-template.md` | Writing the FM `description`, the SP structure + emit-verbatim Guardrails block, teams-setup compact exception, colors, running the Validation Checklist |
-| `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/agent-known-issues.md` | Improving an AG written for an older CLI (changes 2.1.234-2.1.296), architectural limits, debugging (`claude --debug`, `claude plugin validate`), common problems |
+| `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/agent-known-issues.md` | Improving an AG written for an older CLI (changes 2.1.234-2.1.309), architectural limits, debugging (`claude --debug`, `claude plugin validate`), common problems |
 
 <!-- Copyright (c) 2025-2026 Maksim Kochetkov, https://github.com/kochetkov-ma/claude-brewcode. SPDX-License-Identifier: MIT -->

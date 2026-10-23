@@ -17,7 +17,8 @@ last_updated: "2026-10-22"
 # Skill Creator Agent
 
 Create/improve skills and apply confirmed review fixes against the SKILL.md contracts of CC
-2.1.296. The contracts live in the references under Read on demand; this body is the procedure.
+2.1.309 (docs; live probes 2.1.296-2.1.306). The contracts live in the references under Read on
+demand; this body is the procedure.
 
 ## Return contract
 
@@ -103,14 +104,14 @@ File names below are the references under Read on demand.
    catalog in `frontmatter-fields.md`; invocation type, description style and budget, criticality
    tiers in `activation-and-troubleshooting.md`. Declare `hooks:` only for behavior that must hold
    every time (a hook outlives the skill: it stays registered for the REST OF THE SESSION; one-shot
-   -> `once: true` on the hook entry, never top-level). In a hook command CSD is unavailable; BPR is substituted in exec form (`args`) and exported as env for shell form (double-quote it, never single-quote); or use `${CLAUDE_PROJECT_DIR}`. Plugin-wide behavior -> plugin `hooks.json`. Details + probe:
+   -> `once: true` on the hook entry, never top-level). In a hook command CSD is unavailable; BPR is substituted in exec form (`args`) and exported as env for shell form (double-quote it, never single-quote); or the braced `CLAUDE_PROJECT_DIR` token. Plugin-wide behavior -> plugin `hooks.json`. Details, caps, plugin-only policy + probe:
    `frontmatter-fields.md` Hooks.
 5. **Write SKILL.md.** FM -> `## Prompt contract` -> overview (1-2 sentences) -> instructions in
    imperative form -> resource refs. Keep the body under 500 lines; move excess to `references/`.
    Bash fences follow the safe spellings named under Scope and never.
 6. **Validate.** `bash "${CLAUDE_PLUGIN_ROOT}/skills/skills/scripts/validate-skill.sh" path/to/skill && echo OK || echo FAIL`,
    then the Validation checklist in `activation-and-troubleshooting.md`. Its Validation tools
-   (`claude plugin eval`, `/doctor prompt-audit [path]`, `/skill-doctor`) are optional and never
+   (`claude plugin eval`, `claude plugin validate <dir>`, `/doctor prompt-audit [path]`, `/skill-doctor`) are optional and never
    replace the validator -- name in the report any you ran or could not run.
 7. **Quick eval.** Write 3-5 realistic user prompts (real file paths, casual phrasing). It is a
    paired baseline: run each in a fresh session with the skill available and again disabled, then

@@ -13,6 +13,7 @@ The single description policy: the `description` row in FM Reference (`agent-fro
 | Language | EN only in FM |
 
 > Exceed only if user explicitly asks. Frequent-use AGs: up to ~200 tokens + 1-2 EXs.
+> Session-wide: combined descriptions of all non-built-in AGs over 15,000 tokens -> startup warning with the total (every AG still loads); move detail into the SP.
 > **Example-block exception:** an AG whose domain overlaps another AG's may carry `<example>` blocks in `description` as a YAML block scalar (`description: |`), up to the ceilings above -- see Description Patterns. Multi-line is legal there and only there; every other AG stays single-line.
 
 ## Description Patterns

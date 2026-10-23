@@ -12,7 +12,8 @@ skill-name/
 └── agents/          # OPT: SA prompts (convention, NOT auto-discovered)
 ```
 
-> A root-level `SKILL.md` with no `skills/` subdir also surfaces as a valid PLG SK (v2.1.142+).
+> A root-level `SKILL.md` with no `skills/` subdir also surfaces as a valid PLG SK (v2.1.142+); set its
+> `name`, else a marketplace install names it after its cache dir (`frontmatter-fields.md` Discovery).
 
 ## Pattern catalog
 
@@ -36,7 +37,7 @@ Pattern from the official Anthropic skill-creator plugin.
 | Native agents `.claude/agents/` | "Agents" in SK `agents/` |
 |---|---|
 | Auto-discovered, visible in `/agents` | Reached via Read by path only |
-| Definition controls model/tools/memory; a PLG AG's own FM `hooks`/`mcpServers`/`permissionMode` are ignored (docs verified 2.1.306; plugin `hooks/hooks.json` hooks still apply) | Prompt file alone sets no runtime config; caller selects the spawned AG's definition |
+| Definition controls model/tools/memory; a PLG AG's own FM `hooks`/`mcpServers`/`permissionMode`/`initialPrompt` are ignored (docs verified 2.1.309; plugin `hooks/hooks.json` hooks still apply) | Prompt file alone sets no runtime config; caller selects the spawned AG's definition |
 | YAML frontmatter + Markdown | Plain Markdown (prompt) |
 | Public API | SK implementation detail |
 

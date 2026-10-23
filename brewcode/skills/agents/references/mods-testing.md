@@ -1,6 +1,6 @@
 # Mods Testing Reference
 
-> verified_on: 2.1.306
+> verified_on: 2.1.309
 
 The `claude-code/testing` kit, test patterns, CI wiring, live headless runs, tmux TTY checks. Legend: `mods-api.md`.
 
@@ -22,6 +22,7 @@ The `claude-code/testing` kit, test patterns, CI wiring, live headless runs, tmu
 | `mock.clock(on, {now})` | `.now() .advance(ms) .set(ms) .settle() .sleep(ms)`; timers wait for test to advance | T:16387, 16430-16479 |
 | `mock.store(on, entries)`, `mock.env(on, vars)`, `mock.session(on)` | `$.store`, `$.env.get` from memory (unlisted variable unset); `.appended()` = rows stored by `$.session.append` | T:16395-16414, 16487-16507 |
 | time per test | ~10 ms; a failure prints skipped hooks and why under `the engine reported:` | X |
+| parametrized | no `test.each` (file fails to load: `test.each is not a function`): loop a `const CASES = [...] as const` table and call `test(...)` per row | SX |
 
 ## Stub Bottoms
 
@@ -50,7 +51,8 @@ Plan-vs-live (loud): plan said stubs cannot reject. On 2.1.300 a stub CAN (`{ de
 | `command.run` | typed call needs whole input: `{ command, args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } }` | T:1828-1854; X |
 | `prompt.attachment` | `$.prompt.attachment({ type: 'plan_mode_exit', text, origin: { kind: 'engine' } } as never)` (union needs `detail` for declared types) | T:8370; X |
 | `prompt.edit/change/autocomplete` | not typed on test `$`; run at run time: `await ($.prompt as any).edit({ origin: { kind: 'composer' }, text, cursor, start, end, inputText })` | T:4888-4897; X |
-| `tool.call` | `await $.tool.call({ tool: 'Bash', command })`; a `{ deny }` ends call with errored result | T:15861-15868 |
+| `tool.call` | `await $.tool.call({ tool: 'Bash', command })`; a `{ deny }` ends call with errored result; 2.1.309 `agentId: 'a1'` = a subagent's loop (`EngineToolCall`) | T:15861-15868, 16121-16136 (D309) |
+| `tool.check` (2.1.309) | query `$.tool.check({ tool, input })`: no `approver`, the mod's ask reads `{ decision: 'ask', reason, plugin: '<mod>' }` (a test's own ask: `plugin: ''`); on a real `$.tool.call` a hooked check runs as for a background subagent: a plugin ask -> errored `Permission to use Bash has been denied ...` (`isError: true`) unless a bottom `on('classic.PermissionRequest', () => ({ decision: { behavior: 'allow' } }))` answers it (call runs); `isReadOnly` only on `$.tool.check` | T:16121-16136, 7696; R:81; SX |
 
 ## `ui.mount`
 
@@ -64,7 +66,8 @@ Plan-vs-live (loud): plan said stubs cannot reject. On 2.1.300 a stub CAN (`{ de
 | hover and paint untestable (kit never paints): assert `props.hover` on found element and prove reveal in TTY check | T:29-47 header; PLAN T2.7 |
 | `press` resolves after handler, chain and unawaited work settle: assert right after the `await` | R:81 |
 | `find` returns `{ text, ... }`: `expect((await ui.find({ key: 'toggle' }))?.text).toBe('More')` | X |
-| `drawn()` roots carry `part: { plugin }` on 2.1.300, none on 2.1.296: strip it (`const { part, ...rest } = node`, recursive over `children`) before comparing trees whenever CI pins an older build | T:13017; W |
+| `drawn()` roots carry `part: { plugin }` on 2.1.300, none on 2.1.296; a keyed `Markdown` leaf carries one from 2.1.309: strip it (`const { part, ...rest } = node`, recursive over `children`) before comparing trees whenever CI pins an older build | T:13017, 10080 (D309); W |
+| value an earlier version stored: `on('state.get', () => ({ value: { value: <old>, version: 1 } }))`, then mount: an atom with a new `shape` reads `initial` (skill example `pane.test.tsx`, 2.1.309) | D309 |
 | stub the box a render hook reads: `on('prompt.read', () => ({ value: { text, cursor } }))` | X |
 
 Per surface: `mount` -> `find({ key: 'toggle' })?.text` is `'More'` -> `press` -> `'Less'` -> `press` -> `unmount`.
@@ -84,7 +87,7 @@ Own-handler cost only (scan, decorate, merge, view diff). Parallel agents stall 
 | validate | loop `claude plugin validate --strict` over `.` and every `./brewmod-*`; unpiped rc | V; PLAN S.5 |
 | unit tests | loop `claude plugin test ./brewmod-*/`; no `tests/run.sh` for mods (`check-shards.sh:18` would demand shard); the parity goldens are a frozen spec run by `plugin test` itself (generators retired, no `--check` gates) | PLAN S.5; research 04 §D3 |
 | plain-Node tests | bundled command hooks are `.mjs`, `plugin test` skips them: `node brewmod-placeholders/tests/check-defaults.mjs`, `node brewmod-placeholders/tests/inject-parity.mjs` (golden vectors, layer fixtures, state file, fail open, differential vs the TS lib) and `node --test brewmod-plan-effort/tests/mode.test.mjs` run in the same CI step; each failure prints `::error::` | C41; C43; `validate.yml` |
-| CC pin | `CLAUDE_CODE_VERSION: 2.1.301` in `.github/workflows/validate.yml` (read 2026-10-21; was 2.1.296, npm stable 2.1.292): has `plugin test` and `modules` (D13, S.4); reference verified on 2.1.306, so CI runs a build older than the types; a hook name newer than the pin turns validate and test red (W); tests that compare engine-stamped fields (`part`) normalise them (L13) | D13; S.4; W |
+| CC pin | `CLAUDE_CODE_VERSION: 2.1.301` in `.github/workflows/validate.yml` (read 2026-10-21; was 2.1.296, npm stable 2.1.292): has `plugin test` and `modules` (D13, S.4); reference verified on 2.1.309, so CI runs a build older than the types; a hook name newer than the pin turns validate and test red (W); tests that compare engine-stamped fields (`part`) normalise them (L13) | D13; S.4; W |
 | failed load | a mod that fails to load exits 0 in `claude -p` (grep stderr/debug for `hooks module did not load`) but non-zero in `validate --strict` and `plugin test` | X; probed on 2.1.296 |
 | type check, drift | `npx -y -p typescript@7.0.2 tsc -p <tsconfig outside the mod>` (`mods-lifecycle.md`); `node brewcode/skills/agents/scripts/mods-ref-check.mjs <types> brewcode/skills/agents/references` rc 0: not in CI, run by hand per build | X; D16 |
 

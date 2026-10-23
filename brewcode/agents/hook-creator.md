@@ -18,7 +18,7 @@ last_updated: "2026-10-22"
 
 Create/debug CC bash/JS/mjs hooks: event-specific routing, schemas, failure policy.
 
-> Ref ver: 2.1.296 (changes through 2.1.306 in `hooks-changes.md`; `hooks:` in SKILL.md: `${CLAUDE_PLUGIN_ROOT}/skills/skills/references/frontmatter-fields.md`) | 33 hook events | 5 hook types (command, http, mcp_tool, prompt, agent).
+> Ref ver: 2.1.309 (changes through 2.1.309 in `hooks-changes.md`; `hooks:` in SKILL.md: `${CLAUDE_PLUGIN_ROOT}/skills/skills/references/frontmatter-fields.md`) | 33 hook events | 5 hook types (command, http, mcp_tool, prompt, agent).
 
 ## Return contract
 
@@ -47,7 +47,7 @@ On resume, read that file first and continue from the last hook listed.
 
 Never: mix logs or multiple verdicts into structured stdout (emit one JSON object; command
 `WorktreeCreate` emits only the absolute worktree path instead); use `updatedInput` on
-UserPromptSubmit (silently ignored); reference `${user_config.*}` inside a shell-form `command`
+UserPromptSubmit (silently ignored); reference a dollar-brace `user_config.<KEY>` inside a shell-form `command`
 (v2.1.207 BREAKING -- use `args`/exec form or `$CLAUDE_PLUGIN_OPTION_<KEY>`); skip the
 `stop_hook_active` check on Stop/SubagentStop (infinite block loop).
 
@@ -81,16 +81,37 @@ conventions/rules/docs, !=a replacement.
 3. **Implement.** Bash or JS/mjs from the templates in `hooks-templates.md`: one event-appropriate
    stdout result on every path. Use `args` (exec form, no shell) whenever the command references a
    path placeholder (the braced plugin-root token); never interpolate it into a shell-form string.
-4. **Configure.** `.claude/settings.json`, plugin `hooks/hooks.json`, or agent/skill frontmatter --
-   precedence, workspace-trust and reload rules in `hooks-types-config.md`; every env var the hook
-   process sees in `hooks-env.md`. `if` = one rule, one tool, tool events only (Conditional `if`
-   field, same file).
+4. **Configure.** Location per "Where and when" below; hooks merge across locations (no override
+   chain), trust, reload and policy switches in `hooks-types-config.md` (Declaration locations);
+   every env var the hook process sees in `hooks-env.md`.
+   `if` = one rule, one tool, tool events only (Conditional `if` field, same file).
 5. **Test.** Fire each path (pass, deny/block, malformed) with sample stdin; check the exit code
    and the single stdout result. In a session `claude --debug` logs a `Hooks:` line per command hook
    (2.1.296+; Test in `hooks-templates.md`), Ctrl+O shows verbose mode; isolate a suspected hook
-   with `claude --safe-mode` / `CLAUDE_CODE_SAFE_MODE=1`.
+   with `claude --safe-mode` / `CLAUDE_CODE_SAFE_MODE=1` (managed hooks still run).
 6. **Validate.** Run the Validation Checklist in `hooks-templates.md` before calling a hook done.
 7. **Report.** Emit the Return contract block above; update the checkpoint file per hook.
+
+## Where and when
+
+Goal -> location -> type. Scope, trust, reload and policy switches per location: `hooks-types-config.md`
+(Declaration locations). Hooks merge across locations; only `disableAllHooks` follows precedence.
+
+| Goal | Declare in | Type |
+|---|---|---|
+| your rule in every project | `~/.claude/settings.json` | `command` |
+| team rule committed with the repo | `.claude/settings.json` (after folder trust; `-p` runs it untrusted) | `command` |
+| personal rule for one repo | `.claude/settings.local.json` | `command` |
+| org policy users cannot switch off | managed settings (+ `allowManagedHooksOnly` to run nothing else) | `command` + `onFailure:"block"` |
+| behaviour shipped with a plugin, incl. its agents | plugin `hooks/hooks.json` (plugin-agent FM `hooks` is ignored) | `command`, exec form (`args`) |
+| guard tied to one skill's workflow | skill FM `hooks:` (rest of session; `once: true` = one-shot) | `command` |
+| guard only while one agent runs | agent FM `hooks:` (project agent: exact folder trust) | `command` |
+| decision from the hook input alone | any | `prompt` |
+| decision that must read files/tests | any | `agent` (experimental, no `onFailure`) |
+| shared remote service, audit | any (+ `allowedHttpHookUrls`) | `http` |
+| reuse an MCP tool | any; not SS at launch, not Setup | `mcp_tool` |
+| hard allow/deny | permission rules first; hook gate = PTU exit 2 + `onFailure:"block"` | `command` |
+| static context | CLAUDE.md, not an SS hook | -- |
 
 ## Read on demand
 
@@ -98,9 +119,9 @@ conventions/rules/docs, !=a replacement.
 |---|---|
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-events.md` | Choosing an event or matcher -- 33-event table, lifecycle order, subagent report + synthetic prompts, async behavior, matcher syntax |
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-io-contract.md` | Choosing an output schema or routing channel -- routing matrix, exit codes, failed-hook rules, every output schema, the 10,000-char cap |
-| `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-types-config.md` | Choosing a hook type or config location -- type/field catalog (`onFailure`, `if`), settings/hooks.json/frontmatter precedence, trust, reload |
+| `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-types-config.md` | Choosing a hook type or config location -- type/field catalog (`onFailure`, `if`), declaration-locations matrix (merge, trust, reload, policy switches) |
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-env.md` | Referencing an env var, or resolving the project root inside a hook |
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-templates.md` | Writing a new hook -- bash/JS skeletons, fail-safe design, common patterns, Test, Validation Checklist |
-| `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-changes.md` | Updating a hook written for an older CLI -- changes 2.1.270 -> 2.1.306, older floors still in force, probe limits |
+| `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-changes.md` | Updating a hook written for an older CLI -- changes 2.1.270 -> 2.1.309, older floors still in force, probe limits |
 
 <!-- Copyright (c) 2025-2026 Maksim Kochetkov, https://github.com/kochetkov-ma/claude-brewcode. SPDX-License-Identifier: MIT -->

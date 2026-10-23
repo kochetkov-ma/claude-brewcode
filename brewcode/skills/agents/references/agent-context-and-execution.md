@@ -4,19 +4,20 @@
 
 | Context | Inherited? | Notes |
 |---------|-----------|-------|
-| CD (project + user + local; loaded AGENTS.md) | Yes, unless omitted | Built-in `Explore`/`Plan` skip it. `omitClaudeMd: true` (2.1.271+) skips these instructions; managed policy still loads except for managed AG definitions |
+| CD (project + user + local; loaded AGENTS.md) | Yes, unless omitted | Built-in `Explore`/`Plan` skip it. `omitClaudeMd: true` (2.1.271+) skips these instructions; managed policy still loads except for managed AG definitions. For all three, a subdirectory's CD + matching path-scoped rules still load once the AG works with files there |
 | `.claude/rules/*.md` | Yes, unless omitted | Same `Explore`/`Plan` and `omitClaudeMd` exceptions |
 | Git status | Conditional | Snapshot when SA starts; absent outside Git or when disabled (`includeGitInstructions`). `Explore`/`Plan` skip it |
 | Permissions | Yes | Override via `permissionMode` -- ignored for PLG AGs |
 | TLs / MCP servers | Filtered | Inherited, then narrowed by the two filters -- see Available TLs in `agent-scope-and-tools.md`. `mcpServers` key ignored for PLG AGs |
 | SKs from `skills:` field | Yes | Full content at startup; model-invocable SKs only, see below |
-| AG memory (`memory:` field) | Yes | First 200 lines of MEMORY.md; auto-adds Read/Write/Edit |
+| AG memory (`memory:` field) | Yes | First 200 lines or 25KB of MEMORY.md, whichever comes first; auto-adds Read/Write/Edit; inert while auto memory is off |
 | Sibling roster | Conditional | Lists `main` + every named AG as valid `SendMessage` targets; appears only when `tools:` has `SendMessage` and another AG is named. Snapshot at start |
-| Full CC SP | No | Replaced with the AG's own body + environment details |
+| Full CC SP | No | Replaced with the AG's own body + environment details. Headless `--append-subagent-system-prompt` (2.1.205+; `-file` form 2.1.261+) appends text to every non-fork SA's SP, nested incl. |
 | Parent conversation history | No | Clean slate each invocation; a fork inherits it |
 | Parent's invoked SKs | No | Preload via `skills:`, or invoke at runtime with the `Skill` TL |
 | Output style | No | The SA runs its own SP; forks excepted |
 | Parent's auto memory (`memory/MEMORY.md`) | No | Only AG-specific memory |
+| Parent's context window size | No | Sized by the AG's own model: a smaller-window model gets the smaller window |
 
 > Don't duplicate inherited CD rules in AG body. With `omitClaudeMd`, put any indispensable task constraints in the delegation prompt.
 
@@ -45,7 +46,7 @@ When AG spawns from a SK that uses `references/`, AG does NOT have `skill_base_d
 | <50 lines | Inline into AG prompt | Pass ref content directly via the `Agent` prompt |
 | >50 lines | Use `${CLAUDE_PLUGIN_ROOT}` path | `Read ${CLAUDE_PLUGIN_ROOT}/skills/skill-name/references/mode.md` |
 
-`${CLAUDE_PLUGIN_ROOT}` (exact brace form) is substituted at load to this plugin's root -- PLUGIN AGENTS only; project-local `.claude/agents/*.md` get no substitution (repo-relative paths only). The bare `$CLAUDE_PLUGIN_ROOT` and any `:-fallback` form are NOT substituted; the variable is unset in the Bash TL env.
+`${CLAUDE_PLUGIN_ROOT}` (exact brace form) is substituted at load to this plugin's root -- PLUGIN AGENTS only; project-local `.claude/agents/*.md` get no substitution (repo-relative paths only). The bare `$CLAUDE_PLUGIN_ROOT` and any `:-fallback` form are NOT substituted; the variable is unset in the Bash TL env. A PLG AG body also gets `${CLAUDE_PLUGIN_DATA}`, `${CLAUDE_PROJECT_DIR}` and `${user_config.KEY}` substituted anywhere in the Markdown body -- non-sensitive `userConfig` values only, a sensitive one becomes a placeholder.
 
 > If SK detects mode BEFORE spawning AG, pass only the relevant ref.
 
@@ -54,20 +55,21 @@ When AG spawns from a SK that uses `references/`, AG does NOT have `skill_base_d
 | Mode | Behavior | Permissions | TL pool |
 |------|----------|-------------|---------|
 | Foreground | Blocks the main conversation | Prompts pass through as they come up | Filter 1 only |
-| Background | Runs concurrently; the result reaches Claude as a completion notification in a later turn | The prompt SURFACES in the main session naming the asking SA -- approve, or Esc denies that one TL call without stopping the SA | Filter 1 + filter 2 |
+| Background | Runs concurrently; the result reaches Claude as a completion notification in a later turn | The prompt SURFACES in the main session naming the asking SA -- approve, or Esc denies that one TL call without stopping the SA; an answer that lasts beyond the call (e.g. session grant) applies session-wide, main incl. | Filter 1 + filter 2 |
 
 > The result reaches the caller under a "subagent output" header (2.1.277+): instructions or approval claims inside carry no user authority. A report that imitates `<system-reminder>` or mentions `bypassPermissions`/`--dangerously-skip-permissions` also gets a `[harness: subagent output matched instruction-shaped pattern(s):` marker line -- expected, not an error.
 
-Mode is picked per `Agent` spawn by the first matching case:
+Mode is picked per `Agent` spawn by the first matching case. Fork mode is ON by DEF everywhere since 2.1.302 (interactive terminal since 2.1.232); `CLAUDE_CODE_FORK_SUBAGENT=0` turns it off.
 
 | # | Condition | Mode |
 |---|-----------|------|
-| 1 | An in-process AG-teams teammate spawned it | Foreground; definition `background: true` errors; with fork mode/background-disable both off, `run_in_background: true` also errors |
-| 2 | `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` | Foreground, every session kind, fork mode irrelevant |
-| 3 | Fork mode ON (the DEF in an interactive session) | Background -- forks and non-forks alike; Claude cannot ask for the foreground |
-| 4 | Fork mode OFF (`-p` headless, Agent SDK unless enabled) | Background by DEF, foreground when Claude needs the result before continuing. `background: true` pins it to BG anyway |
+| 1 | An in-process AG-teams teammate spawned it | Foreground; definition `background: true` errors; `run_in_background: true` errors or silently runs in the foreground |
+| 2 | `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` | Foreground, every session kind, fork mode irrelevant (Ctrl+B off too) |
+| 3 | Main's spawn, interactive terminal / VS Code / desktop, fork mode ON | Background -- forks and non-forks alike; Claude cannot wait (desktop + VS Code: always BG since 2.1.302) |
+| 4 | Main's spawn in `-p`/Agent SDK (fork mode either way), or interactive with fork mode OFF | Background by DEF; Claude may wait (foreground) on its own judgment or when asked. `background: true` pins it to BG anyway |
+| 5 | A SA's own (nested) `Agent` call | `-p`/SDK with fork mode ON, desktop, VS Code: foreground by DEF (2.1.302), the spawner waits. Interactive terminal: BG, the spawning SA waits for its children. `-p`/SDK with fork mode OFF: BG, the spawner does not wait, a child that outlives it reports to main |
 
-> `background: true` matters only in case 4. There is no `false` force-foreground switch -- use case 1 or case 2. Skill `context: fork` has its own `background: false` semantics, not this four-case table. A resumed SA runs in BG but keeps its original tool pool.
+> `background: true` matters in case 4; its effect on case 5 is undocumented. There is no `false` force-foreground switch -- use case 1 or case 2. Skill `context: fork` has its own `background: false` semantics, not this table. A resumed SA runs in BG but keeps its original tool pool. Pool per mode: foreground = filter 1 only, BG = filters 1 + 2.
 
 ## SA Resource Limits
 
@@ -80,7 +82,7 @@ Mode is picked per `Agent` spawn by the first matching case:
 | `CLAUDE_CODE_MAX_TURNS` | turn cap when no explicit limit is passed (= `--max-turns`, which wins); positive int | unset |
 | `API_TIMEOUT_MS` | single API call | 10 min |
 | `CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS` | BG-AG stall; resets on streaming | 10 min |
-| `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` | concurrent SAs; on hit `Concurrent subagent limit reached`, do not retry. `/subtask` forks take a slot but are never blocked; a resume takes a fresh slot without checking; ultracode sessions exempt | 20 |
+| `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` | concurrent SAs; on hit `Concurrent subagent limit reached`, do not retry. `/subtask` forks take a slot but are never blocked; a resume takes a fresh slot without checking; ultracode sessions exempt; workflow AGs and teammates follow their own limits | 20 |
 | `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` | SA nesting depth below main; `1` turns nesting off. At the limit `Agent` is withheld (a fork keeps it, but it errors) | 3 |
 | `CLAUDE_CODE_MAX_OUTPUT_TOKENS` | output tokens per response | MDL max |
 | `MAX_THINKING_TOKENS` | thinking budget | -- |
@@ -101,8 +103,10 @@ Mode is picked per `Agent` spawn by the first matching case:
 | Recovery | `.claude/projects/{project}/{sessionId}/subagents/agent-{agentId}.jsonl` | SA transcript (retention: `cleanupPeriodDays`) |
 | Recovery | background SA + `Read` | Its output file, live |
 | Recovery | `TaskStop` | Kill a running SA |
-| Recovery | `SendMessage` | Resume a stopped SA with ctx intact |
+| Recovery | `SendMessage` (`to`: AG ID or name) | Resume a finished or `TaskStop`-stopped SA with ctx intact, in BG, same tool set + warmed cache (2.1.304 fixed forgetting the latest work). A name now held by a newer AG -> send refused with a retarget hint; names survive a restart (2.1.299+), names from before the last compaction need the ID |
 
-Auto-mode local non-fork SAs may deliver through `SubagentHandback` (2.1.271+), which is added even if omitted/denied in `tools`. Their `PostToolUse:Agent` result `content` can contain only a hand-back note; capture the report from `PreToolUse`/`PostToolUse:SubagentHandback` `tool_input.message`, !=the note. A `SubagentStop` block after the hand-back is ignored. Explore/Plan are one-shot and return no resumable AG ID. User-cancelled AGs do not auto-resume; permission approval never comes from an AG message.
+Auto-mode local non-fork SAs may deliver through `SubagentHandback` (2.1.271+), which is added even if omitted/denied in `tools`. Their `PostToolUse:Agent` result `content` can contain only a hand-back note; capture the report from `PreToolUse`/`PostToolUse:SubagentHandback` `tool_input.message`, !=the note. A `SubagentStop` block after the hand-back is ignored. Explore/Plan are one-shot and return no resumable AG ID. User-cancelled AGs (`x` in `/tasks`, SDK `stop_task`) do not auto-resume: a message to one is refused; permission approval never comes from an AG message.
 
-> Sources: [SA docs](https://code.claude.com/docs/en/sub-agents), [tools](https://code.claude.com/docs/en/tools-reference), [hooks](https://code.claude.com/docs/en/hooks); verified through CC 2.1.296.
+**API errors:** a cut-off with text but no TL calls auto-continues first. Foreground: partial text + a cut-off note, or `Agent terminated early due to an API error` when it produced nothing or only TL calls. BG: marked failed, the end message names the error and keeps the last output. A report opening `⚠ This agent switched to <model> because its earlier model could not be used.` finished on a fallback model. Retry or resume once the error clears.
+
+> Sources: [SA docs](https://code.claude.com/docs/en/sub-agents), [tools](https://code.claude.com/docs/en/tools-reference), [hooks](https://code.claude.com/docs/en/hooks); verified through CC 2.1.309.

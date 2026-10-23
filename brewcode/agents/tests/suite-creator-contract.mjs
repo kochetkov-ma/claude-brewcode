@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Pins the Claude Code 2.1.296 facts the three creator agents teach. A fact that lives in a reference
+// Pins the Claude Code 2.1.309 facts the three creator agents teach. A fact that lives in a reference
 // is TWO asserts: the reference states it, the body cites that reference. Run: node <this file>.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -61,15 +61,15 @@ const STOPFAILURE_TYPES = [
   'overloaded', 'rate_limit', 'server_error', 'unknown',
 ];
 
-/** 12 values -- 2.1.234 added the 3 `quota_auto_resume_*` values (was 9). */
+/** 13 values -- 2.1.234 added the 3 `quota_auto_resume_*` values (was 9); docs list `plugin_notification` too. */
 const NOTIFICATION_TYPES = [
   'agent_completed', 'agent_needs_input', 'auth_success', 'elicitation_complete',
   'elicitation_dialog', 'elicitation_response', 'elicitation_url_dialog', 'idle_prompt',
-  'permission_prompt', 'quota_auto_resume_disabled', 'quota_auto_resume_fired',
-  'quota_auto_resume_stale',
+  'permission_prompt', 'plugin_notification', 'quota_auto_resume_disabled',
+  'quota_auto_resume_fired', 'quota_auto_resume_stale',
 ];
 
-const REF_VER = '2.1.296';
+const REF_VER = '2.1.309';
 
 /** Claims that were true once and are now wrong; a hit, in any casing, is a regression. */
 const BANNED = [
@@ -309,7 +309,7 @@ function runHookTemplate(source, stdin) {
     'hooks-events.md StopFailure must carry all 12 error types (N2, 2.1.267)');
   check('matcher.Notification.types',
     tokens(row(/^\| Notification \|/)), NOTIFICATION_TYPES,
-    'hooks-events.md Notification must carry all 12 notification types (N3, 2.1.234)');
+    'hooks-events.md Notification must carry all 13 notification types (N3, 2.1.234)');
 
   // N2/N1 second location: the events-table row for StopFailure/SessionStart, same file.
   const eventsSec = section('hooks-events.md', '## All 33 Hook Events', '### Common input');
@@ -623,7 +623,7 @@ function runHookTemplate(source, stdin) {
   }
 }
 
-// ------------------------------- 14. mod-creator (own block: FILES refver pins are hook-creator's CC 2.1.296 baseline)
+// ------------------------------- 14. mod-creator (own block: FILES refver pins are hook-creator's CC 2.1.309 baseline)
 
 {
   // GIVEN the mod-creator body WHEN read apart from FILES THEN its contract pieces are all present.

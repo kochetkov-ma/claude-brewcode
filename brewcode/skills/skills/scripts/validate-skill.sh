@@ -84,8 +84,8 @@ else
     FRONTMATTER=""
 fi
 
-# 4. name: present, bare kebab-case, max 64 chars, equal to the directory name. House rule: one
-# spelling, no `plugin:` prefix (Claude Code adds it; 2.1.216-2.1.245 rendered a baked one doubled).
+# 4. name: bare kebab-case (spec: no leading/trailing/double hyphen), <=64 chars, == dir name. House
+# rule: one spelling, no `plugin:` prefix (Claude Code adds it; 2.1.216-2.1.245 doubled a baked one).
 NAME=$(echo "$FRONTMATTER" | grep -E '^name:' | head -1 | sed 's/^name:[[:space:]]*//' | tr -d '"' | tr -d "'" || true)
 DIR_NAME=$(basename "$(cd "$SKILL_DIR" 2>/dev/null && pwd || echo "$SKILL_DIR")")
 if [ -z "$NAME" ]; then
@@ -94,8 +94,8 @@ elif [ ${#NAME} -gt 64 ]; then
     check fail "name too long (${#NAME} chars, max 64)"
 elif echo "$NAME" | grep -qE '^[a-z0-9][a-z0-9-]*:'; then
     check fail "name '$NAME' carries a plugin prefix — Claude Code adds it, use bare '${NAME#*:}'"
-elif ! echo "$NAME" | grep -qE '^[a-z0-9][a-z0-9-]*$'; then
-    check fail "name '$NAME' is not valid kebab-case"
+elif ! printf '%s\n' "$NAME" | LC_ALL=C grep -qE '^[a-z0-9]+(-[a-z0-9]+)*$'; then
+    check fail "name '$NAME' is not valid kebab-case (a-z/0-9 words joined by single hyphens)"
 elif [ "$NAME" != "$DIR_NAME" ]; then
     check fail "name '$NAME' does not match directory '$DIR_NAME'"
 else

@@ -64,11 +64,14 @@ With `context: fork`, `agent` selects the SA type.
 
 | Agent | Model | Tools | Use for |
 |---|---|---|---|
-| `Explore` | Inherit (2.1.198+); Claude API capped at Opus | Read-only | Analysis/file discovery; user/project definition or forced SA model can override |
+| `Explore` | Main's model; with a Fable main: the `opus` alias on subscription/Console/`ANTHROPIC_BASE_URL` gateway, main's model on Bedrock/Agent Platform/Foundry/Claude Platform on AWS/apps gateway | Read-only | Analysis/file discovery; user/project definition or forced SA model can override |
 | `Plan` | Inherit | Read-only | Planning, structured research |
 | `general-purpose` | Inherit | All | Multi-step tasks (default), code changes |
 
-> Usual choices, !=the entire roster: upstream also supplies `claude` and specialized helpers.
+> Usual choices, !=the entire roster: upstream also supplies `claude` (catch-all, default agent of
+> background sessions) and specialized helpers. `CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS=1` (2.1.198+)
+> removes built-in Explore/Plan (same-name custom agents stay); `CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS=1`
+> (`-p`/SDK) removes every built-in incl. `general-purpose` (a call without `subagent_type` then fails).
 > `developer`/`tester`/`reviewer` need custom discoverable definitions (`.claude/agents/` /
 > `~/.claude/agents/`, named as `agent: my-custom-agent`).
 
@@ -118,10 +121,13 @@ FORK body. Multi-line -> a fenced block opened with ` ```! `.
 
 | Rule | Detail |
 |---|---|
-| Failure ABORTS the whole invocation | Not just the placeholder — Claude never sees the SK content |
-| Non-zero = failure | Carveout: exit 1 from search/comparison commands is normal, output still injected; exit >=2 fails even for those |
+| Failure ABORTS the whole invocation | Not just the placeholder — Claude never sees the SK content; shows `Shell command failed for pattern "..."` with the output |
+| Non-zero = failure | Carveout: exit 1 from search/comparison commands is normal, output still injected; exit >=2 fails even for those (`shell: powershell`: its own carveout set) |
 | Remedy | Append `\|\| true` to a command expected to exit non-zero |
-| Permission | Outside auto mode, a non-allow result aborts. In auto mode, a command needing approval can defer to Claude's actual shell call; still aborts for `context: fork` with explicit `agent`, or no shell tool. Deny/ask rules override `allowed-tools` |
+| Permission | Never prompts. A deny rule aborts (`Shell command permission check failed for pattern "..."`). Outside auto mode, any non-allow result aborts. In auto mode, a command needing approval can defer to Claude's actual shell call; still aborts for `context: fork` with explicit `agent`, or no shell tool. Deny/ask rules override `allowed-tools`. A `UserPromptSubmit` hook blocking a typed `/name` stops them (2.1.299+) |
+| Output | bash merges stderr into the injected text; output past the Bash inline ceiling arrives as a file path + short preview |
+| Blocked | Raw control char (not tab/newline) in any `!` line -> `No shell command in <name> was run`, none runs. Setting `disableSkillShellExecution: true` -> each command becomes `[shell command execution disabled by policy]` (user/project/plugin/add-dir SKs) |
+| Shell | `shell` key picks the Bash or PowerShell tool (`frontmatter-fields.md` `shell` row) |
 | CWD | The session shell's, moves with `cd`. Use CSD/`${CLAUDE_PROJECT_DIR}` for anything that must resolve identically |
 | Timeout | Default 2 min; auto-backgrounded commands still render task/output-path info. Commands that cannot auto-background are killed, aborting invocation |
 | Inline form | `` ! `` recognized only at line start or after whitespace — `` KEY=!`cmd` `` stays literal |
@@ -129,21 +135,27 @@ FORK body. Multi-line -> a fenced block opened with ` ```! `.
 
 ## String substitutions
 
-Complete set; nothing else is substituted. Each is TEXT spliced into the whole SKILL.md at load
-(prose, inline code, every fence), never a variable the Bash tool can read: all are unset there.
+Complete set (table); nothing else is substituted. Each is TEXT spliced into the whole SKILL.md at load
+(prose, inline code, every fence), never a variable the Bash tool can read: all are unset there, in main and SAs.
 Hooks and agents have no CSD; hook-command path rules (exec form substitutes, shell form reads env): `frontmatter-fields.md` Hooks Paths row. In agent bodies use `${CLAUDE_PLUGIN_ROOT}`.
 
 | Variable | Description | Since |
 |---|---|---|
-| `$ARGUMENTS` | All args as typed. Absent from the body -> appended as `ARGUMENTS: <value>` | -- |
-| `$ARGUMENTS[N]`, `$0`/`$1`/`$2` | Arg by 0-based index; shell-style quoting (`"it is"` = one arg) | -- |
-| `$name` | Named arg declared via `arguments` frontmatter key | -- |
+| `$ARGUMENTS` | All args as typed. No placeholder RECEIVES an arg -> appended as `ARGUMENTS: <value>` (an unfilled `$2` doesn't count, a declared `$name` does) | -- |
+| `$ARGUMENTS[N]`, `$0`/`$1`/`$2` | Arg by 0-based index; shell-style quoting (`"it is"` = one arg); unfilled -> stays literal | -- |
+| `$name` | Named arg declared via `arguments` frontmatter key; unfilled -> empty; first 64 names x 64 chars only | 2.1.301 cap |
 | `${CLAUDE_SESSION_ID}` | Current session ID | -- |
 | `${CLAUDE_EFFORT}` | Active effort: `low\|medium\|high\|xhigh\|max` | -- |
 | CSD (`${CLAUDE_SKILL_DIR}`) | Dir containing SKILL.md; plugin SK -> the SK subdir, not the plugin root | v2.1.69 |
 | `${CLAUDE_PROJECT_DIR}` | Project root — same path hooks/MCP get | v2.1.196 |
 | BPR (`${CLAUDE_PLUGIN_ROOT}`) | Plugin install dir, plugin skills only | -- |
 | `${CLAUDE_PLUGIN_DATA}` | Plugin persistent data dir, survives updates, plugin skills only | -- |
+| `${user_config.KEY}` | A plugin `userConfig` value, in plugin SK + agent bodies; non-sensitive only (a sensitive one becomes a placeholder) | -- |
+
+Arg text is inserted literally (a `$1`/`$ARGUMENTS` typed inside it stays), but a `${CLAUDE_*}` token
+inside it IS expanded afterwards: treat args as untrusted text. Synced (claude.ai) SK in a local
+non-Cowork session (2.1.228+): no `!` run, no `@` attach, `${CLAUDE_PROJECT_DIR}`/`${CLAUDE_SESSION_ID}`
+stay literal; a local SK's `@path` refs do attach. `ultrathink` anywhere in the content requests deeper reasoning.
 
 Spelling decides what reaches the shell (observed on CC 2.1.296):
 
@@ -166,17 +178,22 @@ bash "${CLAUDE_SKILL_DIR}/scripts/run.sh" "$ARGS"
 
 `Skill(skill="skill-name", args="...")` / `Skill(skill="plugin:skill", args="...")` — Claude Code
 runtime tool for skills using the agentskills.io format; !=a Codex/ChatGPT tool API. Needs no
-`allowed-tools` entry to be callable; survives both SA tool filters.
+`allowed-tools` entry to be callable; survives both SA tool filters. Also reaches `/init`,
+`/security-review` (not `/compact`). Rules: `Skill` = all, `Skill(name)` exact, `Skill(name *)` prefix;
+allow matches only the SK's own and invoked name. Deny reach: an alias also covers its bundled target,
+an unqualified name the nested `apps/web:deploy` (2.1.260+), `Skill(skill:<name>)` every name of that SK.
 
 `Agent` delegates to SAs (`Task` is its pre-v2.1.63 name, still an alias in settings and agent
 definitions). Params: `description` (3-5 words), `prompt`, `subagent_type` (BC always explicit,
 not `agent`), `model`, `effort` (2.1.292+, non-fork SAs; overrides the agent's own `effort`),
-`run_in_background` (absent where fork mode is on: spawns run in the background anyway),
-`isolation`. Continue a resumable SA with `SendMessage(to: <agent ID/name>, message: ...)`.
+`run_in_background` (its schema under fork mode: unverified), `isolation`. Fork mode is ON by default since 2.1.302 everywhere (`-p`, SDK,
+desktop, VS Code; terminal since 2.1.232; `CLAUDE_CODE_FORK_SUBAGENT=0` = off): in terminal, desktop and
+VS Code main's spawns run in the background, Claude can't wait; in `-p`/SDK it can; a SA's own `Agent`
+calls in `-p`, SDK, desktop, VS Code run foreground by default. A `context: fork` SK follows Context modes. Continue a resumable SA with `SendMessage(to: <agent ID/name>, message: ...)`.
 
 Listing `Agent` in a SA's `tools:` lets it spawn; only a type list inside the parentheses is
 ignored. A read-only SA omits `Agent` from `tools:` or denies it with `disallowedTools`, so a
 delegate cannot bypass its tool restrictions. This alone does not make Bash/MCP read-only; do NOT
 assume nesting is off by default.
 
-> Sources: [skills](https://code.claude.com/docs/en/skills), [subagents](https://code.claude.com/docs/en/sub-agents), [tools](https://code.claude.com/docs/en/tools-reference); checked through CC 2.1.296.
+> Sources: [skills](https://code.claude.com/docs/en/skills), [subagents](https://code.claude.com/docs/en/sub-agents), [tools](https://code.claude.com/docs/en/tools-reference); docs checked through CC 2.1.309 (spelling rows observed on 2.1.296).

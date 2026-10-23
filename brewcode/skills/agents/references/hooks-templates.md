@@ -2,13 +2,13 @@
 
 Bash and JS/mjs hook skeletons, fail-safe design rules, common patterns, and the pre-ship validation checklist.
 
-Verified against Claude Code 2.1.296: [official hook I/O](https://code.claude.com/docs/en/hooks#hook-input-and-output), [debugging guide](https://code.claude.com/docs/en/hooks-guide). Start from existing `hooks/lib/utils.mjs` for product hooks before adding utilities.
+Verified against Claude Code 2.1.309: [official hook I/O](https://code.claude.com/docs/en/hooks#hook-input-and-output), [debugging guide](https://code.claude.com/docs/en/hooks-guide). Start from existing `hooks/lib/utils.mjs` for product hooks before adding utilities.
 
 ## Templates
 
 ### Bash Hook Template
 
-Exactly ONE JSON object reaches stdout on structured-output paths. WorktreeCreate command hooks instead print only the absolute created path. Decide into `$DECISION`, emit once at the end --
+Exactly ONE JSON object reaches stdout on structured-output paths. WorktreeCreate command hooks instead print the created path: CC reads the LAST non-empty stdout line (ANSI stripped, a relative path resolved against the hook's dir); house rule: print only the absolute path. Decide into `$DECISION`, emit once at the end --
 never `echo '{}'` before a decision, or the hook prints two objects and the decision is discarded.
 
 ```bash
@@ -109,9 +109,10 @@ Other verdicts are a different `decide()` return, never a second `output()`:
 | `stop_hook_active` check in Stop/SubagentStop | prevents infinite block loop |
 | keep injected context under 10,000 chars per field | `AC`, `systemMessage`, `initialUserMessage`, and plain stdout spill to a file with preview; `decision.reason` is not listed in this cap |
 | choose fail-open vs fail-closed from the invariant | fail-open (`output({})` on error) is right for advisory/context hooks -- a broken hook then has no effect, !=trap user in broken state. A hook enforcing a HARD invariant must instead emit the deny/block with the exception text as its `reason`, because `{}` on an enforcement hook is silent approval |
-| hard gate on `command`/`http`: also set `onFailure:"block"` | a hook that cannot start never emits its deny. `probe` (observed live on CLI 2.1.296, undocumented): a registered but missing script then blocks EVERY matching call, subagents included, also the Bash that would repair it -- install the script before the registration, uninstall the registration before the script. The `catch` must still print a valid deny (not-covered case: `hooks-io-contract.md`, Failed hook) |
+| hard gate on `command`/`http`: also set `onFailure:"block"` | a hook that cannot start never emits its deny. A registered but missing script then blocks EVERY matching call (docs); `probe` (CLI 2.1.296): subagents included, also the Bash that would repair it -- install the script before the registration, uninstall the registration before the script. The `catch` must still print a valid deny (not-covered case: `hooks-io-contract.md`, Failed hook) |
+| background child: print the decision first, then start it with stdout/stderr redirected (`>/dev/null 2>&1 &`) | a deny the child prints after the hook exits does not block; an allow followed by an unredirected child BLOCKS the call (`refusing to honor the suspect capture`) |
 
-> Infinite loop protection (Stop/SubagentStop): check `stop_hook_active` and short-circuit to `{}` -- see both templates above. CC also force-ends the turn after 8 consecutive Stop-hook blocks (raise via `$CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`); a broken loop-brake wastes turns, it doesn't hang the session.
+> Infinite loop protection (Stop/SubagentStop): check `stop_hook_active` and short-circuit to `{}` -- see both templates above. CC also force-ends the turn after 8 consecutive Stop-hook blocks (`$CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` raises it, `0` disables the cap); a broken loop-brake wastes turns, it doesn't hang the session.
 > `exit 1` is a non-blocking error nearly everywhere: the action proceeds. Enforce with `exit 2` or JSON, never `exit 1`. A mistyped script path exits 127 and, without `onFailure:"block"`, leaves the gate silently disabled -- watch for the `<hook name> hook error` notice on a policy hook's first run.
 
 ## Common Hook Patterns
@@ -125,7 +126,13 @@ Gate, Stop-block and SS-context patterns are the two templates above with the pa
 
 ## Test
 
-`claude --debug` (log `~/.claude/debug/<session-id>.txt`) or `--debug-file <path>`: on v2.1.296+ every command hook leaves a `Hooks:` line with its command, plugin, outcome and duration -- the proof it fired. Isolate a suspected hook with `claude --safe-mode`/`CLAUDE_CODE_SAFE_MODE=1` (ALL customizations off: `hooks-env.md`). A hook that never fires: reload rules in `hooks-types-config.md`.
+`claude --debug` (log `~/.claude/debug/<session-id>.txt`, nothing printed to the terminal), `--debug-file <path>`, or `/debug` mid-session: on v2.1.296+ every command hook leaves a `Hooks:` line with its command, plugin, outcome and duration -- the proof it fired. Isolate a suspected hook with `claude --safe-mode`/`CLAUDE_CODE_SAFE_MODE=1` (customizations off, managed hooks still run: `hooks-env.md`).
+
+| Symptom | Check |
+|---------|-------|
+| never fires | `/hooks` (read-only, labels each hook's source; `All events`): listed under the right event? Matcher case-sensitive. Skill hooks are listed only after the skill is invoked; debug `registers none of its hooks` = per-source cap. Locations, trust, reload: `hooks-types-config.md` |
+| matcher unclear | `CLAUDE_CODE_DEBUG_LOG_LEVEL=verbose` adds matcher counts |
+| JSON ignored | debug `Hook output does not start with {` = read as plain text (shell-profile echo before the JSON); `Hook JSON output had unrecognized keys` = field at the wrong level |
 
 ## Validation Checklist
 
@@ -144,7 +151,7 @@ Gate, Stop-block and SS-context patterns are the two templates above with the pa
 | 12 | syntax check (`bash -n` or `node --check`) |
 | 13 | `if` field (v2.1.85+) to reduce overhead when applicable -- tool events only, one rule per tool |
 | 14 | hook type (`command` deterministic, `http` API/remote, `mcp_tool` MCP tool, `prompt`/`agent` allow-block gate) |
-| 15 | exactly ONE JSON object on structured paths; exit-2 gates may print stderr only; WorktreeCreate command prints absolute path only. Test each path |
+| 15 | exactly ONE JSON object on structured paths; exit-2 gates may print stderr only; WorktreeCreate command: path on the last non-empty stdout line, house rule absolute path only. Test each path |
 | 16 | hard gate on `command`/`http`: `onFailure:"block"` set, script installed before its registration |
 | 17 | injected context fields under 10,000 chars; verify routing and disk-spill behavior separately from gate reason |
 | 18 | `args` (exec form) whenever the command references a path placeholder |

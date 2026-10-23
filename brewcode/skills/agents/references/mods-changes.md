@@ -1,8 +1,24 @@
 # Mods Changes Reference
 
-> verified_on: 2.1.306
+> verified_on: 2.1.309
 
-Per-Claude-Code-version log of mod API changes an author acts on, plus self-update procedure (D16). 2.1.300 -> 2.1.306 from the 2.1.306 types, `reference.md` and the official docs (D306). Seeded 2.1.296 -> 2.1.300 from plan "Re-verification on CC 2.1.300", research 01, and a diff of two types files (`X`); Team-org findings from spike F1 (2.1.300, 2026-10-15). Legend: `mods-api.md`.
+Per-Claude-Code-version log of mod API changes an author acts on, plus self-update procedure (D16). 2.1.306 -> 2.1.309 from a line diff of both types files, `reference.md` and examples (D309), the changelog (CL) and scratch probes (SX). 2.1.300 -> 2.1.306 from the 2.1.306 types, `reference.md` and the official docs (D306). Seeded 2.1.296 -> 2.1.300 from plan "Re-verification on CC 2.1.300", research 01, and a diff of two types files (`X`); Team-org findings from spike F1 (2.1.300, 2026-10-15). Legend: `mods-api.md`.
+
+## Changes 2.1.306 -> 2.1.309
+
+Types files: 2.1.306 = 22,473 lines, 2.1.309 = 22,554 (both on disk, 216-line diff). 136 of 137 index fragments held; the drift was `ToolCheckDecider`. CL: 2.1.306, 2.1.307 no mod entries; 2.1.308 "bug fixes" only; 2.1.309 two mod entries (rows below) and a VS Code "From the … plugin" label fix (no author action). OD baseline unchanged (CLI v2.1.290, VS Code v2.1.299). Shipped mods on 2.1.309: `validate --strict` rc 0 x3, `plugin test` rc 0 (454, 71, 152 tests; SX).
+
+| Version | Change | What to do differently | src |
+|---------|--------|------------------------|-----|
+| 2.1.309 | `tool.check`: result `decider` removed; result `plugin?` = engine-stamped plugin whose hook made the `ask` (a hook's write dropped); input `approver?: 'host'\|'person'` (`ToolCheckApprover`, pinned; absent = nobody can be asked); every hook `ask` is a person's: dialog, host callback or a `PermissionRequest` hook answers (2.1.306: a PermissionRequest allow did not settle it), no classifier allow, nobody to ask = deny | drop `decider: 'person'` (not in `ToolCheckResult`; runtime drops it, verdict stands); read `e.approver` before relying on an ask; full-object test compares include `plugin` | T:13655-13800; R:81; D309; SX |
+| 2.1.309 | `$.prompt.fill` and the `prompt.fill` event take `cursor?` (offset into the whole draft after the write; clamped; non-integer refused); `PromptFilled.cursor` reports where it stands | a re-fill keeps the caret (`cursor: e.cursor`), lifting the caret-at-end guard of patterns #4 [unproven: kit shows `cursor` reaching `prompt.fill`; live mid-draft paint not run] | T:8956-8967, 9037-9046; R:254; SX |
+| 2.1.309 | `turn.step` `next({ ...e, model })` takes an alias (`haiku`) or a full id; an alias failed every request before (CL fix) | alias needs >= 2.1.309; a lower floor names the full id | T:14378; CL; SX (`-p`: `claude-haiku-5-5`) |
+| 2.1.309 | `ui.render`: a tree that does not validate fails its hook like a wrong shape (skipped alone, `.catch` asked, its `next(e)` result or the next handler stands, other plugins' parts drawn); transcript `<plugin>: ui.render hook skipped: returned the wrong shape (a tree <Component> refuses: <reason>)`; final tree checked whole (debug `the chain settled on a tree that does not validate`); `hover` judged per hook answer | grep the new lines (`mods-lifecycle.md` Debug lines); keep a hover's keyed Box in the same hook's answer | R:163-166; D309 |
+| 2.1.309 | test kit: `$.tool.call` typed `EngineToolCall` with `agentId` (the loop); a hooked `tool.check` runs as for a background subagent: a `classic.PermissionRequest` bottom answers an ask, no test plays a person's yes (plugin ask without it = errored denied result); a keyed `Markdown` leaf carries `part` like a Box | `mods-testing.md` Raising Events, `ui.mount` | T:16121-16136, 10080; R:81; SX |
+| 2.1.309 | `$.ui.open` `columns`: dock width capped at 45% of terminal columns, at least 24 | a wide pane request gets at most 45% | T:7648-7656 |
+| 2.1.309 | module nested past 2,000 scopes: load error names the file (CL; OD Limits); `validate` rc 1 says `code nested too deep to scan` | flatten generated or deeply nested code | CL; OD; SX |
+| 2.1.304 (CLI, not types) | `claude plugin validate` no longer prints the managed-org note (`hooks on classic.* ... do not run in a plugin a person installs where an organization manages Claude Code`): present 2.1.300-2.1.303, absent 2.1.304-2.1.309 (exact npm builds, same module); the bypass holds (Team 2.1.309: `seated outermost`, `classic.UserPromptSubmit` and `prompt.attachment` `bypassed`; GH) | nothing in `validate` flags a bypassed hook: decide with `mods-api.md` "Mod Or Classic Hook", prove with the Team live check | SX; GH |
+| covered at 2.1.309 (in 2.1.306 types; first in `reference.md`/examples 2.1.309) | `atom(ref, initial, { shape })` + contract key `Shaped<T>`: a value stored under another tag (older code; `$.state` survives reload) reads as `initial` | change the tag when a stored value's fields change; test it by stubbing `state.get` with the old value (`mods-testing.md`) | T:710-750, 12536-12550; R:154; examples `pane.tsx`, `pane.test.tsx` |
 
 ## Changes 2.1.300 -> 2.1.306
 
@@ -13,7 +29,7 @@ Types files: 2.1.300 = 22,232 lines, 2.1.306 = 22,473 (`X`; the 2.1.300 file is 
 | 2.1.306 | `$.settings.read` = `SettingsReadOverloads`: `{ key }` -> that key's value (`unknown`, `undefined` when none), `{ source }` (`user project local flag policy`) or nothing -> `Settings`; event `settings.read` carries `layers` (`SettingsLayerSource` adds `plugin`), raised by a plugin's call AND by the engine for its own merge | `$.settings` is not read-only for hooks: a `settings.read` hook's answer is what every reader sees; keep it a function of `layers` + `next`'s answer | T:3652-3697, 12395-12500, 7359; D306 |
 | 2.1.306 | `$.env.set` resolves `EnvSetResult` = `{ deny?: string }` (the old index fragment stopped before the return type): under an org-managed session the engine HOLDS a write a non-built-in plugin stands behind; a hook's own `{ deny }` rejects the caller | read the result of `$.env.set`; the fragment in the index now carries the full signature so a return-type change shows as DRIFT | T:3692-3726, 4851-4863; D306 |
 | 2.1.306 | `HookFailure` = `{ kind: 'throw' \| 'timeout', message?, budget }`: the `re-entry` kind and `cause` (`rewritten`, `lent`) of 2.1.300/OD are gone | a `.catch` reads `next.error.kind` as `throw`/`timeout` only; no `cause` branch | T:5297-5316; D306 |
-| 2.1.306 | `tool.check`: `decider: 'person'` from a hook's `ask` (dialog or host answers; no machine allow settles it, a machine refusal still refuses; nobody to ask = deny); `isReadOnly?: true` on the input (engine's, pinned; OD: 2.1.304+); `$.tool.check` takes `tool`, `input` only | read `isReadOnly` as the tool's own word, absent = write; route "ask the person" via `decider` | T:13650-13770; D306 |
+| 2.1.306 | `tool.check`: `decider: 'person'` from a hook's `ask` (replaced in 2.1.309 by `plugin`/`approver`, above); `isReadOnly?: true` on the input (engine's, pinned; OD: 2.1.304+); `$.tool.check` takes `tool`, `input` only | read `isReadOnly` as the tool's own word, absent = write | T:13650-13770; D306 |
 | 2.1.306 | `ToolSpec.isDeferred` left out = tool behind ToolSearch (as an MCP tool); `false` = schema in the prompt's list; `tool.describe` `isDeferred` wins | a mod whose own tool the model must reach for sets `isDeferred: false` | T:13996-14020; R:259-262; D306 |
 | 2.1.306 | band `Button.hotkey` doc: a bare digit alone in an EMPTY composer answers a band Button (OD: after a pause; Buttons wholly inside the scroll window only) | the 2.1.300 pack said "never the composer": amended in `mods-api.md` | T:9848-9859, 10800-10812; OD; D306 |
 | 2.1.306 | `prompt.edit` budget: types still `HookBudget.ms = 10_000` for all hooks; OD Limits say 50 ms for `prompt.edit` | record both, types win, keep zero I/O and the self-imposed targets | T:5268-5287; OD |
@@ -52,7 +68,7 @@ Types files: 2.1.296 = 21,433 lines, 2.1.300 = 22,232 lines. npm `latest` = 2.1.
 
 ## Did Not Reproduce / Not In The API (plan vs live bytes)
 
-Each row checked against 2.1.300/2.1.306 types or a live run; claims that held live in `mods-api.md`.
+Each row checked against 2.1.300/2.1.306/2.1.309 types or a live run; claims that held live in `mods-api.md`.
 
 | Topic | Plan said | Live | src |
 |-------|-----------|------|-----|
@@ -68,6 +84,8 @@ Each row checked against 2.1.300/2.1.306 types or a live run; claims that held l
 | no 50 ms `prompt.edit` budget (2.1.300 pack) | none documented | OD Limits: 50 ms; 2.1.306 types: 10 s for all hooks; both recorded | OD; T:5277 |
 | band `Button` `hotkey` "never from the composer" | never | a bare digit in an empty composer answers a band Button | T:9848-9859; OD |
 | headless effort proxy | `PostToolBatch` `effort.level` shows xhigh | stays session level; only session JSONL `api-request` shows override | T11 Q2; X |
+| `tool.check` `decider: 'person'` marks a person's ask (2.1.306 pack) | hook writes it | gone in 2.1.309: every hook `ask` is a person's, engine stamps `plugin`; `reference.md` 2.1.309 still says a hook's `decider: 'person'` is refused in tests, but the kit drops the key and the verdict stands | T:13655-13800; R:81; SX |
+| `validate` names bypassed hooks (F1, 2.1.300 pack) | note per module | absent from 2.1.304; bypass itself still live on Team 2.1.309 | SX; GH |
 
 ## Update Procedure (D16, maintainer context)
 
@@ -86,4 +104,4 @@ Maintainer context = cwd is claude-brewcode repo. Elsewhere: report drift rows, 
 
 Entry shape: `| <ver> | <what the types/CLI now do> | <what an author does differently> | T:<line>; X |`.
 
-Rules: delete before growing (a row that no longer matters goes); no fact without a `src`; an item still under test carries a bracketed `unproven` mark (none open at 2.1.306; T6P cleared the mixed `hooks.json` marketplace install) until a real mod proves it; clear the mark in the same edit that cites the proof.
+Rules: delete before growing (a row that no longer matters goes); no fact without a `src`; an item still under test carries a bracketed `unproven` mark (one open at 2.1.309: `$.prompt.fill` `cursor` re-paint, patterns #4; T6P cleared the mixed `hooks.json` marketplace install) until a real mod proves it; clear the mark in the same edit that cites the proof.

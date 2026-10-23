@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run.sh - offline regression for validate-skill.sh: locale-independent Cyrillic check, standalone exemption.
+# run.sh - offline regression for validate-skill.sh: locale-independent Cyrillic check, standalone exemption, name rule.
 # Cyrillic cases run under sh and bash x LC_ALL=C, LANG=C.UTF-8, inherited locale; rc 1 on any failure.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -59,7 +59,7 @@ pass=0; fail=0
 expect() {
   local label="$1" dir="$2" line="$3" want="$4" shell="$5"; shift 5
   local out rc=0
-  out="$(env "$@" "$shell" "$VALIDATE" "$dir" 2>&1)" || rc=$?
+  out="$(env "$@" "$shell" "$VALIDATE" "$dir" 2>&1 </dev/null)" || rc=$?
   # Here-string: `printf | grep -q` under pipefail SIGPIPEs printf on an early match -> false FAIL.
   if grep -qxF -- "$line" <<<"$out" && [ "$rc" -eq "$want" ]; then
     pass=$((pass + 1))
@@ -101,5 +101,19 @@ for shell in sh bash; do
   expect "not-standalone-other" "$OTHER" '❌ argument-hint missing in frontmatter — prompt contract requires a prompt-first hint (section 1)' 1 "$shell"
 done
 
-printf '=== validate-skill regression (Cyrillic, standalone): %s passed, %s failed ===\n' "$pass" "$fail"
+# Name rule (Agent Skills spec): a-z/0-9 words joined by single hyphens; row = name|want-rc|exact line.
+KEBAB_HINT='is not valid kebab-case (a-z/0-9 words joined by single hyphens)'
+while IFS='|' read -r name want line; do
+  dir="$(make_skill "$name" 'проверь' 'исправь')"
+  for shell in sh bash; do
+    expect "name-$name" "$dir" "$line" "$want" "$shell"
+  done
+done <<ROWS
+a-b|0|✅ name: 'a-b' (3 chars)
+a-|1|❌ name 'a-' $KEBAB_HINT
+a--b|1|❌ name 'a--b' $KEBAB_HINT
+-a|1|❌ name '-a' $KEBAB_HINT
+ROWS
+
+printf '=== validate-skill regression (Cyrillic, standalone, name): %s passed, %s failed ===\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
