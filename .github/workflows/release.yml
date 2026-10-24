@@ -11,14 +11,20 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
         with:
+          sparse-checkout-cone-mode: false
           sparse-checkout: |
             RELEASE-NOTES.md
             .github/release-footer.md

@@ -1,14 +1,10 @@
 name: Semgrep
 
 on:
-  push:
-    branches: [ main ]
-    tags-ignore:
-      - "v*.*.*"
-  pull_request:
-    branches: [main]
-  schedule:
-    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
@@ -18,17 +14,20 @@ jobs:
   sast:
     name: SAST
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     permissions:
+      contents: read
       security-events: write
     steps:
       - uses: actions/checkout@v7.0.1
       # Official CLI image (semgrep-action is archived); scan never fails on findings, they go to code scanning
       - name: Semgrep scan
         run: >-
-          docker run --rm -v "${GITHUB_WORKSPACE}:/src" semgrep/semgrep:1.180.0
+          docker run --rm -v "${GITHUB_WORKSPACE}:/src"
+          semgrep/semgrep:1.182.1@sha256:451b3d875c00dac7ed5db5293e584a07de11449a409c10b3c2d2652f429630b6
           semgrep scan --config p/javascript --config p/secrets --metrics=off
           --sarif --output semgrep.sarif
-      - uses: github/codeql-action/upload-sarif@v4.38.3
+      - uses: github/codeql-action/upload-sarif@v4.39.1
         if: always()
         with:
           sarif_file: semgrep.sarif
@@ -37,6 +36,7 @@ jobs:
         with:
           name: semgrep-sarif
           path: semgrep.sarif
+          retention-days: 7
       - name: Summary
         if: always()
         run: |
