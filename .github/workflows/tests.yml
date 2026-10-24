@@ -1,0 +1,246 @@
+# Full offline regression coverage is opt-in; release tags use Validate's smoke job.
+name: Tests
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  CLAUDE_CODE_VERSION: 2.1.310
+
+jobs:
+  validators:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24.22.1
+          cache: npm
+          cache-dependency-path: web/docs/package-lock.json
+
+      - name: Set up Python
+        id: python
+        uses: actions/setup-python@v7.1.0
+        with:
+          python-version: 3.14.9
+
+      - name: Install Claude Code CLI
+        run: npm install -g --no-fund --no-audit "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+
+      - name: Restore teams-setup tokenizer cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/.cache/claude-brewcode/teams-setup/tokenizer
+          key: teams-tokenizer-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('brewcode/skills/teams-setup/scripts/prepare-tokenizer.py') }}
+
+      - name: Prepare teams-setup tokenizer
+        run: python3 -I -S brewcode/skills/teams-setup/scripts/prepare-tokenizer.py prepare
+
+      - name: Release checks
+        run: bash .github/scripts/validate-release.sh
+
+      # A mod whose hooks module fails to load makes both `plugin validate --strict` and `plugin test` exit non-zero (probed on 2.1.296).
+      - name: Brewmod tests (claude plugin test)
+        if: ${{ !cancelled() }}
+        run: |
+          set -uo pipefail
+          CLAUDE_CONFIG_DIR="$(mktemp -d)"
+          export CLAUDE_CONFIG_DIR
+          fail=0
+          for mod in ./brewmod-*/; do
+            claude plugin test "$mod" || { echo "::error::claude plugin test $mod failed"; fail=1; }
+          done
+          node brewmod-placeholders/tests/check-defaults.mjs || { echo "::error::brewmod-placeholders defaults drifted from defaults-pin.test.ts"; fail=1; }
+          node brewmod-placeholders/tests/inject-parity.mjs || { echo "::error::brewmod-placeholders hooks/inject.mjs drifted from the golden vectors or the TS lib"; fail=1; }
+          node --test brewmod-plan-effort/tests/mode.test.mjs || { echo "::error::brewmod-plan-effort hooks/mode.mjs tests failed"; fail=1; }
+          node --test brewmod-reminders/tests/remind.test.mjs || { echo "::error::brewmod-reminders hooks/remind.mjs tests failed"; fail=1; }
+          exit "$fail"
+
+      - name: Codex tests
+        if: ${{ !cancelled() }}
+        run: |
+          set -uo pipefail
+          fail=0
+          for test in .codex/tests/*.test.mjs; do
+            node "$test" || { echo "::error file=${test}::failed"; fail=1; }
+          done
+          for test in .codex/tests/*.test.py; do
+            python -B "$test" || { echo "::error file=${test}::failed"; fail=1; }
+          done
+          exit "$fail"
+
+      # Docs build -> dist scanned against the CSP in web/docs/deploy/docs.Caddyfile (inline scripts/handlers, foreign origins).
+      - name: Docs CSP (build + check-csp)
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          npm --prefix web/docs ci --no-fund --no-audit
+          npm --prefix web/docs run build
+          node web/docs/scripts/check-csp.mjs
+          node web/docs/scripts/check-csp.test.mjs
+
+  suites:
+    name: suites (${{ matrix.shard }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: semble-a
+            claude: true
+            suites: |
+              bash brewcode/skills/semble-setup/tests/run.sh core
+              bash brewcode/skills/semble-setup/tests/run.sh hooks
+              bash brewcode/skills/semble-setup/tests/run.sh agents telemetry
+          - shard: semble-b
+            claude: true
+            suites: |
+              bash brewcode/skills/semble-setup/tests/run.sh project
+              bash brewcode/skills/semble-setup/tests/run.sh status
+              bash brewcode/skills/semble-setup/tests/run.sh integration
+          - shard: plugins
+            claude: true
+            zsh: true
+            packages: true
+            suites: |
+              bash .claude/scripts/check-skill-fences.sh
+              bash brewcode/skills/setup-status/tests/run.sh
+              bash brewtools/skills/deploy/tests/run.sh
+              bash brewdoc/skills/docsync-setup/tests/run.sh
+              bash brewtools/skills/agent-return-setup/tests/run.sh
+              bash brewtools/skills/manager-setup/tests/run.sh
+              bash brewtools/skills/agent-router-setup/tests/run.sh
+              bash brewtools/skills/agent-deadline-setup/tests/run.sh
+              bash brewdoc/skills/publish/tests/run.sh
+              bash brewdoc/skills/my-claude/tests/run.sh
+              bash brewcode/skills/superreview-setup/tests/run.sh
+              bash brewcode/.codex/skills/superreview-setup/tests/run.sh
+              bash brewdoc/skills/memory-sync-setup/tests/run.sh
+              bash brewtools/skills/provider-switch/tests/run.sh
+              bash brewcode/skills/skills/tests/run.sh
+              bash brewcode/skills/agents/tests/run.sh
+              bash brewcode/skills/rules/tests/run.sh
+              bash brewcode/.codex/skills/rules/tests/run.sh
+              bash brewtools/skills/context-slim/tests/run.sh
+              bash brewtools/skills/ssh/tests/run.sh
+              bash brewtools/skills/text-optimize/tests/run.sh
+              bash brewtools/.codex/skills/text-optimize/tests/run.sh
+              bash brewtools/skills/text-human/tests/run.sh
+              bash brewdoc/skills/md-to-pdf/tests/run.sh
+              bash brewdoc/.codex/skills/md-to-pdf/tests/run.sh
+              bash brewcode/skills/convention-setup/tests/run.sh
+              bash brewcode/.codex/skills/convention-setup/tests/run.sh
+              bash brewtools/skills/secrets-scan/tests/run.sh
+              bash brewcode/hooks/tests/run.sh
+              bash brewcode/agents/tests/run.sh
+              bash brewtools/skills/plugin-update/tests/run.sh
+              bash .claude/scripts/tests/run.sh
+              bash .claude/skills/docs/tests/run.sh
+          - shard: teams-others
+            tokenizer: true
+            suites: |
+              bash brewcode/skills/teams-setup/tests/run.sh lifecycle
+              bash brewcode/skills/teams-setup/tests/run.sh parked-conflict trace-ops multi-team intent-guard
+              bash brewcode/.codex/skills/teams-setup/tests/run.sh lifecycle
+              bash brewcode/.codex/skills/teams-setup/tests/run.sh parked-conflict trace-ops multi-team intent-guard
+          - shard: teams-profile-0
+            tokenizer: true
+            packages: true # Cache-error fixtures also execute the host Python directly.
+            suites: |
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=0 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=0 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
+          - shard: teams-profile-1
+            tokenizer: true
+            suites: |
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=1 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=1 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
+          - shard: teams-profile-2
+            tokenizer: true
+            suites: |
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=2 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=2 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
+          - shard: teams-profile-3
+            tokenizer: true
+            suites: |
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=3 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=3 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
+          - shard: teams-profile-4
+            tokenizer: true
+            suites: |
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=4 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=4 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
+          - shard: teams-profile-5
+            tokenizer: true
+            suites: |
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=5 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=5 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
+          - shard: teams-profile-6
+            tokenizer: true
+            suites: |
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=6 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=6 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
+          - shard: teams-profile-7
+            tokenizer: true
+            suites: |
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=7 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=7 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24.22.1
+          cache: ${{ matrix.claude && 'npm' || '' }}
+          cache-dependency-path: web/docs/package-lock.json
+
+      - name: Set up Python
+        id: python
+        uses: actions/setup-python@v7.1.0
+        with:
+          python-version: 3.14.9
+          cache: ${{ matrix.packages && 'pip' || '' }}
+          cache-dependency-path: .github/requirements-ci.txt
+
+      - name: Install Python test packages
+        if: ${{ matrix.packages }}
+        run: python -m pip install --disable-pip-version-check -r .github/requirements-ci.txt
+
+      - name: Install Claude Code CLI
+        if: ${{ matrix.claude }}
+        run: npm install -g --no-fund --no-audit "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+
+      - name: Install zsh
+        if: ${{ matrix.zsh }}
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends zsh
+
+      - name: Restore teams-setup tokenizer cache
+        if: ${{ matrix.tokenizer }}
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/.cache/claude-brewcode/teams-setup/tokenizer
+          key: teams-tokenizer-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('brewcode/skills/teams-setup/scripts/prepare-tokenizer.py') }}
+
+      - name: Prepare teams-setup tokenizer
+        if: ${{ matrix.tokenizer }}
+        run: python3 -I -S brewcode/skills/teams-setup/scripts/prepare-tokenizer.py prepare
+
+      - name: Suites
+        env:
+          SUITES: ${{ matrix.suites }}
+        run: printf '%s\n' "$SUITES" | bash .github/scripts/run-parallel.sh

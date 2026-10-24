@@ -13,7 +13,7 @@ Derived from `.claude/rules/docker-best-practice.md`; image examples match `web/
 
 | # | Practice | Context | Source |
 |---|----------|---------|--------|
-| 1 | 2-stage build: `node:24.21.0-alpine3.23` (build) + `caddy:2.11.7-alpine` (serve) — copy only `/app/dist` to final stage | Astro static site Docker | `web/docs/Dockerfile` |
+| 1 | 2-stage build: `node:24.22.1-alpine3.23` (build) + `caddy:2.11.7-alpine` (serve) — copy only `/app/dist` to final stage | Astro static site Docker | `web/docs/Dockerfile` |
 | 2 | Caddy security headers: `X-Content-Type-Options nosniff`, `X-Frame-Options DENY`, `Referrer-Policy strict-origin-when-cross-origin` | Production `Caddyfile` | reviewer |
 | 3 | Caddy `handle_errors { rewrite * /404.html; file_server }` for custom 404 with correct HTTP 404 status | Caddyfile error handling | developer |
 | 4 | Caddy `encode zstd gzip` with zstd prioritized; `/_astro/*` with `Cache-Control: public, max-age=31536000, immutable` | Static asset caching | reviewer |

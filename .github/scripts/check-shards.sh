@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# check-shards.sh <workflow.yml> - every tests/run.sh suite is in a shard; .codex/tests globs are in a step.
+# check-shards.sh [workflow.yml] - every tests/run.sh suite and native test glob is in manual Tests.
 # .codex/plugins/** runners are skipped: validate-compat.mjs proves them byte-equal to <plugin>/.codex/skills/**.
 set -uo pipefail
-wf="${1:?usage: check-shards.sh <workflow.yml>}"
+wf="${1:-.github/workflows/tests.yml}"
 cd "$(dirname "$0")/../.." || exit 2
 fail=0
 missing() { echo "::error file=$wf::not in any shard: $1"; fail=1; }
