@@ -30,8 +30,22 @@ const parse = (str) => {
   return JSON.parse(result.stdout);
 };
 const pairs = [
-  ['source', parse(readFileSync(join(ROOT, '.github/workflows/docs.yml'), 'utf8')), parse(readFileSync(join(ROOT, '.github/workflows/deploy-docs.yml'), 'utf8'))],
-  ['template', parse(expand(fences[0])), parse(expand(fences[1]))],
+  ['source', parse(readFileSync(join(ROOT, '.github/workflows/docs.yml'), 'utf8')), parse(readFileSync(join(ROOT, '.github/workflows/deploy-docs.yml'), 'utf8')), {
+    buildStep: 'Build docs image',
+    branchRuns: [
+      ['branch push', 'push', 'feature/one', 1, '1.2.3'],
+      ['manual branch', 'workflow_dispatch', 'feature/one', 0, '1.2.3-manual-123'],
+      ['untrusted manual branch', 'workflow_dispatch', 'feature$(touch HACKED)', 0, '1.2.3-manual-123'],
+      ['untrusted branch push', 'push', 'feature$(touch HACKED)', 1, '1.2.3'],
+    ],
+  }],
+  ['template', parse(expand(fences[0])), parse(expand(fences[1])), {
+    buildStep: 'Build and push',
+    branchRuns: [
+      ['branch push', 'push', 'feature/one', 0, '1.2.3-feature-one-2'],
+      ['untrusted branch push', 'push', 'feature$(touch HACKED)', 0, '1.2.3-feature--touch-HACKED--2'],
+    ],
+  }],
 ];
 const step = (doc, name) => doc.jobs[Object.keys(doc.jobs)[0]].steps.find((item) => item.name === name);
 const temp = mkdtempSync(join(tmpdir(), 'brewcode-provenance-'));
@@ -174,20 +188,20 @@ async function api(body, env, runPatch = {}, workflowPatch = {}) {
   }
 }
 try {
-  for (const [label, producer, consumer] of pairs) {
+  for (const [label, producer, consumer, policy] of pairs) {
     const cwd = join(temp, label), output = join(cwd, 'output');
     mkdirSync(cwd);
     writeFileSync(output, '');
     // GIVEN the actual producer WHEN building a release THEN its metadata feeds the verifier unchanged.
     check(bash(step(producer, 'Compute image tags').run, {
-      GITHUB_OUTPUT: output, GITHUB_REF: 'refs/tags/v1.2.3', GITHUB_REF_NAME: 'v1.2.3', GITHUB_RUN_ID: '123', GITHUB_SHA: OTHER_SHA,
+      GITHUB_EVENT_NAME: 'push', GITHUB_OUTPUT: output, GITHUB_REF: 'refs/tags/v1.2.3', GITHUB_REF_NAME: 'v1.2.3', GITHUB_RUN_ID: '123', GITHUB_SHA: OTHER_SHA,
     }, cwd).status, 0, label + ': release producer succeeds');
     const metadataPath = join(cwd, 'web/docs/public/build-info.json');
     check(JSON.parse(readFileSync(metadataPath, 'utf8')), info, label + ': exact version/SHA/run JSON');
     check(readFileSync(output, 'utf8').split('\n').filter(Boolean), [
       'tags=' + IMAGE + ':1.2.3,' + IMAGE + ':sha-' + SHA + '-123-1', 'version=1.2.3', 'sha=' + SHA,
     ], label + ': bounded tags and actual checkout SHA');
-    check(step(producer, 'Build and push').with.labels.trim().split('\n').sort(), [
+    check(step(producer, policy.buildStep).with.labels.trim().split('\n').sort(), [
       'io.brewcode.docs.build-attempt=${{ github.run_attempt }}',
       'io.brewcode.docs.build-run-id=${{ github.run_id }}',
       'org.opencontainers.image.revision=${{ steps.meta.outputs.sha }}',
@@ -196,7 +210,7 @@ try {
     // GIVEN the same commit/run WHEN rerun THEN the attempt creates a distinct deployment alias.
     writeFileSync(output, '');
     check(bash(step(producer, 'Compute image tags').run, {
-      GITHUB_OUTPUT: output, GITHUB_REF: 'refs/tags/v1.2.3', GITHUB_REF_NAME: 'v1.2.3', GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '2',
+      GITHUB_EVENT_NAME: 'push', GITHUB_OUTPUT: output, GITHUB_REF: 'refs/tags/v1.2.3', GITHUB_REF_NAME: 'v1.2.3', GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '2',
     }, cwd).status, 0, label + ': rerun producer succeeds');
     check(readFileSync(output, 'utf8').split('\n').filter(Boolean), [
       'tags=' + IMAGE + ':1.2.3,' + IMAGE + ':sha-' + SHA + '-123-2', 'version=1.2.3', 'sha=' + SHA,
@@ -204,7 +218,7 @@ try {
     check(JSON.parse(readFileSync(metadataPath, 'utf8')), info,
       label + ': rerun preserves the public three-field metadata contract');
     check(bash(step(producer, 'Compute image tags').run, {
-      GITHUB_OUTPUT: output, GITHUB_REF: 'refs/tags/v1.2.3;touch HACKED',
+      GITHUB_EVENT_NAME: 'push', GITHUB_OUTPUT: output, GITHUB_REF: 'refs/tags/v1.2.3;touch HACKED',
       GITHUB_REF_NAME: 'v1.2.3;touch HACKED', GITHUB_RUN_ID: '123',
     }, cwd).status, 1, label + ': malformed release ref fails');
     // GIVEN untrusted input WHEN routing THEN only bounded version/SHA-run tags survive.
@@ -316,16 +330,28 @@ try {
     check(lines(base.FIX_STDIN_LOG), [''], label + ': remote without GHCR_TOKEN sends an empty stdin');
     check(readFileSync(join(cwd, '.env'), 'utf8'), 'DOCS_TAG=1.2.2\n',
       label + ': remote without GHCR_TOKEN leaves the previous version selected');
-    // GIVEN a branch ref WHEN deriving its version THEN routing keeps the original bounded branch policy.
-    check(bash(step(producer, 'Compute image tags').run, {
-      GITHUB_OUTPUT: output, GITHUB_REF: 'refs/heads/feature/one', GITHUB_REF_NAME: 'feature/one', GITHUB_RUN_ID: '123',
-    }, cwd).status, 0, label + ': branch producer succeeds');
-    check(JSON.parse(readFileSync(metadataPath, 'utf8')), { ...info, version: '1.2.3-feature-one-2' },
-      label + ': branch metadata matches sanitized branch and git describe distance');
-    check(bash(step(producer, 'Compute image tags').run, {
-      GITHUB_OUTPUT: output, GITHUB_REF: 'refs/heads/feature/one', GITHUB_REF_NAME: 'feature$(touch HACKED)', GITHUB_RUN_ID: '123',
-    }, cwd).status, 0, label + ': untrusted branch text stays data during sanitization');
-    check(existsSync(join(cwd, 'HACKED')), false, label + ': malicious ref/tag input never executes');
+    for (const [name, event, branch, status, version] of policy.branchRuns) {
+      // GIVEN each producer's event policy and manifest, with unchanged metadata as the rejection control.
+      const branchDir = join(cwd, name.replaceAll(' ', '-'));
+      const branchMetadata = join(branchDir, 'web/docs/public/build-info.json');
+      const branchOutput = join(branchDir, 'output');
+      mkdirSync(dirname(branchMetadata), { recursive: true });
+      mkdirSync(join(branchDir, 'brewcode/.claude-plugin'), { recursive: true });
+      writeFileSync(join(branchDir, 'brewcode/.claude-plugin/plugin.json'), JSON.stringify({ version: '1.2.3' }));
+      writeFileSync(branchMetadata, JSON.stringify(info));
+      writeFileSync(branchOutput, '');
+      check(JSON.parse(readFileSync(branchMetadata, 'utf8')), info, label + ': ' + name + ' starts with the control metadata');
+      // WHEN the actual producer receives the branch event and untrusted ref text.
+      const produced = bash(step(producer, 'Compute image tags').run, {
+        GITHUB_EVENT_NAME: event, GITHUB_OUTPUT: branchOutput, GITHUB_REF: 'refs/heads/feature/one',
+        GITHUB_REF_NAME: branch, GITHUB_RUN_ID: '123',
+      }, branchDir);
+      // THEN the source accepts only manual builds, while the shipped template preserves bounded previews.
+      check({ status: produced.status, metadata: JSON.parse(readFileSync(branchMetadata, 'utf8')), hacked: existsSync(join(branchDir, 'HACKED')) }, {
+        status, metadata: { ...info, version }, hacked: false,
+      }, label + ': ' + name + ' follows its explicit event policy without executing ref text');
+    }
+    check(existsSync(join(cwd, 'HACKED')), false, label + ': malicious release ref/tag input never executes');
   }
   // GIVEN the shipped deploy workflow and template WHEN the producing build is not a release tag THEN nothing deploys.
   for (const [label, , deploy] of pairs) {

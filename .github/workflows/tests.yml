@@ -159,6 +159,7 @@ jobs:
               bash brewcode/.codex/skills/teams-setup/tests/run.sh parked-conflict trace-ops multi-team intent-guard
           - shard: teams-profile-0
             tokenizer: true
+            packages: true # Cache-error fixtures also execute the host Python directly.
             suites: |
               TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=0 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
               TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=0 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
