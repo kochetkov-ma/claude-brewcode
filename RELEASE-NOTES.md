@@ -2,6 +2,22 @@
 
 ---
 
+## v6.12.3 (2026-10-25)
+
+> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+**What changed for you**
+
+- After a publish, [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) adds one optional line: sign in at [account.brewpage.app](https://account.brewpage.app) to manage your pages and tokens from any device. Publishing still needs no account, and Claude never asks you to sign in.
+
+### brewdoc
+
+#### Changed
+
+- **publish:** Step 7 success output (page and site) adds the optional `account.brewpage.app` sign-in line after the owner-token line; the skill mentions it only as optional and never asks the user to sign in. Same change in the standalone `skills/brewpage-publish` and `openclaw/brewpage-publish` copies and all three READMEs. Scripts unchanged.
+
+---
+
 ## v6.12.2 (2026-10-23)
 
 > Docs: [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [mod-creator](https://doc-claude.brewcode.app/brewcode/agents/mod-creator/) | [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | [reminders](https://doc-claude.brewcode.app/mods/reminders/)

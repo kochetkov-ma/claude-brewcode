@@ -4,6 +4,8 @@ Publishes text, markdown, JSON, a file, a folder or a ZIP site to [brewpage.app]
 
 BrewPage needs no account and keeps pages for 1 to 30 days. To compare it with GitHub Pages, Netlify Drop, Tiiny Host and others, see [brewpage.app/compare](https://brewpage.app/compare).
 
+Optional: sign in at [account.brewpage.app](https://account.brewpage.app) to manage your pages and tokens from any device. Not required.
+
 ## Install
 
 Install the [Brewdoc plugin](../../README.md#install), then `/reload-plugins`. Needs `curl` and `jq`; site uploads also need Node.js and `unzip`, and directories need `zip`.

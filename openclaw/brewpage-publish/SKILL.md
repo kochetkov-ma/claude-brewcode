@@ -188,6 +188,7 @@ bash {baseDir}/scripts/brewpage-run.sh cleanup --run '{run_id}'
 ```
 Published: {url from bash output}
 Owner token saved to ./brewpage-history.md (mode 600, git-ignored)
+Optional: sign in at https://account.brewpage.app to manage your pages and tokens from any device. Not required.
 ```
 
 **Success for SITE** (the script printed `OK {url} | Files: {count}`):
@@ -195,9 +196,12 @@ Owner token saved to ./brewpage-history.md (mode 600, git-ignored)
 Published site: {url from bash output}
 Entry: {entry_file} | Files: {count}
 Owner token saved to ./brewpage-history.md (mode 600, git-ignored)
+Optional: sign in at https://account.brewpage.app to manage your pages and tokens from any device. Not required.
 
 Share the server URL exactly as printed, including any trailing slash.
 ```
+
+Mention the sign-in line only as optional; never ask the user to sign in.
 
 **NEVER print the ownerToken in conversation.** The token lives only in the history file.
 

@@ -101,6 +101,8 @@ The owner token is **never printed in conversation** — `brewpage-run.sh` calls
 
 `./brewpage-history.md` is a **private file**: the script creates it with mode 600 and adds it to `./.gitignore` inside a git repo. Each new row stores `ownerLink` and identity: `id`, `namespace`, `type`, `routingCohort`, `deliveryMode`, `modeLocked`, `hostingVersion`, `managementLink`, `createdAt` and `expiresAt`.
 
+Optional: sign in at [account.brewpage.app](https://account.brewpage.app) to manage your pages and tokens from any device. Not required.
+
 Owner API and management links remain on `brewpage.app`, even when content uses a subdomain. Use the stored `ownerLink` and metadata; old history without metadata keeps its existing API identifiers. To delete a publication, read its owner API URL and token from history:
 
 ```bash
