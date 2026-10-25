@@ -91,13 +91,13 @@ file must remain.
 Ask the user:
 
 ```
-Namespace controls discovery. Eligible public HTML, sites and files may permit indexing on either address; unlisted, protected or otherwise ineligible native responses retain `noindex, nofollow`. Indexing is not guaranteed.
+Namespace decides who can find the publication; it also appears in its address on brewpage.app.
 
 Options:
-1) public — eligible gallery discovery (default)
-2) {suggested slug}
-3) Enter custom namespace
-4) Skip → use public
+1) public — public pages, sites and files are listed in the public gallery and the sitemap, so Google, Bing and AI search can find and index them and people can discover them. Use it for anything meant to be found or shared: docs, guides, demos, portfolios, reports, landing pages. Public pages are served right on the brewpage.app domain, which gives them the strongest reach in search; a page whose code needs its own origin (cookies, storage) gets its own subdomain automatically. Anyone can find and read a public publication: never put secrets, tokens or personal data there.
+2) {suggested slug} — private (default): unlisted and not indexed; anyone who has the link can still open it (a password restricts access).
+3) Enter custom namespace (private, like 2)
+4) Skip → use suggested slug (private)
 
 Reply with a number or your custom namespace (1-32 lowercase letters, digits or hyphens).
 ```
@@ -110,8 +110,8 @@ Auto-suggest: generate a **meaningful short slug** (3-16 chars, lowercase alphan
 Never use random strings or truncated filenames — the slug should be human-readable and describe what's being published.
 
 Resolution:
-- `1`, `4`, or empty → `public`
-- `2` → suggested slug
+- `2`, `4`, empty, or no answer (headless) → suggested slug (private)
+- `1` → `public`
 - `3` or any other string → use as-is
 
 ### Step 5: Ask Password
@@ -201,6 +201,8 @@ Optional: sign in free (Google or any email) at https://account.brewpage.app to 
 Share the server URL exactly as printed, including any trailing slash.
 ```
 
+For a private (non-`public`) namespace, append one short line after the link (skip if the reply must stay brief): *Unlisted link — anyone who has it can open it, but it's not in the gallery or search. Want it discoverable? Publish to `public`.*
+
 Mention the sign-in line only as optional; never ask the user to sign in.
 
 **NEVER print the ownerToken in conversation.** The token lives only in the history file.
@@ -231,9 +233,9 @@ a value that still cannot be stored is a 400, not a 409.
 - **`format` is a query param**: `/api/html` reads only `?format=` from the URL; a body `format` key is ignored and the default `html` stores markdown as raw text.
 - History: `./brewpage-history.md` in the workspace (the shell's working directory), mode `600`, added to `./.gitignore` inside a git repo. Its header holds the **delete** command for the owner token.
 - Run dirs: private `brewpage.XXXXXX` under `$TMPDIR` (else `/tmp`); only `scripts/brewpage-run.sh` creates, fills and removes them.
-- TTL default is `15` days. Namespace must match `^[a-z0-9-]{1,32}$`, default `public`.
+- TTL default is `15` days. Namespace must match `^[a-z0-9-]{1,32}$`, default the suggested private slug.
 - Use returned `ownerLink` and stored identity metadata for owner API operations; never parse NEW root hosts for namespace/ID. OLD history without metadata retains its existing API identifiers.
-- To **update a published site**, `PUT` the replacement bundle to its apex owner API with `X-Owner-Token`; retain the host and omit `X-Delivery-Mode` on ordinary PUT/update.
+- To **update a published site**, `PUT` the replacement bundle to its apex owner API with `X-Owner-Token`; retain the host and omit `X-Delivery-Mode` on ordinary PUT/update. Old publications (made before 5 October 2026) are read-only: 409 OLD_PUBLICATION_READ_ONLY; publish anew; report the new URL and owner token.
 - Only NEW publications without a required subdomain allow owner-only `PATCH /api/{type}/{ns}/{id}/hosting` with `{"deliveryMode":"subdomain","expectedVersion":1}` from current identity metadata. OLD, sites and non-public HTML pages keep their mode (200 with a notice). Use the returned URL/version afterward.
 - NEW password-protected links stay clean: never generate or append `?p=`. API requests still use `X-Password`; OLD password behavior remains unchanged.
 - **SITE bundles are allowlisted**: the directory build drops dot-entries (`.env`, `.git/`, `.DS_Store`; the root `.well-known/` stays, extension-less files included), `node_modules/`, `__MACOSX/`, symlinks and unknown types (`*.map`, `*.log`, `Thumbs.db`), flags kept names that look sensitive (`secret`, `token`, `password`, `credential`) for confirmation, and verifies the archive (`unzip -t`, name set) before upload. A supplied ZIP is never rewritten; anything unexpected, hidden or sensitive inside it needs confirmation (system files the server drops are left alone).
