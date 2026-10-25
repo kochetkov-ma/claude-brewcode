@@ -8,7 +8,7 @@
 
 **What changed for you**
 
-- After a publish, [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) adds one optional line: sign in at [account.brewpage.app](https://account.brewpage.app) to manage your pages and tokens from any device. Publishing still needs no account, and Claude never asks you to sign in.
+- After a publish, [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) adds one optional line: sign in free (Google or any email) at [account.brewpage.app](https://account.brewpage.app) to never lose your pages or tokens and to mint tokens that never expire. Publishing still needs no account, and Claude never asks you to sign in.
 
 ### brewdoc
 

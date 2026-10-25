@@ -101,7 +101,7 @@ Default requested time-to-live is **15 days** (normally 1..30, subject to owner 
 
 The owner token is **never printed in conversation** — `brewpage-run.sh` parses the response and writes it directly to `.claude/brewpage-history.md` at the project root (`CLAUDE_PROJECT_DIR`, else the git toplevel). The script creates the file with mode 600 and adds it to the project `.gitignore`. It also records the exact public URL, apex `ownerLink`, and identity fields such as `id`, `namespace`, `type`, `routingCohort`, `deliveryMode` and `hostingVersion` for later owner operations.
 
-Optional: sign in at [account.brewpage.app](https://account.brewpage.app) to manage your pages and tokens from any device. Not required.
+Optional: sign in free (Google or any email) at [account.brewpage.app](https://account.brewpage.app) to never lose your pages or tokens and to mint tokens that never expire. Not needed to publish.
 
 New password-protected links stay clean: do not append `?p=`. Readers unlock through the trusted `unlock.brewpage.app` page; programmatic reads use `X-Password` on the apex API. Existing password behavior remains unchanged.
 

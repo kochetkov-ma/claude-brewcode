@@ -213,7 +213,7 @@ bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh cleanup --run '{run_id}'
 ```
 Published: {url from bash output}
 Owner token saved to <project-root>/.claude/brewpage-history.md (mode 600, git-ignored)
-Optional: sign in at https://account.brewpage.app to manage your pages and tokens from any device. Not required.
+Optional: sign in free (Google or any email) at https://account.brewpage.app to never lose your pages or tokens and to mint tokens that never expire. Not needed to publish.
 ```
 
 **Success for SITE** (the script printed `OK {url} | Files: {count}`):
@@ -221,7 +221,7 @@ Optional: sign in at https://account.brewpage.app to manage your pages and token
 Published site: {url from bash output}
 Entry: {entry_file} | Files: {count}
 Owner token saved to <project-root>/.claude/brewpage-history.md (mode 600, git-ignored)
-Optional: sign in at https://account.brewpage.app to manage your pages and tokens from any device. Not required.
+Optional: sign in free (Google or any email) at https://account.brewpage.app to never lose your pages or tokens and to mint tokens that never expire. Not needed to publish.
 
 Share the server URL exactly as printed, including any trailing slash.
 ```
