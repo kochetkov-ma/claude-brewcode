@@ -8,18 +8,18 @@
 
 **What changed for you**
 
-- [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) no longer promises an in-place update for every publication. Publications from before the new link format are read-only and answer `409 OLD_PUBLICATION_READ_ONLY`; the skill now says to publish anew and report the new URL and owner token. Publications with the new link format still update in place.
-- The namespace question now spells out what `public` gives you (listed in the public gallery and the sitemap, so Google, Bing and AI search can find and index it: for anything meant to be found or shared) and that anyone can read it, so no secrets or personal data. Private stays the default: unlisted and not indexed, but the link still opens it.
+- [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) no longer promises an in-place update for every publication. Old publications (made before 5 October 2026) are read-only and answer `409 OLD_PUBLICATION_READ_ONLY`; the skill now says to publish anew and report the new URL and owner token. Newer publications still update in place.
+- The namespace question now spells out what `public` gives you (public pages, sites and files are listed in the public gallery and the sitemap, so Google, Bing and AI search can find and index them: for anything meant to be found or shared) and that anyone can read it, so no secrets or personal data. Private stays the default: unlisted and not indexed, but the link still opens it.
 
 ### brewdoc
 
 #### Fixed
 
-- **publish:** the history-file header (types now include `files`) and the "Update a site" note state that in-place `PUT` works only for publications with the new link format; older ones answer `409 OLD_PUBLICATION_READ_ONLY`: publish anew; report the new URL and owner token. Same change in the standalone `skills/brewpage-publish` and `openclaw/brewpage-publish` copies, the OpenClaw README and the docs page. Scripts still only `POST`; no new commands.
+- **publish:** the history-file header (types now include `files`) and the "Update a site" note state: Old publications (made before 5 October 2026) are read-only: `409 OLD_PUBLICATION_READ_ONLY`; publish anew; report the new URL and owner token. Same change in the standalone `skills/brewpage-publish` and `openclaw/brewpage-publish` copies, the OpenClaw README and the docs page. Scripts still only `POST`; no new commands.
 
 #### Changed
 
-- **publish:** Step 4 namespace question (all three copies), READMEs and the docs page describe `public` with its benefits and its read-by-anyone warning, and private (default) briefly. The OpenClaw copy now defaults to the suggested private slug like the other copies (it defaulted to `public`) and adds the unlisted-link hint after a private publish.
+- **publish:** Step 4 namespace question (all three copies), READMEs and the docs page describe `public` with its benefits (including the brewpage.app domain address for public pages) and its read-by-anyone warning, and private (default) briefly. The OpenClaw copy now defaults to the suggested private slug like the other copies (it defaulted to `public`) and adds the unlisted-link hint after a private publish.
 
 ---
 

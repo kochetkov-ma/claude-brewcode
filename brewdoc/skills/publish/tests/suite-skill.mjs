@@ -55,8 +55,8 @@ const countLines = (re) => LINES.filter((l) => re.test(l)).length;
 
 // GIVEN the namespace question WHEN rendering public guidance THEN benefits and the read-by-anyone warning both show.
 check('skill.discovery.public', [
-  'listed in the public gallery and the sitemap, so Google, Bing and AI search can find and index it and people can discover it.',
-  'Anyone can find and read it: never put secrets, tokens or personal data there.',
+  'public pages, sites and files are listed in the public gallery and the sitemap, so Google, Bing and AI search can find and index them and people can discover them.',
+  'Anyone can find and read a public publication: never put secrets, tokens or personal data there.',
 ].map((s) => SKILL.includes(s)), [true, true], 'public namespace states its discovery benefits and its exposure warning');
 check('skill.discovery.obsolete', SKILL.includes('Dedicated subdomain hosts use noindex'), false,
   'the removed blanket subdomain noindex claim stays absent');
