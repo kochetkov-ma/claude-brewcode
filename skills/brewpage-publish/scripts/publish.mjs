@@ -2,8 +2,8 @@
 /** Offline SITE bundle build/verify: `pack --dir <abs-dir> --out <abs.zip> [--entry <name>]` | `inspect --zip <abs.zip> [--entry <name>]`; caller curls only on exit 0.
  * Exit 0 verified, manifest printed -> upload | 2 verified, flagged entries -> ask user | 1 failure, partial archive removed -> never upload. */
 import { spawnSync } from 'node:child_process';
-import { readdirSync, statSync, lstatSync, existsSync, rmSync } from 'node:fs';
-import { join, relative, extname, basename } from 'node:path';
+import { readdirSync, statSync, lstatSync, existsSync, rmSync, accessSync, constants } from 'node:fs';
+import { join, relative, extname, basename, delimiter } from 'node:path';
 
 /** Publishable web assets. Allowlist by design: an unknown extension is dropped, never shipped. */
 const ALLOWED_EXT = new Set([
@@ -99,9 +99,16 @@ function resolveEntry(names, requested) {
   return [...html].sort((a, b) => depth(a) - depth(b) || (a < b ? -1 : a > b ? 1 : 0))[0];
 }
 
+/** True when `p` is an executable regular file. */
+function isExecutable(p) {
+  try { accessSync(p, constants.X_OK); return statSync(p).isFile(); } catch { return false; }
+}
+
+/** PATH lookup only, nothing is run: an exec probe reads as shell execution to skill scanners. */
 function requireTool(bin) {
-  const probe = spawnSync(bin, ['-h'], { encoding: 'utf8' });
-  if (probe.error && probe.error.code === 'ENOENT') die(`${bin} required`);
+  const exts = process.platform === 'win32' ? ['', ...(process.env.PATHEXT || '.EXE;.CMD;.BAT').split(';')] : [''];
+  const dirs = (process.env.PATH || '').split(delimiter).filter(Boolean);
+  if (!dirs.some((dir) => exts.some((ext) => isExecutable(join(dir, bin + ext))))) die(`${bin} required`);
 }
 
 /** Why a spawnSync child failed, '' on success; its own non-zero exit wins over the EPIPE it causes. */
