@@ -9,7 +9,7 @@ This is an [AgentSkills](https://docs.openclaw.ai/tools/skills)-standard skill f
 ## What It Does
 
 1. **Detects content type** — a directory/ZIP becomes a multi-file site, a single file becomes a file upload, everything else becomes HTML (markdown rendered)
-2. **Asks namespace** — interactive prompt for a short, human-readable namespace (URL slug)
+2. **Asks namespace** — `public` or a short, human-readable private slug (default). `public` is listed in the gallery, can be indexed by Google, Bing and AI search and is included in the sitemap: use it for anything meant to be found or shared. Anyone can find and read it, so never put secrets, tokens or personal data there. A private slug (default) is unlisted and not indexed; anyone with the link can still open it.
 3. **Asks password** — optional protection (hides the page from the gallery): an existing local file, given by absolute path, holds the password (min 4 characters); nothing is typed or generated
 4. **Calls API** — sends content to brewpage.app
 5. **Returns URL** — public link ready to share
@@ -109,7 +109,7 @@ Owner API and management links remain on `brewpage.app`, even when content uses 
 curl -X DELETE "$OWNER_API" -H "X-Owner-Token: $OWNER_TOKEN"
 ```
 
-To replace a site, `PUT` the new archive to its stored owner API with `X-Owner-Token`. The bundle replaces the full file set while retaining the content host. Omit `X-Delivery-Mode` on ordinary updates. In-place `PUT` works for publications with the new link format; older ones answer `409 OLD_PUBLICATION_READ_ONLY`: publish anew and keep the new URL and owner token.
+To replace a site, `PUT` the new archive to its stored owner API with `X-Owner-Token`. The bundle replaces the full file set while retaining the content host. Omit `X-Delivery-Mode` on ordinary updates. In-place `PUT` works for publications with the new link format; older ones answer `409 OLD_PUBLICATION_READ_ONLY`: publish anew; report the new URL and owner token.
 
 Only new public HTML/file publications allow owner-only `PATCH /api/{type}/{ns}/{id}/hosting` (`type` is `html` or `files`). Read the current hosting metadata first with owner-only `GET` at the same endpoint, then send `deliveryMode` and that `hostingVersion` as `expectedVersion` with `X-Owner-Token`. Use the returned link and version afterward. Switching either way retains the reserved host; stale versions return `409`. Old publications, sites and non-public namespaces have no mode choice.
 

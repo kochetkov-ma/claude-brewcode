@@ -16,9 +16,9 @@ bp_history_init() {
     cat > "$HISTORY_FILE" <<'HEADER'
 # brewpage.app — Published Pages
 
-> Owner tokens allow delete; in-place PUT (html/json/kv/sites) works for publications with the new link format; older ones answer 409 OLD_PUBLICATION_READ_ONLY: publish anew and report the new URL + owner token. Keep this file private.
+> Owner tokens allow delete; in-place PUT (html/json/kv/files/sites) works for publications with the new link format; older ones answer 409 OLD_PUBLICATION_READ_ONLY: publish anew; report the new URL and owner token. Keep this file private.
 > Delete: `curl -s -X DELETE "<Owner API>" -H "X-Owner-Token: TOKEN"`; rows without one: `https://brewpage.app/api/<type>/<ns>/<id>`, type = html|json|files|kv|sites.
-> Update a site (same URL, new link format only; older -> 409, publish anew): `PUT /api/sites/<ns>/<id>` with `X-Owner-Token: TOKEN` + the new bundle.
+> Update a site (same URL, new link format only; older -> 409: publish anew; report the new URL and owner token): `PUT /api/sites/<ns>/<id>` with `X-Owner-Token: TOKEN` + the new bundle.
 
 | Date | URL | Owner Token | TTL | Type | Owner API | Identity |
 |------|-----|-------------|-----|------|-----------|----------|

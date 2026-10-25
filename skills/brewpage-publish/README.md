@@ -42,7 +42,7 @@ All uploads require `bash`, `curl` and `jq`. Directory and ZIP sites also requir
 ## What It Does
 
 1. **Detects content type** — directory/ZIP becomes a multi-file site, single file becomes a file upload, objects/arrays become JSON, everything else becomes HTML (markdown rendered)
-2. **Asks namespace** — interactive prompt for a short, human-readable namespace (URL slug)
+2. **Asks namespace** — `public` or a short, human-readable private slug (default). `public` is listed in the gallery, can be indexed by Google, Bing and AI search and is included in the sitemap: use it for anything meant to be found or shared. Anyone can find and read it, so never put secrets, tokens or personal data there. A private slug (default) is unlisted and not indexed; anyone with the link can still open it.
 3. **Asks password** — optional protection (hides the page from the gallery): an existing local file, given by absolute path, holds the password (min 4 characters); nothing is typed or generated
 4. **Calls API** — sends content to brewpage.app
 5. **Returns URL** — shareable link

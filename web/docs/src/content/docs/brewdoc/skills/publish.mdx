@@ -77,7 +77,7 @@ SITE is checked first. Site entry follows the server rule: `--entry`, else the r
 
 **Good to know**
 
-- Eligible, unprotected HTML, sites and files in `public` can appear in the gallery and be indexed; everything else is `noindex`. Eligibility does not guarantee ranking.
+- `public` is listed in the gallery, can be indexed by Google, Bing and AI search and is included in the sitemap: use it for anything meant to be found or shared. Anyone can find and read it, so never put secrets, tokens or personal data there. A private slug (default) is unlisted and not indexed; anyone with the link can still open it.
 - Headless runs use the defaults: suggested private namespace, no password.
 - A rejected upload prints `FAILED: publish rejected (HTTP <status>: <message>)` with the server's reason. After a successful `OK` line, lines starting with `NOTICE:` say what the server skipped or adjusted.
 - Limits behind the headline numbers: a ZIP expands to at most 40 MB, paths stop at 380 characters (900 bytes) and names at 200 bytes. The skill's own read-only `limits` command prints the current values.
@@ -127,7 +127,7 @@ curl -s -X DELETE "$OWNER_API" -H "X-Owner-Token: TOKEN"
 curl -s -X PUT "$OWNER_API" -H "X-Owner-Token: TOKEN" -F "archive=@/absolute/path/to/new-bundle.zip"
 ```
 
-PUT replaces a site's file set and keeps the host and the delivery mode; do not send `X-Delivery-Mode` on it. In-place PUT works for publications with the new link format; older ones answer `409 OLD_PUBLICATION_READ_ONLY`: publish anew and keep the new URL and owner token.
+PUT replaces a site's file set and keeps the host and the delivery mode; do not send `X-Delivery-Mode` on it. In-place PUT works for publications with the new link format; older ones answer `409 OLD_PUBLICATION_READ_ONLY`: publish anew; report the new URL and owner token.
 
 Only new public non-sites can switch hosting: `GET /api/{type}/{ns}/{id}/hosting` returns the version, then `PATCH` it with `X-Owner-Token` and `{"deliveryMode":"subdomain","expectedVersion":1}`. Use the version from GET. Issued URLs become safe redirects.
 

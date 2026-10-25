@@ -22,7 +22,7 @@ The skill is model-invocable: ask Claude to "publish this" or "share a link". On
 | Directory site | `/brewdoc:publish docs/v1/ --entry hub.html` | `/api/sites` |
 | ZIP site | `/brewdoc:publish site.zip` | `/api/sites` |
 
-Flags: `--ttl N` (days), `--entry <filename>` (sites), `--delivery-mode path|subdomain` (omit for the server default). The skill asks for a namespace (`public` or a private slug) and an optional password-file path; headless runs use a private slug and no password. It returns `Published: <exact server URL>`; share that link exactly. To delete a page, `curl -X DELETE "{ownerLink}" -H "X-Owner-Token: {ownerToken}"` with both values from `.claude/brewpage-history.md`.
+Flags: `--ttl N` (days), `--entry <filename>` (sites), `--delivery-mode path|subdomain` (omit for the server default). The skill asks for a namespace (`public` or a private slug) and an optional password-file path. `public` is listed in the gallery, can be indexed by Google, Bing and AI search and is included in the sitemap: use it for anything meant to be found or shared. Anyone can find and read it, so never put secrets, tokens or personal data there. A private slug (default) is unlisted and not indexed; anyone with the link can still open it. Headless runs use a private slug and no password. It returns `Published: <exact server URL>`; share that link exactly. To delete a page, `curl -X DELETE "{ownerLink}" -H "X-Owner-Token: {ownerToken}"` with both values from `.claude/brewpage-history.md`.
 
 Site entry is the root `index.html`, else the shallowest page (`--entry` overrides); the root `.well-known/` ships; the skill knows the upload limits ([details](https://doc-claude.brewcode.app/brewdoc/skills/publish/)).
 

@@ -120,14 +120,12 @@ file must remain.
 Use **AskUserQuestion**:
 
 ```
-Namespace controls discovery and appears in publication addresses on brewpage.app.
-By default publishing is PRIVATE (unlisted): not in the public gallery and not indexed by search engines. The link is not secret, though — anyone who has it can open it (use a password to restrict access).
-Choose `public` for eligible gallery discovery. Eligible public HTML, sites and files may permit indexing on either address; unlisted, protected or otherwise ineligible native responses retain `noindex, nofollow`. Indexing is not guaranteed.
+Namespace decides who can find the publication; it also appears in its address on brewpage.app.
 
 Options:
-1) public — eligible gallery discovery; eligible publications may permit indexing
-2) {suggested slug} — private, link-only (default)
-3) Enter custom namespace
+1) public — listed in the public gallery, can be indexed by Google, Bing and AI search, and is included in the sitemap, so people can discover it. Use it for anything meant to be found or shared: docs, guides, demos, portfolios, reports, landing pages. Anyone can find and read it: never put secrets, tokens or personal data there.
+2) {suggested slug} — private (default): unlisted and not indexed; anyone who has the link can still open it (a password restricts access).
+3) Enter custom namespace (private, like 2)
 4) Skip → use suggested slug (private)
 
 Reply with a number or your custom namespace (1-32 lowercase letters, digits or hyphens).
@@ -246,7 +244,6 @@ Publish failed: {the FAILED line, verbatim}
 | 413 | Request over 25 MB, or too many parts | Shrink the bundle; many files → one ZIP |
 | 422 | No servable file left (every file has an unsupported or missing extension) | Add the `.html`/assets |
 | 408 | Upload interrupted | Retry the identical command once |
-| 409 OLD_PUBLICATION_READ_ONLY | Old publication is read-only | Publish anew; report the new URL |
 
 Unstorable metadata (tags, names, control characters) is stored as the closest valid value with a notice;
 a value that still cannot be stored is a 400, not a 409.
@@ -259,7 +256,7 @@ a value that still cannot be stored is a 400, not a 409.
 - Permissions: model-invocable, so `allowed-tools` holds one scoped Bash rule that matches every step above, in `default`, `dontAsk` and headless runs alike (verified on CC 2.1.296). A script path containing spaces breaks the unquoted command shape.
 - History TTL = requested days; stored `createdAt`/`expiresAt` are authoritative: a deduplicated winner keeps its original expiry, and ordinary PUT/update does not renew it.
 - Owner API calls use the returned `ownerLink` and stored identity metadata, never a NEW root hostname parsed for namespace/ID; OLD rows without metadata keep their existing API identifiers.
-- **Update a site**: `PUT` the new bundle to its apex owner API with `X-Owner-Token`; it replaces the file set and keeps the host. No `X-Delivery-Mode` on ordinary PUT/update. In-place PUT works for publications with the new link format; older ones answer 409 OLD_PUBLICATION_READ_ONLY: publish anew and report the new URL + owner token.
+- **Update a site**: `PUT` the new bundle to its apex owner API with `X-Owner-Token`; it replaces the file set and keeps the host. No `X-Delivery-Mode` on ordinary PUT/update. In-place PUT works for publications with the new link format; older ones answer 409 OLD_PUBLICATION_READ_ONLY: publish anew; report the new URL and owner token.
 - Hosting change, NEW publications without a required subdomain only (OLD, sites and non-public HTML pages keep their mode, 200 with a notice): owner-only `PATCH /api/{type}/{ns}/{id}/hosting` with `{"deliveryMode":"subdomain","expectedVersion":1}` from current identity metadata; then use the returned URL/version.
 - NEW password-protected links stay clean: never generate or append `?p=`. API password requests use `X-Password`; OLD password behavior is unchanged.
 - **SITE bundles are allowlisted**: `pack` drops dot-entries (`.env`, `.git/`, `.DS_Store`; the root `.well-known/` stays, extension-less files included), `node_modules/`, `__MACOSX/`, symlinks and unknown types, and verifies the archive (`unzip -t`, name set) before `curl`, else deletes it and exits 1. `inspect` never rewrites a supplied ZIP; it exits 2 when anything unexpected, hidden or sensitive is inside (system files the server drops are left alone).

@@ -53,9 +53,11 @@ function sh(code, { cwd, env = {} } = {}) {
 
 const countLines = (re) => LINES.filter((l) => re.test(l)).length;
 
-// GIVEN finalized discovery rules WHEN rendering namespace guidance THEN eligibility governs either address.
-check('skill.discovery.address', SKILL.includes('Eligible public HTML, sites and files may permit indexing on either address;'), true,
-  'public discovery eligibility is independent of Promotion or Dedicated address');
+// GIVEN the namespace question WHEN rendering public guidance THEN benefits and the read-by-anyone warning both show.
+check('skill.discovery.public', [
+  'can be indexed by Google, Bing and AI search, and is included in the sitemap',
+  'Anyone can find and read it: never put secrets, tokens or personal data there.',
+].map((s) => SKILL.includes(s)), [true, true], 'public namespace states its discovery benefits and its exposure warning');
 check('skill.discovery.obsolete', SKILL.includes('Dedicated subdomain hosts use noindex'), false,
   'the removed blanket subdomain noindex claim stays absent');
 
