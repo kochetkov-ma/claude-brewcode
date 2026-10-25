@@ -77,7 +77,7 @@ SITE is checked first. Site entry follows the server rule: `--entry`, else the r
 
 **Good to know**
 
-- `public` is listed in the gallery, can be indexed by Google, Bing and AI search and is included in the sitemap: use it for anything meant to be found or shared. Anyone can find and read it, so never put secrets, tokens or personal data there. A private slug (default) is unlisted and not indexed; anyone with the link can still open it.
+- `public` is listed in the public gallery and the sitemap, so Google, Bing and AI search can find and index it and people can discover it. Use it for anything meant to be found or shared. Anyone can find and read it, so never put secrets, tokens or personal data there. A private slug (default) is unlisted and not indexed; anyone with the link can still open it.
 - Headless runs use the defaults: suggested private namespace, no password.
 - A rejected upload prints `FAILED: publish rejected (HTTP <status>: <message>)` with the server's reason. After a successful `OK` line, lines starting with `NOTICE:` say what the server skipped or adjusted.
 - Limits behind the headline numbers: a ZIP expands to at most 40 MB, paths stop at 380 characters (900 bytes) and names at 200 bytes. The skill's own read-only `limits` command prints the current values.

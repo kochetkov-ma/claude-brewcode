@@ -9,7 +9,7 @@ This is an [AgentSkills](https://docs.openclaw.ai/tools/skills)-standard skill f
 ## What It Does
 
 1. **Detects content type** — a directory/ZIP becomes a multi-file site, a single file becomes a file upload, everything else becomes HTML (markdown rendered)
-2. **Asks namespace** — `public` or a short, human-readable private slug (default). `public` is listed in the gallery, can be indexed by Google, Bing and AI search and is included in the sitemap: use it for anything meant to be found or shared. Anyone can find and read it, so never put secrets, tokens or personal data there. A private slug (default) is unlisted and not indexed; anyone with the link can still open it.
+2. **Asks namespace** — `public` or a short, human-readable private slug (default). `public` is listed in the public gallery and the sitemap, so Google, Bing and AI search can find and index it and people can discover it. Use it for anything meant to be found or shared. Anyone can find and read it, so never put secrets, tokens or personal data there. A private slug (default) is unlisted and not indexed; anyone with the link can still open it.
 3. **Asks password** — optional protection (hides the page from the gallery): an existing local file, given by absolute path, holds the password (min 4 characters); nothing is typed or generated
 4. **Calls API** — sends content to brewpage.app
 5. **Returns URL** — public link ready to share

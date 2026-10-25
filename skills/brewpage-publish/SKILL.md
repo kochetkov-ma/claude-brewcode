@@ -101,7 +101,7 @@ Use **AskUserQuestion**:
 Namespace decides who can find the publication; it also appears in its address on brewpage.app.
 
 Options:
-1) public — listed in the public gallery, can be indexed by Google, Bing and AI search, and is included in the sitemap, so people can discover it. Use it for anything meant to be found or shared: docs, guides, demos, portfolios, reports, landing pages. Anyone can find and read it: never put secrets, tokens or personal data there.
+1) public — listed in the public gallery and the sitemap, so Google, Bing and AI search can find and index it and people can discover it. Use it for anything meant to be found or shared: docs, guides, demos, portfolios, reports, landing pages. Anyone can find and read it: never put secrets, tokens or personal data there.
 2) {suggested slug} — private (default): unlisted and not indexed; anyone who has the link can still open it (a password restricts access).
 3) Enter custom namespace (private, like 2)
 4) Skip → use suggested slug (private)

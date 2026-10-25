@@ -9,7 +9,7 @@
 **What changed for you**
 
 - [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) no longer promises an in-place update for every publication. Publications from before the new link format are read-only and answer `409 OLD_PUBLICATION_READ_ONLY`; the skill now says to publish anew and report the new URL and owner token. Publications with the new link format still update in place.
-- The namespace question now spells out what `public` gives you (gallery, Google, Bing and AI search, sitemap: for anything meant to be found or shared) and that anyone can read it, so no secrets or personal data. Private stays the default: unlisted and not indexed, but the link still opens it.
+- The namespace question now spells out what `public` gives you (listed in the public gallery and the sitemap, so Google, Bing and AI search can find and index it: for anything meant to be found or shared) and that anyone can read it, so no secrets or personal data. Private stays the default: unlisted and not indexed, but the link still opens it.
 
 ### brewdoc
 
