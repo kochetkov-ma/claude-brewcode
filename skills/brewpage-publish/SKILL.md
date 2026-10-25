@@ -230,6 +230,7 @@ Publish failed: {the FAILED line, verbatim}
 | 413 | Request over 25 MB, or too many parts | Shrink the bundle; many files → one ZIP |
 | 422 | No servable file left (every file has an unsupported or missing extension) | Add the `.html`/assets |
 | 408 | Upload interrupted | Retry the identical command once |
+| 409 OLD_PUBLICATION_READ_ONLY | Old publication is read-only | Publish anew; report the new URL |
 
 Unstorable metadata (tags, names, control characters) is stored as the closest valid value with a notice;
 a value that still cannot be stored is a 400, not a 409.
@@ -243,7 +244,7 @@ a value that still cannot be stored is a 400, not a 409.
 - Permissions: model-invocable, so `allowed-tools` holds one scoped Bash rule that matches every step above. A skill directory path containing spaces breaks the unquoted command shape.
 - TTL default is `15` days; stored `createdAt`/`expiresAt` are authoritative: a deduplicated winner keeps its original expiry, and ordinary PUT/update does not renew it.
 - Use returned `ownerLink` and stored identity metadata for owner API operations; never parse NEW root hosts for namespace/ID. OLD history without metadata retains its existing API identifiers.
-- To **update a published site**, `PUT` the replacement bundle to its apex owner API with `X-Owner-Token`; it replaces the file set and keeps the host. Omit `X-Delivery-Mode` on ordinary PUT/update.
+- To **update a published site**, `PUT` the replacement bundle to its apex owner API with `X-Owner-Token`; it replaces the file set and keeps the host. Omit `X-Delivery-Mode` on ordinary PUT/update. In-place PUT works for publications created with BrewPage 2.0+ only; older ones answer 409 OLD_PUBLICATION_READ_ONLY: publish anew and report the new URL + owner token.
 - Only NEW publications without a required subdomain allow owner-only `PATCH /api/{type}/{ns}/{id}/hosting` with `{"deliveryMode":"subdomain","expectedVersion":1}` from current identity metadata. OLD, sites and non-public HTML pages keep their mode (200 with a notice). Use the returned URL/version afterward.
 - NEW password-protected links stay clean: never generate or append `?p=`. API requests use `X-Password`; OLD password behavior remains unchanged.
 - **SITE bundles are allowlisted**: the directory build drops dot-entries (`.env`, `.git/`, `.DS_Store`; the root `.well-known/` stays, extension-less files included), `node_modules/`, `__MACOSX/`, symlinks and unknown types (`*.map`, `*.log`, `Thumbs.db`), flags kept names that look sensitive (`secret`, `token`, `password`, `credential`) for confirmation, and verifies the archive (`unzip -t`, name set) before upload. A supplied ZIP is never rewritten; anything unexpected, hidden or sensitive inside it needs confirmation (system files the server drops are left alone).

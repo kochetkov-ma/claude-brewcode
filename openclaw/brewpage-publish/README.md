@@ -109,7 +109,7 @@ Owner API and management links remain on `brewpage.app`, even when content uses 
 curl -X DELETE "$OWNER_API" -H "X-Owner-Token: $OWNER_TOKEN"
 ```
 
-To replace a site, `PUT` the new archive to its stored owner API with `X-Owner-Token`. The bundle replaces the full file set while retaining the content host. Omit `X-Delivery-Mode` on ordinary updates.
+To replace a site, `PUT` the new archive to its stored owner API with `X-Owner-Token`. The bundle replaces the full file set while retaining the content host. Omit `X-Delivery-Mode` on ordinary updates. In-place `PUT` works for publications created with BrewPage 2.0+ only; older ones answer `409 OLD_PUBLICATION_READ_ONLY`: publish anew and keep the new URL and owner token.
 
 Only new public HTML/file publications allow owner-only `PATCH /api/{type}/{ns}/{id}/hosting` (`type` is `html` or `files`). Read the current hosting metadata first with owner-only `GET` at the same endpoint, then send `deliveryMode` and that `hostingVersion` as `expectedVersion` with `X-Owner-Token`. Use the returned link and version afterward. Switching either way retains the reserved host; stale versions return `409`. Old publications, sites and non-public namespaces have no mode choice.
 
