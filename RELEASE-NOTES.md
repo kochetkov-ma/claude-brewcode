@@ -8,13 +8,13 @@
 
 **What changed for you**
 
-- [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) no longer promises an in-place update for every publication. Publications made before BrewPage 2.0 are read-only and answer `409 OLD_PUBLICATION_READ_ONLY`; the skill now says to publish anew and hand you the new URL and owner token. Newer publications still update in place.
+- [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) no longer promises an in-place update for every publication. Publications from before the new link format are read-only and answer `409 OLD_PUBLICATION_READ_ONLY`; the skill now says to publish anew and hand you the new URL and owner token. Publications with the new link format still update in place.
 
 ### brewdoc
 
 #### Fixed
 
-- **publish:** the history-file header, the "Update a site" note and the status table (new `409 OLD_PUBLICATION_READ_ONLY` row) state that in-place `PUT` works only for publications created with BrewPage 2.0+; older ones are published anew. Same change in the standalone `skills/brewpage-publish` and `openclaw/brewpage-publish` copies, the OpenClaw README and the docs page. Scripts still only `POST`; no new commands.
+- **publish:** the history-file header, the "Update a site" note and the status table (new `409 OLD_PUBLICATION_READ_ONLY` row) state that in-place `PUT` works only for publications with the new link format; older ones are published anew. Same change in the standalone `skills/brewpage-publish` and `openclaw/brewpage-publish` copies, the OpenClaw README and the docs page. Scripts still only `POST`; no new commands.
 
 ---
 

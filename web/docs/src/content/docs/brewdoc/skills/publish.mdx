@@ -127,7 +127,7 @@ curl -s -X DELETE "$OWNER_API" -H "X-Owner-Token: TOKEN"
 curl -s -X PUT "$OWNER_API" -H "X-Owner-Token: TOKEN" -F "archive=@/absolute/path/to/new-bundle.zip"
 ```
 
-PUT replaces a site's file set and keeps the host and the delivery mode; do not send `X-Delivery-Mode` on it. In-place PUT works for publications created with BrewPage 2.0+ only; older ones answer `409 OLD_PUBLICATION_READ_ONLY`: publish anew and keep the new URL and owner token.
+PUT replaces a site's file set and keeps the host and the delivery mode; do not send `X-Delivery-Mode` on it. In-place PUT works for publications with the new link format; older ones answer `409 OLD_PUBLICATION_READ_ONLY`: publish anew and keep the new URL and owner token.
 
 Only new public non-sites can switch hosting: `GET /api/{type}/{ns}/{id}/hosting` returns the version, then `PATCH` it with `X-Owner-Token` and `{"deliveryMode":"subdomain","expectedVersion":1}`. Use the version from GET. Issued URLs become safe redirects.
 
