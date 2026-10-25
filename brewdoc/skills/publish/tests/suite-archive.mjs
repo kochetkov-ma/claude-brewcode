@@ -149,6 +149,16 @@ try {
       'no partial archive is left behind for a later curl to pick up');
   }
 
+  // ── tool check: PATH lookup only; a same-named directory is not the tool ──
+  {
+    const noTool = join(BASE, 'no-tool-bin');
+    mkdirSync(join(noTool, 'zip'), { recursive: true });
+    const r = spawnSync(process.execPath, [PUBLISH, 'pack', '--dir', SITE, '--out', join(BASE, 'out', 'notool.zip')],
+      { encoding: 'utf8', env: { ...process.env, PATH: noTool }, timeout: 30000 });
+    check('notool.result', [r.status, r.stdout], [1, 'FAILED: zip required\nRESULT: fail\n'],
+      'GIVEN PATH holding only a zip directory WHEN pack runs THEN it fails fast as "zip required"');
+  }
+
   // ── failure causes: a child's error/signal is named, never read as its exit status ──
   {
     // GIVEN a site whose name list just passes 1 MiB (Node's default maxBuffer) with few files: 754-byte paths

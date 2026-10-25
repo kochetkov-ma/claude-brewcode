@@ -1,4 +1,4 @@
-// brewcode-meta: version=6.12.3 content_version=6.8.0 generated_by=brewtools:manager-setup
+// brewcode-meta: version=6.12.4 content_version=6.8.0 generated_by=brewtools:manager-setup
 
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2025-2026 Maksim Kochetkov

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.12.3 content_version=6.5.1 generated_by=brewcode:semble-setup
+// brewcode-meta: version=6.12.4 content_version=6.5.1 generated_by=brewcode:semble-setup
 
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2025-2026 Maksim Kochetkov

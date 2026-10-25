@@ -2,6 +2,22 @@
 
 ---
 
+## v6.12.4 (2026-10-25)
+
+> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+**What changed for you**
+
+- [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) checks that `zip` and `unzip` are installed by looking them up on `PATH` instead of running them, so skill security scanners (ClawHub) no longer read the check as shell execution. Publishing works exactly as before.
+
+### brewdoc
+
+#### Fixed
+
+- **publish:** `scripts/publish.mjs` `requireTool()` resolves the binary on `PATH` (`fs.accessSync` X_OK, regular file, `PATHEXT` on Windows) instead of `spawnSync(bin, ['-h'])`; same `<tool> required` failure. Same change in the standalone `skills/brewpage-publish` and `openclaw/brewpage-publish` copies (OpenClaw skill 1.0.3 on ClawHub). The `zip`/`unzip` runs that build and verify the archive are unchanged.
+
+---
+
 ## v6.12.3 (2026-10-25)
 
 > Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
