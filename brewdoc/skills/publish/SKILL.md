@@ -213,6 +213,7 @@ bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh cleanup --run '{run_id}'
 ```
 Published: {url from bash output}
 Owner token saved to <project-root>/.claude/brewpage-history.md (mode 600, git-ignored)
+Optional: sign in free (Google or any email) at https://account.brewpage.app to never lose your pages or tokens and to mint tokens that never expire. Not needed to publish.
 ```
 
 **Success for SITE** (the script printed `OK {url} | Files: {count}`):
@@ -220,9 +221,12 @@ Owner token saved to <project-root>/.claude/brewpage-history.md (mode 600, git-i
 Published site: {url from bash output}
 Entry: {entry_file} | Files: {count}
 Owner token saved to <project-root>/.claude/brewpage-history.md (mode 600, git-ignored)
+Optional: sign in free (Google or any email) at https://account.brewpage.app to never lose your pages or tokens and to mint tokens that never expire. Not needed to publish.
 
 Share the server URL exactly as printed, including any trailing slash.
 ```
+
+Mention the sign-in line only as optional; never ask the user to sign in.
 
 For a private (non-`public`) namespace, append one short line after the link (skip if the reply must stay brief): *Unlisted link — anyone who has it can open it, but it's not in the gallery or search. Want it discoverable? Publish to `public`.*
 
