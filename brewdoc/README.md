@@ -89,7 +89,7 @@ What each skill needs and writes locally:
 
 | Skill | Needs | Writes |
 |-------|-------|--------|
-| `publish` | `curl`, `jq`; sites also `node`, `unzip`; directories also `zip` | the owner-token history `.claude/brewpage-history.md` (mode 600, git-ignored) |
+| `publish` | POSIX (macOS/Linux/WSL), `bash`, `curl`, `jq`, Python 3 with `fcntl`; Git inside Git checkouts; sites also `node`, `unzip`; directories also `zip` ([requirements](skills/publish/SKILL.md#notes)) | owner-token history `.claude/brewpage-history.md` (mode 600, git-ignored); unsafe history writes stop publication; tokens never enter chat |
 | `md-to-pdf` | `reportlab` or `weasyprint` | the PDF next to the source; the engine choice in `.claude/md-to-pdf.config.json` |
 | `my-claude` | nothing extra | only under `.claude/brewdoc/`: guides in `my-claude/`, plus `INDEX.jsonl` |
 | `my-claude refresh` | nothing extra | a new dated guide; the older file stays (a same-day run overwrites) |

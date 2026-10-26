@@ -11,9 +11,9 @@ import { Badge, Card, CardGrid, Spoiler, UpdateNotice } from '../../../../compon
 
 Shares text, markdown, JSON, a file, a folder or a ZIP site on [brewpage.app](https://brewpage.app) (free, no sign-up) and returns the link. Private means unlisted, not locked: anyone with the link can open it unless a password is set. Pick the visibility before uploading; owner tokens go to a local history file and never into the conversation.
 
-BrewPage needs no account and keeps pages for 1 to 30 days. To compare it with GitHub Pages, Netlify Drop, Tiiny Host and others, see [brewpage.app/compare](https://brewpage.app/compare).
+BrewPage needs no account; anonymous publications last up to 30 days, or up to 90 days with a profile. Updates retain the original expiry. To compare hosting options, see [brewpage.app/compare](https://brewpage.app/compare).
 
-Optional: sign in free (Google or any email) at [account.brewpage.app](https://account.brewpage.app) to never lose your pages or tokens and to mint tokens that never expire. Not needed to publish.
+Optional: sign in free (Google or any email) at [account.brewpage.app](https://account.brewpage.app) to manage publications and owner-token history. Publications still expire; sign-in is not needed to publish.
 
 ## Quick reference
 
@@ -24,7 +24,7 @@ Optional: sign in free (Google or any email) at [account.brewpage.app](https://a
 | Model | haiku |
 | Invocation | Type the command, or ask Claude ("publish this", "share a link"). Claude may start it itself; headless and `dontAsk` runs need `Skill(brewdoc:publish *)` allowed |
 | Permissions | No Bash or Write prompts: one scoped rule, `scripts/brewpage-run.sh`, covers every step |
-| Requires | `jq`, `curl`; site uploads also `zip`, `unzip`, `node` |
+| Requires | POSIX runtime (macOS/Linux or WSL), `bash`, `curl`, `jq`, Python 3 (`python3`) with `fcntl`; `git` inside Git checkouts; sites also `node`, `unzip`, and directories `zip`. Native Windows Python is unsupported |
 
 ## When to use
 
@@ -69,16 +69,16 @@ SITE is checked first. Site entry follows the server rule: `--entry`, else the r
 
 | Fresh publication | Default | Explicit choice |
 |-------|-------|-------|
-| Public HTML/Markdown, JSON or file | Promotion (`path`) | `path` or `subdomain`, also with a password |
-| Site, any namespace | Subdomain | `subdomain`; `path` is rejected |
-| Non-site outside `public` | Subdomain | `subdomain`; `path` is rejected |
+| HTML format in `public`; Markdown, JSON or file in any namespace | Promotion (`path`) | `path` or `subdomain`, also with a password |
+| Site, any namespace | Subdomain | Forced; requested `path` still publishes with a mismatch notice |
+| HTML format outside `public` | Subdomain | Forced; requested `path` still publishes with a mismatch notice |
 
 **Promotion** serves from a `brewpage.app` address with stricter HTML limits (scripts, cookies, embeds). **Dedicated subdomain** gives its own origin with fewer limits: choose it if Promotion breaks your HTML. The response decides the effective mode, and the server may return an existing publication: **share the returned link exactly, trailing slash included**. New password-protected links stay clean (never append `?p=`).
 
 **Good to know**
 
 - In `public`, pages, sites and files are listed in the public gallery and the sitemap, so Google, Bing and AI search can find and index them and people can discover them. Use it for anything meant to be found or shared. Anyone can find and read a public publication, so never put secrets, tokens or personal data there. A private slug (default) is unlisted and not indexed; anyone with the link can still open it.
-- Headless runs use the defaults: suggested private namespace, no password.
+- Headless runs need explicit namespace and password choices supplied or previously confirmed for this content/workflow. An unanswered or ambiguous choice stops the upload.
 - A rejected upload prints `FAILED: publish rejected (HTTP <status>: <message>)` with the server's reason. After a successful `OK` line, lines starting with `NOTICE:` say what the server skipped or adjusted.
 - Limits behind the headline numbers: a ZIP expands to at most 40 MB, paths stop at 380 characters (900 bytes) and names at 200 bytes. The skill's own read-only `limits` command prints the current values.
 - Do not publish `.env` files or secrets: pages are reachable by anyone with the link, and content expires after the TTL.
@@ -91,9 +91,9 @@ SITE is checked first. Site entry follows the server rule: `--entry`, else the r
 
 **Detect.** For a path, `brewpage-run.sh probe '<path>'` prints `TYPE:`, the absolute `PATH:` and size stats. Types are classified SITE, MARKDOWN, FILE, JSON, HTML in that order.
 
-**Namespace.** Options: `public`, a suggested slug (3-16 chars named after the content, such as `api-docs`; never random), or custom. Skip or no answer means the suggested private slug.
+**Namespace.** Options: `public`, a suggested slug (3-16 chars named after the content, such as `api-docs`; never random), or custom. An explicit Skip selects the suggested private slug. An unanswered or ambiguous choice stops the upload.
 
-**Password.** Option 2 takes an absolute path to an existing file with at least four characters. Option 1, 3 or no answer ignores every password file, stale ones included. The helper copies the bytes into private header files: never shell literals, curl arguments or chat output; control characters stop the upload.
+**Password.** Option 2 takes an absolute path to an existing file with at least four characters. Explicit option 1 or 3 selects no password; an unanswered or ambiguous choice stops the upload. The helper copies the bytes into private header files: never shell literals, curl arguments or chat output; control characters stop the upload.
 
 **Publish.** Every slot is re-validated by the script (`ns`, `days`, `entry`, `delivery_mode`, `password_file`); an invalid value is re-asked, never cleaned up. Commands over 8,000 characters are refused, so long text goes through `stage`: chunks of up to 6,000 characters, then `publish --run <id>`. `cleanup --run <id>` drops a staged but unpublished run.
 
@@ -123,19 +123,20 @@ SITE is checked first. Site entry follows the server rule: `--entry`, else the r
 Use the stored **Owner API** (`ownerLink`), never a hostname split into namespace and ID. `OWNER_API` is that URL and `TOKEN` the stored owner token.
 
 ```bash
-curl -s -X DELETE "$OWNER_API" -H "X-Owner-Token: TOKEN"
-curl -s -X PUT "$OWNER_API" -H "X-Owner-Token: TOKEN" -F "archive=@/absolute/path/to/new-bundle.zip"
+curl -s -X DELETE "$OWNER_API" -H "X-Owner-Token: $TOKEN"
+curl -s -X PUT "$OWNER_API" -H "X-Owner-Token: $TOKEN" -F "archive=@/absolute/path/to/new-bundle.zip"
 ```
 
-PUT replaces a site's file set and keeps the host and the delivery mode; do not send `X-Delivery-Mode` on it. Old publications (made before 5 October 2026) are read-only: `409 OLD_PUBLICATION_READ_ONLY`; publish anew; report the new URL and owner token.
+PUT replaces a site's file set and keeps the host and the delivery mode; do not send `X-Delivery-Mode` on it. Old publications (made before 5 October 2026) are read-only: `409 OLD_PUBLICATION_READ_ONLY`; publish anew and report only the new public URL. Keep the owner token in protected local history, never in conversation or logs.
 
-Only new public non-sites can switch hosting: `GET /api/{type}/{ns}/{id}/hosting` returns the version, then `PATCH` it with `X-Owner-Token` and `{"deliveryMode":"subdomain","expectedVersion":1}`. Use the version from GET. Issued URLs become safe redirects.
+Owner-only `GET` and `PATCH /api/{type}/{ns}/{id}/hosting` support `html`, `files`, `json`, `kv` and `sites`. Read the current version with GET, then PATCH with `X-Owner-Token` and `{"deliveryMode":"subdomain","expectedVersion":1}`, using the actual version from GET. Use the returned link and version. Legacy publications without new routing metadata remain unchanged; sites and non-public HTML-format pages stay on subdomain. Mode mismatches are reported rather than rejected. Eligible switches retain the reserved host and redirect the previous link.
 
 | Response | Meaning |
 |-------|-------|
 | `403` | Owner authorization failed |
-| `400` | Invalid mode or version, or `HOSTING_MODE_LOCKED` (old or forced-mode identity; sites have no PATCH) |
-| `409 HOSTING_VERSION_CONFLICT` | Reload current settings, retry |
+| `400` | Invalid mode or malformed version |
+| Success with stale-version notice | The requested mode was applied; inspect the returned version and link |
+| Success with mode-mismatch notice | A forced-mode publication keeps its subdomain, or a legacy publication keeps its existing link |
 | `503` | Hosting changes unavailable; creation can fail with `HOST_ALLOCATION_FAILED` |
 
 Passwords and revocation cannot recall downloaded or cached copies.
@@ -145,6 +146,8 @@ Passwords and revocation cannot recall downloaded or cached copies.
 <Spoiler id="site-bundles" title="Site bundles and tests">
 
 A directory is packed by `scripts/publish.mjs pack --dir <dir> --out <archive.zip>`: stale target removed, `zip` status checked, result verified with `unzip -t` and a non-zero size; any failure deletes the archive before `curl` runs.
+
+Local inspection checks the central directory before decompression: at most 25 MiB compressed, 40 MiB expanded, 200 files, 400 entries, 5 MiB per member and 1 MiB metadata. ZIP64 and split archives are refused; each `unzip` check has a 10-second timeout. These local budgets are separate from server upload limits.
 
 The pack is an allowlist: only web-asset extensions (`.html .css .js .json .svg .png .woff2 .pdf .md` and similar) go in. System files (`.DS_Store`, `__MACOSX/`, `Thumbs.db`, `desktop.ini`) are dropped and listed under `SKIPPED`, never flagged and never counted toward the server's file limit. Hidden files and folders (`.env`, `.git/`) are dropped too, except the root `.well-known/`, which ships with its files, extension-less ones included (such as `apple-app-site-association`); `node_modules/` and symlinks are dropped as well. A supplied `.zip` is inspected, never rewritten: system entries are left alone (the server drops them), hidden entries are flagged, and an entry matching `.env`, `id_rsa`, `secret`, `credential`, `password`, `token`, `.pem`, `.key`, `.p12`, `.crt` or `.map` blocks the upload until you confirm.
 
@@ -159,7 +162,7 @@ Tests: `bash brewdoc/skills/publish/tests/run.sh` (no network, no real upload; t
     Convert markdown to PDF, then publish the file.
   </Card>
   <Card title="brewpage-mcp" icon="package" href="https://www.npmjs.com/package/brewpage-mcp">
-    Official MCP server for the BrewPage Sites API: `claude mcp add brewpage -- npx -y brewpage-mcp@1.9.3`
+    Official MCP server for the BrewPage API: `claude mcp add brewpage -- npx -y brewpage-mcp@1.14.4`
   </Card>
   <Card title="OpenAPI spec" icon="globe" href="https://kochetkov-ma.github.io/brewpage-openapi/">
     Full API contract (Scalar UI); REST base URL `https://brewpage.app/api`.

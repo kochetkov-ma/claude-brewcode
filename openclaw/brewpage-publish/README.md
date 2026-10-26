@@ -26,7 +26,7 @@ OpenClaw discovers skills from two locations. Drop the whole `brewpage-publish/`
 
 The folder/`name` (`brewpage-publish`) drives the slash command and the allowlist key. The name uses lowercase + a hyphen — colon/uppercase forms like `BrewPage::publish` are **invalid** in OpenClaw.
 
-This skill is standalone and portable; it bundles its own `scripts/` (`brewpage-run.sh` with `probe`, `stage`, `publish` and `cleanup`, a helper library and `publish.mjs`) and does not load Brewdoc publishing libraries. Its history stays in the current workspace at `./brewpage-history.md`.
+This skill is standalone; it bundles its own `scripts/` (`brewpage-run.sh` with `probe`, `stage`, `publish` and `cleanup`, a helper library, `publish.mjs` and `history.py`) and does not load Brewdoc publishing libraries. Its history stays in the current workspace at `./brewpage-history.md`.
 
 ## How to Invoke
 
@@ -47,7 +47,7 @@ Upload report.md to brewpage.app
 Deploy this directory as a site
 ```
 
-The model detects the content type, asks for a namespace and password, calls the brewpage.app API, and returns the link.
+The model detects the content type, asks for a namespace and password, calls the brewpage.app API, and returns the link. Both privacy choices require an explicit answer; an unanswered or ambiguous choice stops the upload. An explicit Skip selects the suggested private namespace or no password.
 
 ## API Coverage
 
@@ -66,9 +66,9 @@ For new publications (`routingCohort: "new-v1"`):
 
 | Content / namespace | Default | Choice |
 |---------------------|---------|--------|
-| HTML or file in `public`, including password-protected uploads | Promotion (`path`) | `path` or `subdomain` |
-| HTML or file in any non-public namespace | Dedicated subdomain (`subdomain`) | Required; explicit `path` is rejected |
-| Site in any namespace | Dedicated subdomain (`subdomain`) | Required; explicit `path` is rejected |
+| HTML format in `public`; markdown/text or file in any namespace, including password-protected uploads | Promotion (`path`) | `path` or `subdomain` |
+| HTML format in any non-public namespace | Dedicated subdomain (`subdomain`) | Forced; requested `path` still publishes with a mode mismatch/notice |
+| Site in any namespace | Dedicated subdomain (`subdomain`) | Forced; requested `path` still publishes with a mode mismatch/notice |
 
 Share the server's `link` exactly, including a new subdomain root's trailing `/`. Never reconstruct a host from IDs or parse a hostname to obtain API identifiers.
 
@@ -89,6 +89,8 @@ Entry file (server rule): `--entry` override > root `index.html` > shallowest `.
 
 Site limits: 200 files, 5 MB per file, 20 MB total, 25 MB per request. To see the current values, ask the skill to check the limits or run `curl -s https://brewpage.app/api/limits`; the skill runs its own `limits` command before a big site. A successful upload prints `OK <url>`, followed by any server `NOTICE:` lines. A rejected upload prints `FAILED: publish rejected (HTTP <status>: <message>)` with the server's reason and no notices.
 
+Local ZIP inspection has separate budgets: 25 MiB compressed, 40 MiB expanded, 200 files, 400 entries, 5 MiB per member and 1 MiB of metadata. ZIP64 and split archives are refused; each `unzip` check has a 10-second timeout. See [the skill workflow](SKILL.md) for inspection details; server limits still apply.
+
 New sites use the exact returned subdomain root URL, including `/`, with native entry and asset paths. Verify rendering in a browser. Old sites may still redirect their root to the landing page; verify them in a browser or fetch their explicit entry asset. Preserve each returned link's original form.
 
 ## TTL
@@ -101,7 +103,7 @@ The owner token is **never printed in conversation** — `brewpage-run.sh` calls
 
 `./brewpage-history.md` is a **private file**: the script creates it with mode 600 and adds it to `./.gitignore` inside a git repo. Each new row stores `ownerLink` and identity: `id`, `namespace`, `type`, `routingCohort`, `deliveryMode`, `modeLocked`, `hostingVersion`, `managementLink`, `createdAt` and `expiresAt`.
 
-Optional: sign in free (Google or any email) at [account.brewpage.app](https://account.brewpage.app) to never lose your pages or tokens and to mint tokens that never expire. Not needed to publish.
+Optional: sign in free (Google or any email) at [account.brewpage.app](https://account.brewpage.app) to manage publications and tokens, with retention up to 90 days. Publications still expire; a token without an expiry does not extend content retention. Local owner-token history stays in your workspace. Sign-in is not needed to publish.
 
 Owner API and management links remain on `brewpage.app`, even when content uses a subdomain. Use the stored `ownerLink` and metadata; old history without metadata keeps its existing API identifiers. To delete a publication, read its owner API URL and token from history:
 
@@ -109,9 +111,9 @@ Owner API and management links remain on `brewpage.app`, even when content uses 
 curl -X DELETE "$OWNER_API" -H "X-Owner-Token: $OWNER_TOKEN"
 ```
 
-To replace a site, `PUT` the new archive to its stored owner API with `X-Owner-Token`. The bundle replaces the full file set while retaining the content host. Omit `X-Delivery-Mode` on ordinary updates. Old publications (made before 5 October 2026) are read-only: `409 OLD_PUBLICATION_READ_ONLY`; publish anew; report the new URL and owner token.
+To replace a site, `PUT` the new archive to its stored owner API with `X-Owner-Token`. The bundle replaces the full file set while retaining the content host. Omit `X-Delivery-Mode` on ordinary updates. Old publications (made before 5 October 2026) are read-only: `409 OLD_PUBLICATION_READ_ONLY`; publish anew and report only the new public URL. Keep the new owner token in the protected local history file, never in conversation or logs.
 
-Only new public HTML/file publications allow owner-only `PATCH /api/{type}/{ns}/{id}/hosting` (`type` is `html` or `files`). Read the current hosting metadata first with owner-only `GET` at the same endpoint, then send `deliveryMode` and that `hostingVersion` as `expectedVersion` with `X-Owner-Token`. Use the returned link and version afterward. Switching either way retains the reserved host; stale versions return `409`. Old publications, sites and non-public namespaces have no mode choice.
+Owner-only `GET` and `PATCH /api/{type}/{ns}/{id}/hosting` support `html`, `files`, `json`, `kv` and `sites`. Read the current hosting metadata first, then send `deliveryMode` and that `hostingVersion` as `expectedVersion` with `X-Owner-Token`. Use the returned link and version afterward. Legacy publications without new routing metadata remain unchanged. Sites and non-public HTML-format pages stay on their subdomain; a mismatched mode is reported rather than rejected. A stale version is applied with a notice, so inspect the response. Switching an eligible publication retains its reserved host.
 
 ## Password-Protected Links
 
@@ -119,7 +121,7 @@ New protected links stay clean: never append `?p=`. Share the exact returned URL
 
 ## Requirements
 
-All uploads require `bash`, `curl` and `jq`. Directory and ZIP sites also require `node` and `unzip`; directory packaging also requires `zip`.
+Use a POSIX runtime: macOS, Linux or WSL. All uploads require `bash`, `curl`, `jq` and POSIX Python 3 (`python3`) with `fcntl` for secure local history; `git` is also required inside Git checkouts. Native Windows Python is unsupported and fails before upload. Directory and ZIP sites also require `node` and `unzip`; directory packaging also requires `zip`.
 
 ## Documentation
 
@@ -128,4 +130,4 @@ All uploads require `bash`, `curl` and `jq`. Directory and ZIP sites also requir
 
 ## License
 
-MIT
+The bundled skill and scripts are MIT-licensed. The hosted BrewPage service is proprietary.
