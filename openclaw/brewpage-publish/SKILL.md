@@ -190,7 +190,7 @@ bash {baseDir}/scripts/brewpage-run.sh cleanup --run '{run_id}'
 ```
 Published: {url from bash output}
 Owner token saved to ./brewpage-history.md (mode 600, git-ignored)
-Optional: sign in free (Google or any email) at https://account.brewpage.app to never lose your pages or tokens and to mint tokens that never expire. Not needed to publish.
+Optional: sign in free (Google or any email) at https://account.brewpage.app to manage publications and token history, and extend publication retention up to 90 days. Publications still expire. Not needed to publish.
 ```
 
 **Success for SITE** (the script printed `OK {url} | Files: {count}`):
@@ -198,7 +198,7 @@ Optional: sign in free (Google or any email) at https://account.brewpage.app to 
 Published site: {url from bash output}
 Entry: {entry_file} | Files: {count}
 Owner token saved to ./brewpage-history.md (mode 600, git-ignored)
-Optional: sign in free (Google or any email) at https://account.brewpage.app to never lose your pages or tokens and to mint tokens that never expire. Not needed to publish.
+Optional: sign in free (Google or any email) at https://account.brewpage.app to manage publications and token history, and extend publication retention up to 90 days. Publications still expire. Not needed to publish.
 
 Share the server URL exactly as printed, including any trailing slash.
 ```
