@@ -122,3 +122,21 @@ for (const [file, bytes] of [['config', '[invalid\n'], ['index', 'invalid index'
   const result = spawnSync('python3', [join(scripts, 'history.py'), 'init', project, 'brewpage-history.md'], { input: 'fixture secret\n', encoding: 'utf8' });
   assert.deepEqual([result.status, existsSync(join(project, 'brewpage-history.md'))], [1, false], 'Git operational errors fail before history write');
 });
+
+for (const type of ['html', 'site']) for (const [name, outcome, saved] of [
+  ['created', { code: 'ok', action: 'created', extras: { isOwner: false } }, true],
+  ['owned merged', { code: 'duplicate', action: 'merged', extras: { isOwner: true } }, true],
+  ['nonowned merged', { code: 'duplicate', action: 'merged', extras: { isOwner: false } }, false],
+  ['merged without ownership metadata', { code: 'duplicate', action: 'merged' }, true],
+  ['legacy without outcome', undefined, true],
+]) test(`${type} ${name} preserves history and saves only supported capabilities`, () => {
+  // GIVEN existing valid ownership WHEN a repeated wire response arrives THEN explicit nonownership is never saved as a capability.
+  const project = mkdtempSync(join(base, 'merged-'));
+  const response = { link: 'https://example.invalid/existing', ownerLink: 'https://example.invalid/api/html/fixture/existing', ownerToken: 'fixture-second', fileCount: 2, result: outcome };
+  const first = { ...response, ownerToken: 'fixture-owner', result: { code: 'ok', action: 'created' } };
+  const run = spawnSync('bash', ['-c', '. "$LIB"; bp_history_init && bp_finish "$FIRST" 15 html && bp_finish "$SECOND" 15 "$TYPE"'], { cwd: project, encoding: 'utf8', env: { ...process.env, PATH: bin + ':' + process.env.PATH, LIB: join(scripts, 'brewpage-lib.sh'), CLAUDE_PROJECT_DIR: project, FIRST: JSON.stringify(first), SECOND: JSON.stringify(response), TYPE: type } });
+  const tokens = [...readFileSync(join(project, '.claude/brewpage-history.md'), 'utf8').matchAll(/`(fixture-owner|fixture-second)`/g)].map(match => match[1]);
+  const success = `OK ${response.link}\nOK ${response.link}${type === 'site' ? ' | Files: 2' : ''}\n`;
+  const expected = saved ? [0, success, ['fixture-owner', 'fixture-second']] : [0, success + 'NOTICE: existing publication returned without ownership; no owner capability saved\n', ['fixture-owner']];
+  assert.deepEqual([run.status, run.stdout, tokens], expected, 'reader success survives while previous ownership and truthful capability rows are preserved');
+});

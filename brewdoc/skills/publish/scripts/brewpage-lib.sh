@@ -186,14 +186,18 @@ bp_error_reason() {
 # The tail every block shares: URL out, owner token to history, one OK/FAILED line, then any server NOTICE lines.
 # `site` is the only type whose response carries .fileCount.
 bp_finish() {
-  local response="$1" days="$2" type="$3" url token fcount owner_api identity reason
+  local response="$1" days="$2" type="$3" url token fcount owner_api identity reason nonowned_merge=0
   url=$(printf '%s' "$response" | jq -r '.link // empty')
   if [ -z "$url" ]; then
     reason=$(bp_error_reason "$response")
     echo "FAILED: publish rejected (${reason:-no .link in response})"
     return 1
   fi
-  token=$(printf '%s' "$response" | jq -r '.ownerToken // empty')
+  if printf '%s' "$response" | jq -e '.result.action == "merged" and .result.extras.isOwner == false' >/dev/null 2>&1; then
+    token=""; nonowned_merge=1
+  else
+    token=$(printf '%s' "$response" | jq -r '.ownerToken // empty')
+  fi
   owner_api=$(printf '%s' "$response" | jq -r '.ownerLink // empty')
   identity=$(printf '%s' "$response" | jq -c '{id, namespace, type, routingCohort, deliveryMode, modeLocked, hostingVersion, managementLink, createdAt, expiresAt}')
   if [ "$type" = site ]; then
@@ -204,6 +208,7 @@ bp_finish() {
     if [ -n "$token" ]; then bp_history_append "$url" "$token" "$days" "$type" "$owner_api" "$identity" || { echo 'FAILED: published but owner token could not be saved securely'; return 1; }; fi
     echo "OK $url"
   fi
+  if [ "$nonowned_merge" -eq 1 ]; then echo 'NOTICE: existing publication returned without ownership; no owner capability saved'; fi
   printf '%s' "$response" | jq -r '.notices[]?.message // empty | "NOTICE: " + (tostring | explode | map(if . < 32 then 32 else . end) | implode)' 2>/dev/null || true
 }
 

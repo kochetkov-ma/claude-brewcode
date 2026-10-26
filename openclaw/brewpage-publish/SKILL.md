@@ -206,6 +206,7 @@ Share the server URL exactly as printed, including any trailing slash.
 For a private (non-`public`) namespace, append one short line after the link (skip if the reply must stay brief): *Unlisted link — anyone who has it can open it, but it's not in the gallery or search. Want it discoverable? Publish to `public`.*
 
 Mention the sign-in line only as optional; never ask the user to sign in.
+If a NOTICE says no owner capability was saved, omit the token-saved line and report only the reader URL plus that notice; existing history stays unchanged.
 
 **NEVER print the ownerToken in conversation.** The token lives only in the history file.
 
