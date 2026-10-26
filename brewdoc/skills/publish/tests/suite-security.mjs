@@ -2,10 +2,11 @@
 // Offline audit regressions: history destinations, explicit privacy choices, bounded ZIP inspection.
 import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
-import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, symlinkSync, rmSync, statSync, existsSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { createServer } from 'node:http';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, symlinkSync, rmSync, statSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = dirname(fileURLToPath(import.meta.url));
 const scripts = join(root, '../scripts');
@@ -13,6 +14,76 @@ const base = mkdtempSync(join(tmpdir(), 'publish-security-'));
 const bin = join(base, 'bin'); mkdirSync(bin);
 writeFileSync(join(bin, 'curl'), '#!/bin/sh\nprintf \'{"link":"https://example.invalid/fixture","ownerToken":"fixture"}\\n\'\n', { mode: 0o755 });
 after(() => rmSync(base, { recursive: true, force: true }));
+
+test('real curl uploads only the intended multipart bytes for hostile valid paths', async t => {
+  // GIVEN only benign fixtures and a curl wrapper that redirects approved URLs to loopback.
+  const realCurl = process.env.BREWPAGE_TEST_REAL_CURL || spawnSync('which', ['curl'], { encoding: 'utf8' }).stdout.trim();
+  const fixture = mkdtempSync(join(base, 'multipart-'));
+  const guardedBin = join(fixture, 'bin'); mkdirSync(guardedBin);
+  writeFileSync(join(guardedBin, 'curl'), `#!/usr/bin/env node
+const { spawnSync } = require('node:child_process');
+const args = process.argv.slice(2);
+const urls = args.filter(a => /^https?:/.test(a));
+if (urls.length !== 1) process.exit(97);
+const url = new URL(urls[0]);
+if (url.origin !== 'https://brewpage.app' || !['/api/files', '/api/sites'].includes(url.pathname)) process.exit(97);
+args[args.indexOf(urls[0])] = process.env.LOOPBACK_URL;
+const result = spawnSync(process.env.REAL_CURL, ['--disable', '--proxy', '', ...args], { encoding: 'utf8' });
+process.stdout.write(result.stdout || ''); process.stderr.write(result.stderr || '');
+process.exit(result.status ?? 98);
+`, { mode: 0o700 });
+  const received = [];
+  const server = createServer((req, res) => {
+    const chunks = [];
+    req.on('data', chunk => chunks.push(chunk));
+    req.on('end', () => {
+      received.push({ headers: req.headers, body: Buffer.concat(chunks) });
+      res.end(JSON.stringify({ link: 'https://example.invalid/fixture', fileCount: 1 }));
+    });
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const site = join(fixture, 'site'); mkdirSync(site);
+    writeFileSync(join(site, 'index.html'), '<h1>intended fixture</h1>');
+    const zip = join(fixture, 'intended.zip');
+    const packed = spawnSync('node', [join(scripts, 'publish.mjs'), 'pack', '--dir', site, '--out', zip]);
+    assert.equal(packed.status, 0, 'valid intended ZIP builds offline');
+    const sentinel = join(fixture, 'outside-sentinel'); writeFileSync(sentinel, 'OUTSIDE_READ_SENTINEL');
+    const cases = [];
+    for (const type of ['file', 'site-zip']) {
+      const prefix = join(fixture, `${type}-first`);
+      writeFileSync(prefix, 'UNINTENDED_FIRST_FILE');
+      const comma = `${prefix},${sentinel}`;
+      cases.push([type, comma], [type, join(fixture, `${type};type=text/plain`)], [type, join(fixture, `${type}-quote"-back\\slash.zip`)], [type, join(fixture, `${type}-relatório-日本語.zip`)]);
+    }
+    cases.push(['site-dir', site]);
+    for (const [type, path] of cases) await t.test(`${type}: ${basename(path)}`, async () => {
+      const expected = type === 'file' ? Buffer.from('INTENDED_FILE_ONLY') : readFileSync(zip);
+      if (type !== 'site-dir') { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, expected); }
+      const project = mkdtempSync(join(fixture, 'project-'));
+      const temp = join(project, 'tmp,;"\\'); mkdirSync(temp);
+      // WHEN the actual runner uses real curl THEN its wire contains one intended file only.
+      const run = await new Promise(resolve => {
+        const child = spawn('bash', [join(scripts, 'brewpage-run.sh'), 'publish', type, '--ns', 'fixture', '--password-file', '', '--path', path], {
+          cwd: project, timeout: 10000, env: { ...process.env, CLAUDE_PROJECT_DIR: project, TMPDIR: temp, PATH: guardedBin + ':' + process.env.PATH, REAL_CURL: realCurl, LOOPBACK_URL: `http://127.0.0.1:${server.address().port}/fixture` },
+        });
+        let output = ''; child.stdout.on('data', chunk => { output += chunk; }); child.stderr.on('data', chunk => { output += chunk; });
+        child.on('close', status => resolve({ status, output }));
+      });
+      const wire = received.shift();
+      assert.equal(run.status, 0, `${type} ${basename(path)} publishes locally: ${run.output}`);
+      assert.equal(wire.body.includes(Buffer.from('OUTSIDE_READ_SENTINEL')), false, `${type}: no outside fixture bytes cross the wire`);
+      const boundary = /boundary=(.+)$/.exec(wire.headers['content-type'])[1];
+      const parts = wire.body.toString('latin1').split(`--${boundary}`).slice(1, -1);
+      const payloads = parts.map(part => Buffer.from(part.slice(part.indexOf('\r\n\r\n') + 4, -2), 'latin1'));
+      assert.deepEqual(payloads, [expected], `${type}: exactly one multipart payload equals intended bytes`);
+      assert.equal(parts[0].includes(`name="${type === 'file' ? 'file' : 'archive'}"`), true, 'multipart field identity is preserved');
+      const filename = Buffer.from((type === 'site-dir' ? 'site.zip' : basename(path)).replaceAll('"', '%22')).toString('latin1');
+      assert.equal(parts[0].includes(`filename="${filename}"`), true, 'original filename is preserved by curl');
+      assert.deepEqual(readdirSync(temp), [], 'private temporary run is cleaned');
+    });
+  } finally { await new Promise(resolve => server.close(resolve)); }
+});
 
 for (const target of ['directory', 'history', 'gitignore']) test(`history rejects symlink ${target}`, () => {
   // GIVEN an attacker-controlled history destination and unchanged external fixture.

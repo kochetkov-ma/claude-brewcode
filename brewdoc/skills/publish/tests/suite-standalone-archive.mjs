@@ -59,7 +59,7 @@ const CONFIRM = 'CONFIRM: flagged entries listed above — ask the user, then re
 const base = realpathSync(mkdtempSync(join(tmpdir(), 'standalone-archive-')));
 const tmp = join(base, 'tmp');
 mkdirSync(tmp);
-const realCurl = spawnSync('sh', ['-c', 'command -v curl'], { encoding: 'utf8' }).stdout.trim();
+const realCurl = process.env.BREWPAGE_TEST_REAL_CURL || spawnSync('sh', ['-c', 'command -v curl'], { encoding: 'utf8' }).stdout.trim();
 const runNames = () => readdirSync(tmp).filter(name => name.startsWith('brewpage.'));
 let seq = 0;
 
@@ -69,9 +69,9 @@ function binWith(stubs) {
   for (const [name, script] of Object.entries(stubs)) writeFileSync(join(bin, name), `#!/bin/bash\n${script}\n`, { mode: 0o755 });
   return bin;
 }
-const UPLOAD_STUB = 'printf "%s\\n" "$@" > "$TEST_BASE/curl-args"\nfor arg in "$@"; do\n  case "$arg" in archive=@*) cp "${arg#archive=@}" "$TEST_BASE/uploaded.zip" || exit 1 ;; esac\ndone\n'
+const UPLOAD_STUB = 'printf "%s\\n" "$@" > "$TEST_BASE/curl-args"\nfor arg in "$@"; do\n  case "$arg" in archive=@*) file="${arg#archive=@}"; file="${file#\\\"}"; file="${file%\\\"}"; cp "$file" "$TEST_BASE/uploaded.zip" || exit 1 ;; esac\ndone\n'
   + 'printf %s \'{"link":"https://example.test/","fileCount":3}\'';
-const REDIRECT_STUB = 'args=()\nfor a in "$@"; do args+=("${a/https:\\/\\/brewpage.app/$BP_ENDPOINT}"); done\nexec "$REAL_CURL" "${args[@]}"';
+const REDIRECT_STUB = 'args=()\nfor a in "$@"; do args+=("${a/https:\\/\\/brewpage.app/$BP_ENDPOINT}"); done\nexec "$REAL_CURL" --disable --proxy "" "${args[@]}"';
 
 function siteFence(copy, slots) {
   const source = readFileSync(join(copy.dir, 'SKILL.md'), 'utf8');

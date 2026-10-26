@@ -6,6 +6,11 @@ set -euo pipefail
 CLAUDE_CONFIG_DIR="$(mktemp -d)"; export CLAUDE_CONFIG_DIR
 # EXIT: delete only the temp profile made above (non-empty, under TMPDIR); runner rc kept.
 CFG_TMP_DIR="$CLAUDE_CONFIG_DIR"; CFG_TMP_ROOT="${TMPDIR:-/tmp}"; CFG_TMP_ROOT="${CFG_TMP_ROOT%/}"
+BREWPAGE_TEST_REAL_CURL="$(command -v curl)"; export BREWPAGE_TEST_REAL_CURL
+mkdir "$CLAUDE_CONFIG_DIR/bin"
+printf '#!/bin/sh\nprintf "FAILED: unexpected network call in publish tests\\n" >&2\nexit 97\n' > "$CLAUDE_CONFIG_DIR/bin/curl"
+chmod 700 "$CLAUDE_CONFIG_DIR/bin/curl"
+PATH="$CLAUDE_CONFIG_DIR/bin:$PATH"; export PATH
 readonly CFG_TMP_DIR CFG_TMP_ROOT
 trap '[ -z "$CFG_TMP_ROOT" ] || case "$CFG_TMP_DIR" in "$CFG_TMP_ROOT"/?*) rm -rf -- "$CFG_TMP_DIR" || true ;; esac' EXIT
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

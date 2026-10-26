@@ -21,7 +21,7 @@ writeFileSync(curl, [
   'const fs = require("node:fs");',
   'const args = process.argv.slice(2);',
   'const files = {};',
-  'for (const a of args) { const m = /^(?:[a-z]+=)?@(.+)$/.exec(a); if (m) files[m[1]] = fs.existsSync(m[1]) ? fs.readFileSync(m[1]).length : null; }',
+  'for (const a of args) { const m = /^(?:[a-z]+=)?@(.+)$/.exec(a); if (m) { const p = m[1].startsWith("\\\"") ? JSON.parse(m[1]) : m[1]; files[p] = fs.existsSync(p) ? fs.readFileSync(p).length : null; } }',
   'const d = args.includes("-d") ? args[args.indexOf("-d") + 1].slice(1) : "";',
   'const payload = d && fs.existsSync(d) ? fs.readFileSync(d, "utf8") : null;',
   'fs.writeFileSync(process.env.CURL_LOG, JSON.stringify({ args, files, payload }));',
@@ -109,7 +109,7 @@ try {
   assert.equal(dir.result.stdout, manifest('site.zip', dirCurl.files[dirZip]) + 'OK https://fixture.brewpage.app/ | Files: 3\n',
     'THEN zsh site-dir command prints the manifest with the requested entry and the URL line');
   assert.deepEqual(normalize(dirCurl.args), ['-s', '-X', 'POST', 'https://brewpage.app/api/sites?ns=public&ttl=15&entry=sub%2Fpage.html',
-    '-H', 'User-Agent: ClaudeCode/1.0', '-F', 'archive=@' + tmp + '/brewpage.RUN/site.zip'], 'THEN curl gets the encoded entry and the run-dir archive');
+    '-H', 'User-Agent: ClaudeCode/1.0', '-F', 'archive=@"' + tmp + '/brewpage.RUN/site.zip"'], 'THEN curl gets the encoded entry and the run-dir archive');
   assert.deepEqual(runDirs(), [], 'THEN the site-dir run dir is removed at exit');
 
   // GIVEN the shipped path command for a ZIP and a nested entry WHEN run under zsh -f THEN inspect honours the entry.
@@ -119,7 +119,7 @@ try {
     'THEN zsh site-zip command prints the manifest with the requested entry and the URL line');
   assert.deepEqual(curlOf(zip), {
     args: ['-s', '-X', 'POST', 'https://brewpage.app/api/sites?ns=public&ttl=15&entry=sub%2Fpage.html',
-      '-H', 'User-Agent: ClaudeCode/1.0', '-F', 'archive=@' + fixtureZip],
+      '-H', 'User-Agent: ClaudeCode/1.0', '-F', 'archive=@"' + fixtureZip + '"'],
     files: { [fixtureZip]: fixtureBytes }, payload: null,
   }, 'THEN curl uploads the user zip unchanged');
   assert.equal(existsSync(fixtureZip), true, 'THEN the user-supplied zip is preserved');

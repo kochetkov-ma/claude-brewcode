@@ -183,7 +183,7 @@ for (const copy of COPIES) {
       'probe prints type, absolute path and size');
     const published = run(copy, fill(copy, "--path '{path}'", { type: 'file', ns: 'my', days: '7', entry: '', delivery_mode: '', password_file: '', path: abs }), 'file');
     assert.deepEqual([published.status, published.stdout, JSON.parse(readFileSync(outFile(copy, 'file'), 'utf8')), runNames()],
-      [0, 'OK https://example.invalid/result\n', ['-s', '-X', 'POST', 'https://brewpage.app/api/files?ns=my&ttl=7', '-F', 'file=@' + abs], []],
+      [0, 'OK https://example.invalid/result\n', ['-s', '-X', 'POST', 'https://brewpage.app/api/files?ns=my&ttl=7', '-F', 'file=@"' + abs + '"'], []],
       'file upload posts the exact path and leaves no run dir');
   });
 

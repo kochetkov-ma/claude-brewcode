@@ -309,10 +309,10 @@ check('skill.payload.file', countRun(/-d @"\$(BP_RUN_DIR\/payload\.json|content)
   const packLine = RUN_LINES.findIndex((l) => l.includes('publish.mjs" pack'));
   const inspectLine = RUN_LINES.findIndex((l) => l.includes('publish.mjs" inspect'));
   const gateLines = RUN_LINES.map((l, i) => [l, i]).filter(([l]) => l.includes('bp_archive_gate')).map(([, i]) => i);
-  const curlLine = RUN_LINES.findIndex((l) => l.includes('archive=@'));
+  const curlLine = RUN_LINES.findIndex((l) => l.includes('form_file archive'));
   check('gate.calls', [packLine >= 0, inspectLine >= 0], [true, true],
     'the directory branch packs and the supplied-ZIP branch inspects');
-  check('gate.curl.count', countRun(/archive=@/), 1, 'exactly one upload line sends an archive, shared by both site types');
+  check('gate.curl.count', countRun(/form_file archive/), 1, 'exactly one upload line sends an archive, shared by both site types');
   check('gate.order', [packLine < gateLines[0], inspectLine < gateLines[1], gateLines[1] < curlLine], [true, true, true],
     'the manifest and the gate come before the upload line in both branches');
   check('gate.abort', countRun(/^ {8}bp_archive_gate "\$rc" "\$manifest" "(\$archive)?" \|\| exit \$\?$/), 2,
