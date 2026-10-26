@@ -24,9 +24,10 @@ brewpage-run.sh probe <path>
 brewpage-run.sh limits
 brewpage-run.sh stage --run <run_id|''> --text <chunk>
 brewpage-run.sh publish <html|json|file|site-dir|site-zip> --ns <ns> [--ttl N] [--entry F]
-  [--delivery-mode path|subdomain] [--password-file ABS] [--confirmed] (--text T | --run ID | --path P)
+  [--delivery-mode path|subdomain] --password-file <ABS|''> [--confirmed] (--text T | --run ID | --path P)
 brewpage-run.sh cleanup --run <run_id>
-Empty flag values count as omitted. Prints one OK/CONFIRM:/FAILED: line; CONFIRM exits 2.
+--ns and --password-file are required; --password-file '' explicitly selects no password.
+Empty --ttl uses 15; empty --entry/--delivery-mode are omitted. Prints OK/CONFIRM:/FAILED:; CONFIRM exits 2.
 USAGE
 }
 

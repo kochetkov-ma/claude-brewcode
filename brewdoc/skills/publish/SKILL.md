@@ -160,7 +160,7 @@ An empty, unavailable, ambiguous or unanswered choice → stop before upload. A 
 
 ### Step 6: Publish and Save Token (secure)
 
-Delivery mode: NEW sites always get a Dedicated subdomain (an explicit `path` is not refused: the site lands on
+Delivery mode: NEW sites and non-public HTML pages (format `html`) get a Dedicated subdomain (an explicit `path` is not refused: the publication lands on
 its subdomain and the response reports the mismatch); everything else defaults to Promotion (`path`) and may
 select `subdomain`, password-protected included. Send it only as `X-Delivery-Mode`, never in authored JSON, text or multipart fields. A deduplicated
 OLD or NEW winner may differ: keep its identity, cohort, mode and exact `link`. Missing/null OLD routing
@@ -252,7 +252,7 @@ a value that still cannot be stored is a 400, not a 409.
 
 ## Notes
 
-- Requires `bash`, `curl`, `jq`, `python3` (secure atomic history); sites also `node`, `zip`, `unzip`.
+- Requires a POSIX runtime (macOS/Linux or WSL), `bash`, `curl`, `jq`, POSIX `python3` with `fcntl` (secure atomic history); sites also `node`, `zip`, `unzip`. Native Windows Python is unsupported and fails before upload.
 - History writes reject symlinks, hardlinks, tracked history and directories writable by others; failure stops publication. Archive inspection caps 25 MiB compressed, 40 MiB expanded, 200 files, 400 entries, 5 MiB/member and 1 MiB metadata; ZIP64/split archives are refused.
 
 - **`format` is a query param**: `/api/html` reads only `?format=` from the URL; a body `format` key is ignored and the default `html` stores markdown as raw text.

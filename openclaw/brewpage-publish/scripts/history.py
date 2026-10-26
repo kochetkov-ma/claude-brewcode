@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025-2026 Maksim Kochetkov
-import fcntl
 import os
+import sys
+
+if os.name != 'posix' or not all(hasattr(os, name) for name in ('O_NOFOLLOW', 'O_DIRECTORY', 'getuid')):
+    print('FAILED: secure history requires POSIX Python 3 (macOS/Linux or WSL); native Windows is unsupported', file=sys.stderr)
+    sys.exit(1)
+import fcntl
 import secrets
 import shutil
 import stat
 import subprocess
-import sys
 
 
 def regular(directory, name):
@@ -88,8 +92,11 @@ def main():
             if git_repo or ignore is not None:
                 ignore = ignore or b''
                 entry = relative.encode()
-                if entry not in ignore.splitlines():
+                ignored = git_repo and subprocess.run(['git', '-C', root, 'check-ignore', '--no-index', '--quiet', '--', relative], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+                if entry not in ignore.splitlines() or (git_repo and not ignored):
                     replace(directory, '.gitignore', ignore + (b'\n' if ignore and not ignore.endswith(b'\n') else b'') + entry + b'\n', 0o644)
+                if git_repo and subprocess.run(['git', '-C', root, 'check-ignore', '--no-index', '--quiet', '--', relative], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
+                    raise ValueError('history is not effectively ignored by git; resolve nested ignore overrides before publishing')
             incoming = sys.stdin.buffer.read(1024 * 1024 + 1)
             if len(incoming) > 1024 * 1024:
                 raise ValueError('history row exceeds local limit')

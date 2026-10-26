@@ -79,3 +79,37 @@ test('missing secure-history runtime fails before any publish preparation', () =
   const result = spawnSync('/bin/bash', [join(scripts, 'brewpage-run.sh'), 'publish', 'html', '--ns', 'fixture', '--password-file', '', '--text', 'fixture'], { encoding: 'utf8', env: { ...process.env, PATH: minimal, CLAUDE_PROJECT_DIR: base } });
   assert.deepEqual([result.status, result.stdout.trim()], [1, 'FAILED: python3 required for secure history'], 'no missing-runtime unsafe fallback exists');
 });
+
+for (const relative of ['brewpage-history.md', '.claude/brewpage-history.md']) test(`effective Git ignore protects ${relative} despite negation`, () => {
+  // GIVEN a literal ignore followed by negation WHEN initializing THEN effective Git visibility is private.
+  const project = mkdtempSync(join(base, 'negated-'));
+  assert.equal(spawnSync('git', ['init', '-q', project]).status, 0, 'fixture repository initializes');
+  assert.equal(spawnSync('git', ['-C', project, 'config', 'core.excludesFile', '/dev/null']).status, 0, 'global ignore rules are disabled for this fixture');
+  writeFileSync(join(project, '.gitignore'), `${relative}\n!${relative}\n`);
+  const result = spawnSync('python3', [join(scripts, 'history.py'), 'init', project, relative], { input: 'fixture history\n', encoding: 'utf8' });
+  const ignored = spawnSync('git', ['-C', project, '-c', 'core.excludesFile=/dev/null', 'check-ignore', '--no-index', '--quiet', '--', relative]);
+  assert.deepEqual([result.status, ignored.status, statSync(join(project, relative)).mode & 0o777], [0, 0, 0o600], 'successful history initialization proves effective exclusion');
+});
+
+test('nested ignore negation fails closed without writing history', () => {
+  // GIVEN deeper negation overriding root rules WHEN initializing THEN no token-bearing file is created.
+  const project = mkdtempSync(join(base, 'nested-negated-'));
+  assert.equal(spawnSync('git', ['init', '-q', project]).status, 0, 'fixture repository initializes');
+  assert.equal(spawnSync('git', ['-C', project, 'config', 'core.excludesFile', '/dev/null']).status, 0, 'global ignore rules are disabled for this fixture');
+  mkdirSync(join(project, '.claude'));
+  writeFileSync(join(project, '.claude/.gitignore'), '!brewpage-history.md\n');
+  const result = spawnSync('python3', [join(scripts, 'history.py'), 'init', project, '.claude/brewpage-history.md'], { input: 'fixture secret\n', encoding: 'utf8' });
+  assert.deepEqual([result.status, existsSync(join(project, '.claude/brewpage-history.md'))], [1, false], 'deeper negation cannot leave committable history');
+});
+
+test('unsupported native Windows runtime fails with a clear requirement', () => {
+  // GIVEN native Windows capability markers WHEN helper starts THEN it refuses before opening history.
+  const result = spawnSync('python3', ['-c', 'import os,runpy,sys; os.name="nt"; runpy.run_path(sys.argv[1], run_name="__main__")', join(scripts, 'history.py')], { encoding: 'utf8' });
+  assert.deepEqual([result.status, result.stdout, result.stderr.trim()], [1, '', 'FAILED: secure history requires POSIX Python 3 (macOS/Linux or WSL); native Windows is unsupported'], 'unsupported OS is an explicit closed gate');
+});
+
+test('runner help describes the required explicit password choice', () => {
+  // GIVEN command help WHEN rendered THEN required flags and explicit empty-password semantics agree.
+  const result = spawnSync('bash', [join(scripts, 'brewpage-run.sh'), '--help'], { encoding: 'utf8' });
+  assert.deepEqual([result.status, result.stdout.includes('--password-file <ABS|\'\'>'), result.stdout.includes("--password-file '' explicitly selects no password."), result.stdout.includes('Empty flag values count as omitted.')], [0, true, true, false], 'help cannot imply missing privacy choice is allowed');
+});

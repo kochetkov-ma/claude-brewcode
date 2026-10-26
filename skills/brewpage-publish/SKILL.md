@@ -142,7 +142,7 @@ An empty, unavailable, ambiguous or unanswered choice → stop before upload. A 
 
 ### Step 6: Publish and Save Token (secure)
 
-Delivery mode: NEW sites always get a Dedicated subdomain (an explicit `path` is not refused: the site lands on
+Delivery mode: NEW sites and non-public HTML pages (format `html`) get a Dedicated subdomain (an explicit `path` is not refused: the publication lands on
 its subdomain and the response reports the mismatch); everything else defaults to Promotion (`path`) and may
 select `subdomain`, password-protected included. Send it only as `X-Delivery-Mode`, never in authored JSON, text or multipart fields. A deduplicated
 OLD or NEW winner may differ: keep its identity, cohort, mode and exact `link`. Missing/null OLD routing
@@ -238,7 +238,7 @@ a value that still cannot be stored is a 400, not a 409.
 
 - History writes reject symlinks, hardlinks, tracked history and directories writable by others; failure stops publication. Archive inspection caps 25 MiB compressed, 40 MiB expanded, 200 files, 400 entries, 5 MiB/member and 1 MiB metadata; ZIP64/split archives are refused.
 
-- Scripts: `scripts/brewpage-run.sh` (the only entry), `scripts/brewpage-lib.sh` (sourced helpers), `scripts/publish.mjs` (offline SITE bundle build/verify). Requires `bash`, `curl`, `jq`, `python3` (secure atomic history); sites also `node`, `zip`, `unzip`.
+- Scripts: `scripts/brewpage-run.sh` (the only entry), `scripts/brewpage-lib.sh` (sourced helpers), `scripts/publish.mjs` (offline SITE bundle build/verify), `scripts/history.py` (secure atomic history). Requires a POSIX runtime (macOS/Linux or WSL), `bash`, `curl`, `jq`, POSIX `python3` with `fcntl`; sites also `node`, `zip`, `unzip`. Native Windows Python is unsupported and fails before upload.
 - **`format` is a query param**: `/api/html` reads only `?format=` from the URL; a body `format` key is ignored and the default `html` stores markdown as raw text.
 - History: `<project-root>/.claude/brewpage-history.md` (root: `CLAUDE_PROJECT_DIR` → git toplevel → upward `.git`/`.claude` walk, profile dirs skipped → `PWD`), mode `600`, added to the project `.gitignore`. Its header holds the **delete** command for the owner token.
 - Run dirs: private `brewpage.XXXXXX` under `$TMPDIR` (else `/tmp`), outside the protected `.claude/`; only `scripts/brewpage-run.sh` creates, fills and removes them, so the skill needs no `Write`/`Edit` grant.
