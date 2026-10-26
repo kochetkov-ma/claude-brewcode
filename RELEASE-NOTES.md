@@ -29,7 +29,8 @@
 
 **What changed for you**
 
-- [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) checks that `zip` and `unzip` are installed by looking them up on `PATH` instead of running them, so skill security scanners (ClawHub) no longer read the check as shell execution. Publishing works exactly as before.
+- [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) checks that `zip` and `unzip` are installed by looking them up on `PATH` instead of running them, so skill security scanners (ClawHub) no longer read the check as shell execution.
+- Publishing works exactly as before: the `zip`/`unzip` runs that build and verify the archive are unchanged.
 
 ### brewdoc
 
@@ -45,7 +46,8 @@
 
 **What changed for you**
 
-- After a publish, [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) adds one optional line: sign in free (Google or any email) at [account.brewpage.app](https://account.brewpage.app) to never lose your pages or tokens and to mint tokens that never expire. Publishing still needs no account, and Claude never asks you to sign in.
+- After a publish, [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) adds an optional sign-in line for [account.brewpage.app](https://account.brewpage.app) (free, Google or any email). A profile lets you manage publications and token history, extend publication retention up to 90 days, and optionally mint owner tokens without an expiry. Publications still expire.
+- Publishing still needs no account, and Claude never asks you to sign in.
 
 ### brewdoc
 
