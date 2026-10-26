@@ -97,7 +97,7 @@ SITE is checked first. Site entry follows the server rule: `--entry`, else the r
 
 **Publish.** Every slot is re-validated by the script (`ns`, `days`, `entry`, `delivery_mode`, `password_file`); an invalid value is re-asked, never cleaned up. Commands over 8,000 characters are refused, so long text goes through `stage`: chunks of up to 6,000 characters, then `publish --run <id>`. `cleanup --run <id>` drops a staged but unpublished run.
 
-**Result.** The script prints one decisive line: `OK <url>` (sites add `| Files: N`), `CONFIRM: ...` (exit 2, nothing uploaded; after you confirm, the same command reruns with `--confirmed`) or `FAILED: ...` (response body withheld, since it may hold a token). On `OK` the skill shows `Published: <url>` (sites: `Published site: <url>`). The run directory is removed on every exit.
+**Result.** The script prints `OK <url>` (sites add `| Files: N`), `CONFIRM: ...` (exit 2, nothing uploaded) or `FAILED: ...` (response body withheld, since it may hold a token). Flagged archives also print `REVIEW_SHA256: <digest>`: after reviewing the manifest and confirming, rerun the same command with `--confirmed --review-sha256 <digest>`, using that displayed digest. Changed archive bytes require a fresh manifest, digest and approval; a stale digest exits 2 without uploading. On `OK` the skill shows `Published: <url>` (sites: `Published site: <url>`). The run directory is removed on every exit.
 
 </Spoiler>
 
@@ -105,7 +105,7 @@ SITE is checked first. Site entry follows the server rule: `--entry`, else the r
 
 **One script, one rule.** Every shell step is `bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh <probe|stage|publish|cleanup> ...` with single-quoted values. The single allowed-tools rule matches that exact shape, so nothing prompts, headless included. A quoted script path, `cd` prefix, `&&` chain or `$(...)` falls back to the normal permission prompt.
 
-**Owner token.** Captured inside the script and written to history; the model sees only `OK`, `CONFIRM` or `FAILED` lines.
+**Owner token.** Stays inside the script and local history; the model sees the manifest, review digest and status lines.
 
 **Run isolation.** A private `brewpage.XXXXXX` directory (mode 700) under `$TMPDIR`, else `/tmp`, outside `.claude/`; only the script creates and removes it, so no `Write` grant is needed.
 
@@ -149,7 +149,7 @@ A directory is packed by `scripts/publish.mjs pack --dir <dir> --out <archive.zi
 
 Local inspection checks the central directory before decompression: at most 25 MiB compressed, 40 MiB expanded, 200 files, 400 entries, 5 MiB per member and 1 MiB metadata. ZIP64 and split archives are refused; each `unzip` check has a 10-second timeout. These local budgets are separate from server upload limits.
 
-The pack is an allowlist: only web-asset extensions (`.html .css .js .json .svg .png .woff2 .pdf .md` and similar) go in. System files (`.DS_Store`, `__MACOSX/`, `Thumbs.db`, `desktop.ini`) are dropped and listed under `SKIPPED`, never flagged and never counted toward the server's file limit. Hidden files and folders (`.env`, `.git/`) are dropped too, except the root `.well-known/`, which ships with its files, extension-less ones included (such as `apple-app-site-association`); `node_modules/` and symlinks are dropped as well. A supplied `.zip` is inspected, never rewritten: system entries are left alone (the server drops them), hidden entries are flagged, and an entry matching `.env`, `id_rsa`, `secret`, `credential`, `password`, `token`, `.pem`, `.key`, `.p12`, `.crt` or `.map` blocks the upload until you confirm.
+The pack is an allowlist: only web-asset extensions (`.html .css .js .json .svg .png .woff2 .pdf .md` and similar) go in. System files (`.DS_Store`, `__MACOSX/`, `Thumbs.db`, `desktop.ini`) are dropped and listed under `SKIPPED`, never flagged and never counted toward the server's file limit. Hidden files and folders (`.env`, `.git/`) are dropped too, except the root `.well-known/`, which ships with its files, extension-less ones included (such as `apple-app-site-association`); `node_modules/` and symlinks are dropped as well. A supplied `.zip` is copied into the private run directory; inspection, hashing and upload use that same copy, leaving the source unchanged. System entries are left alone (the server drops them), hidden entries are flagged, and an entry matching `.env`, `id_rsa`, `secret`, `credential`, `password`, `token`, `.pem`, `.key`, `.p12`, `.crt` or `.map` blocks the upload until you confirm its displayed digest. Temporary payloads are deleted on every exit, including confirmation; no archive is cached between attempts.
 
 Tests: `bash brewdoc/skills/publish/tests/run.sh` (no network, no real upload; they do not prove server rollout).
 

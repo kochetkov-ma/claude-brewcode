@@ -117,10 +117,12 @@ try {
   assert.equal(zip.result.status, 0, 'THEN zsh site-zip command exits 0: ' + zip.result.stdout + zip.result.stderr);
   assert.equal(zip.result.stdout, manifest('fixture.zip', fixtureBytes) + 'OK https://fixture.brewpage.app/ | Files: 3\n',
     'THEN zsh site-zip command prints the manifest with the requested entry and the URL line');
-  assert.deepEqual(curlOf(zip), {
+  const stagedZip = tmp + '/brewpage.RUN/archive/fixture.zip';
+  const zipCurl = curlOf(zip);
+  assert.deepEqual({ ...zipCurl, args: normalize(zipCurl.args), files: Object.fromEntries(Object.entries(zipCurl.files).map(([path, bytes]) => [normalize([path])[0], bytes])) }, {
     args: ['-s', '-X', 'POST', 'https://brewpage.app/api/sites?ns=public&ttl=15&entry=sub%2Fpage.html',
-      '-H', 'User-Agent: ClaudeCode/1.0', '-F', 'archive=@"' + fixtureZip + '"'],
-    files: { [fixtureZip]: fixtureBytes }, payload: null,
+      '-H', 'User-Agent: ClaudeCode/1.0', '-F', 'archive=@"' + stagedZip + '"'],
+    files: { [stagedZip]: fixtureBytes }, payload: null,
   }, 'THEN curl uploads the user zip unchanged');
   assert.equal(existsSync(fixtureZip), true, 'THEN the user-supplied zip is preserved');
   assert.deepEqual(runDirs(), [], 'THEN the site-zip run dir is removed at exit');

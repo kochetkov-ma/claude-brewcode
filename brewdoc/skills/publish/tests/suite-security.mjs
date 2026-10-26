@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, symlinkSync, rmSync, statSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, basename } from 'node:path';
@@ -14,6 +15,44 @@ const base = mkdtempSync(join(tmpdir(), 'publish-security-'));
 const bin = join(base, 'bin'); mkdirSync(bin);
 writeFileSync(join(bin, 'curl'), '#!/bin/sh\nprintf \'{"link":"https://example.invalid/fixture","ownerToken":"fixture"}\\n\'\n', { mode: 0o755 });
 after(() => rmSync(base, { recursive: true, force: true }));
+
+for (const type of ['site-dir', 'site-zip']) test(`${type} confirmation binds exact reviewed bytes without retaining payloads`, () => {
+  // GIVEN benign flagged content and an offline curl capture WHEN review returns THEN no upload or retained payload exists.
+  const project = mkdtempSync(join(base, 'review-')); const site = join(project, 'site'); mkdirSync(site);
+  const temp = join(project, 'tmp'); mkdirSync(temp);
+  const localBin = join(project, 'bin'); mkdirSync(localBin);
+  const captured = join(project, 'captured.zip');
+  writeFileSync(join(localBin, 'curl'), '#!/usr/bin/env node\nconst fs=require("node:fs"),path=require("node:path"); const arg=process.argv.find(a=>a.startsWith("archive=@")); const file=JSON.parse(arg.slice(9)); fs.writeFileSync(process.env.SOURCE_FILE,"source replaced at upload"); fs.copyFileSync(file,process.env.CAPTURED); fs.writeFileSync(process.env.CAPTURED+".json",JSON.stringify([fs.statSync(file).mode&511,fs.statSync(path.dirname(file)).mode&511])); process.stdout.write(\'{"link":"https://example.invalid/fixture","fileCount":3}\');\n', { mode: 0o700 });
+  writeFileSync(join(site, 'index.html'), '<h1>fixture</h1>');
+  writeFileSync(join(site, 'secret-config.json'), '{"fixture":"reviewed"}');
+  const zip = join(project, 'source.zip');
+  const pack = () => assert.equal(spawnSync('node', [join(scripts, 'publish.mjs'), 'pack', '--dir', site, '--out', zip]).status, 2, 'benign sensitive fixture packs with a review verdict');
+  pack();
+  const args = [join(scripts, 'brewpage-run.sh'), 'publish', type, '--ns', 'fixture', '--password-file', '', '--path', type === 'site-dir' ? site : zip];
+  const sourceFile = type === 'site-zip' ? zip : join(site, 'secret-config.json');
+  const env = { ...process.env, CLAUDE_PROJECT_DIR: project, TMPDIR: temp, PATH: localBin + ':' + process.env.PATH, CAPTURED: captured, SOURCE_FILE: sourceFile };
+  const run = flags => spawnSync('bash', [...args, ...flags], { cwd: project, env, encoding: 'utf8', timeout: 10000 });
+  const digestOf = result => /^REVIEW_SHA256: ([0-9a-f]{64})$/m.exec(result.stdout)?.[1];
+  const initial = run([]); const approved = digestOf(initial);
+  assert.match(approved, /^[0-9a-f]{64}$/, 'review emits an exact archive digest');
+  assert.deepEqual([initial.status, existsSync(captured), readdirSync(temp)], [2, false, []], 'review returns without upload or pending payload');
+  const bare = run(['--confirmed']);
+  assert.deepEqual([bare.status, digestOf(bare), existsSync(captured), readdirSync(temp)], [2, approved, false, []], 'bare confirmation cannot bypass a bound review');
+  const unchanged = run(['--confirmed', '--review-sha256', approved]);
+  assert.deepEqual([unchanged.status, createHash('sha256').update(readFileSync(captured)).digest('hex'), readdirSync(temp)], [0, approved, []], 'unchanged approved bytes upload exactly and clean temporary copies');
+  assert.deepEqual(JSON.parse(readFileSync(captured + '.json', 'utf8')), [0o600, 0o700], 'inspected upload snapshot and parent remain private');
+  assert.equal(readFileSync(sourceFile, 'utf8'), 'source replaced at upload', 'source replacement cannot alter the already inspected upload snapshot');
+  rmSync(captured);
+  // WHEN the source changes after approval THEN the old digest cannot authorize the replacement.
+  writeFileSync(join(site, 'secret-config.json'), '{"fixture":"changed"}');
+  writeFileSync(join(site, 'credential-new.json'), '{"fixture":"never reviewed"}'); pack();
+  const changed = run(['--confirmed', '--review-sha256', approved]); const replacement = digestOf(changed);
+  assert.match(replacement, /^[0-9a-f]{64}$/, 'changed content emits a fresh review digest');
+  assert.equal(changed.stdout.includes('credential-new.json'), true, 'fresh manifest identifies the newly flagged member');
+  assert.deepEqual([changed.status, existsSync(captured), readdirSync(temp)], [2, false, []], 'changed archive requires fresh review without upload or retention');
+  const accepted = run(['--confirmed', '--review-sha256', replacement]);
+  assert.deepEqual([accepted.status, createHash('sha256').update(readFileSync(captured)).digest('hex'), readdirSync(temp)], [0, replacement, []], 'only newly approved exact bytes upload');
+});
 
 test('real curl uploads only the intended multipart bytes for hostile valid paths', async t => {
   // GIVEN only benign fixtures and a curl wrapper that redirects approved URLs to loopback.

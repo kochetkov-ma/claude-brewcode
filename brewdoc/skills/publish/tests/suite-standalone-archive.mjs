@@ -54,7 +54,7 @@ const UNREAD_FAILURES = [
   ['zip exits 3 unread', 'exit 3', 'FAILED: zip exited 3 — no archive produced'],
 ];
 const BIG_NAMES = ['index.html', ...Array.from({ length: 350 }, (_, i) => `p/${'a'.repeat(250)}/${'b'.repeat(250)}/${String(i).padStart(5, '0')}${'c'.repeat(240)}.html`)];
-const CONFIRM = 'CONFIRM: flagged entries listed above — ask the user, then re-run with --confirmed';
+const confirmLine = digest => `CONFIRM: review this manifest, then re-run with --confirmed --review-sha256 ${digest}`;
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), 'standalone-archive-')));
 const tmp = join(base, 'tmp');
@@ -219,11 +219,13 @@ for (const copy of COPIES) {
     const bin = binWith({ curl: UPLOAD_STUB });
     const command = siteFence(copy, slots('site-dir'));
     const asked = runSync(copy, command, site, bin);
+    const digest = /^REVIEW_SHA256: ([0-9a-f]{64})$/m.exec(asked.stdout)?.[1];
+    assert.match(digest, /^[0-9a-f]{64}$/, 'review digest accompanies the manifest');
     const askedState = [asked.status, asked.stdout.split('\n').filter(l => l.startsWith('SENSITIVE: ')), lastLine(asked.stdout), existsSync(join(base, 'curl-args')), runNames()];
-    const confirmed = runSync(copy, command + ' --confirmed', site, bin);
+    const confirmed = runSync(copy, command + ' --confirmed --review-sha256 ' + digest, site, bin);
     const listing = spawnSync('unzip', ['-Z1', join(base, 'uploaded.zip')], { encoding: 'utf8' }).stdout.trim().split('\n').sort();
     assert.deepEqual([askedState, confirmed.status, lastLine(confirmed.stdout), listing, runNames()],
-      [[2, ['SENSITIVE: secret-config.json'], CONFIRM, false, []], 0, 'OK https://example.test/ | Files: 3', ['index.html', 'secret-config.json'], []],
+      [[2, ['SENSITIVE: secret-config.json'], confirmLine(digest), false, []], 0, 'OK https://example.test/ | Files: 3', ['index.html', 'secret-config.json'], []],
       'nothing uploads until the identical command is re-run with --confirmed');
   });
 }

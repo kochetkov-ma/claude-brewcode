@@ -3,6 +3,7 @@
 // `scripts/brewpage-run.sh` (BD02 values as single-quoted argv of one allow-listed command).
 // Fixtures under one mkdtemp base, removed at end; no network, no upload, no real `.claude` touched.
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, symlinkSync, existsSync, statSync, rmSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -317,10 +318,12 @@ check('skill.payload.file', countRun(/-d @"\$(BP_RUN_DIR\/payload\.json|content)
     'the manifest and the gate come before the upload line in both branches');
   check('gate.abort', countRun(/^ {8}bp_archive_gate "\$rc" "\$manifest" "(\$archive)?" \|\| exit \$\?$/), 2,
     'both branches abort through the shared gate on a non-zero verifier exit before reaching curl');
-  const confirm = sh('bp_archive_gate 2 "ENTRY: index.html" ""', { cwd: BASE, env: { BREWPAGE_CONFIRMED: undefined } });
+  const gateZip = join(BASE, 'gate.zip'); writeFileSync(gateZip, 'fixture');
+  const digest = createHash('sha256').update('fixture').digest('hex');
+  const confirm = sh('bp_archive_gate 2 "ENTRY: index.html" "$GATE_ZIP"', { cwd: BASE, env: { BREWPAGE_CONFIRMED: undefined, GATE_ZIP: gateZip } });
   const ok = sh('bp_archive_gate 0 "ENTRY: index.html" "" && printf %s "$ENTRY"', { cwd: BASE });
   check('gate.confirm', [confirm.status, confirm.out, ok.status, ok.out],
-    [2, 'CONFIRM: flagged entries listed above — ask the user, then re-run with --confirmed', 0, 'index.html'],
+    [2, `REVIEW_SHA256: ${digest}\nCONFIRM: review this manifest, then re-run with --confirmed --review-sha256 ${digest}`, 0, 'index.html'],
     'the gate stops for confirmation on flagged entries and otherwise hands back the manifest ENTRY');
   check('gate.confirmed.flag', [countRun(/^  BREWPAGE_CONFIRMED=0$/), countRun(/--confirmed\) BREWPAGE_CONFIRMED=1; shift ;;/)], [1, 1],
     'only the --confirmed flag confirms: an inherited BREWPAGE_CONFIRMED is reset first');
