@@ -45,6 +45,7 @@ const DRIFT = {
     'brewpage-run.sh': () => [[RUN_LINE2, RUN_LINE2.replace('brewdoc:publish', 'brewpage-publish')]],
     'brewpage-lib.sh': () => [],
     'publish.mjs': () => [],
+    'history.py': () => [],
   },
   openclaw: {
     'brewpage-run.sh': () => [
@@ -57,9 +58,9 @@ const DRIFT = {
       [LIB_LINE3, '# Owns token-history location (workspace cwd) and URL-safety of prompt-derived query params.\n'],
       [libRootBlock(ref), 'BP_ROOT="$PWD"\nHISTORY_FILE="$BP_ROOT/brewpage-history.md"\n'
         + '# Run dirs stay outside the workspace; only brewpage-run.sh writes into them.\n'],
-      ["bp_gitignore_entry '.claude/brewpage-history.md'", "bp_gitignore_entry 'brewpage-history.md'"],
     ],
     'publish.mjs': () => [],
+    'history.py': () => [],
   },
 };
 
@@ -157,7 +158,7 @@ for (const copy of COPIES) {
 
   test(`${copy.name}: scripts track the brewdoc reference`, () => {
     // GIVEN the brewdoc scripts WHEN the documented per-copy edits are applied THEN each copy is byte-identical.
-    for (const file of ['brewpage-run.sh', 'brewpage-lib.sh', 'publish.mjs']) {
+    for (const file of ['brewpage-run.sh', 'brewpage-lib.sh', 'publish.mjs', 'history.py']) {
       const ref = readFileSync(join(REF, file), 'utf8');
       const pairs = DRIFT[copy.name][file](ref);
       assert.deepEqual(pairs.map(([from]) => ref.split(from).length - 1), pairs.map(() => 1),

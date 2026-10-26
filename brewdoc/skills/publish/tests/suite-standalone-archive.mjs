@@ -46,7 +46,7 @@ const READ_LIST = 'cat > /dev/null\n';
 const FAILURES = [
   ['zip failure', READ_LIST + 'printf partial > "$4"\nexit 3', 'FAILED: zip exited 3 — no archive produced'],
   ['empty archive', READ_LIST + ': > "$4"\nexit 0', 'FAILED: zip produced no usable archive'],
-  ['corrupt archive', READ_LIST + 'printf invalid > "$4"\nexit 0', 'FAILED: archive failed its integrity check'],
+  ['corrupt archive', READ_LIST + 'printf invalid > "$4"\nexit 0', 'FAILED: archive has no valid central directory'],
 ];
 // Fakes that never read a ~4x-pipe (64 KiB) list: EPIPE every run, so the race above becomes the deterministic case.
 const UNREAD_FAILURES = [

@@ -149,7 +149,7 @@ for (const [name, files, want] of [
   const bad = inspect(['--zip', corrupt]);
   check('cause.unzip', [[killed.status, killed.out], [bad.status, bad.out]], [
     [1, 'FAILED: archive could not be checked: unzip killed by SIGKILL\nRESULT: fail\n'],
-    [1, 'FAILED: archive failed its integrity check\nRESULT: fail\n'],
+    [1, 'FAILED: archive has no valid central directory\nRESULT: fail\n'],
   ], 'a killed check and a corrupt archive get distinct, exact reasons');
 }
 

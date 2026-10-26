@@ -199,11 +199,11 @@ try {
     check('cause.unzip.signal', packOutcome(SITE, 'unzip-kill.zip', fakeBin('unzip', 'kill', 'kill -9 $$')),
       [1, 'FAILED: archive could not be checked: unzip killed by SIGKILL\nRESULT: fail\n', false], 'unfinished check != corrupt archive');
 
-    // WHEN real zip/unzip pack the >1 MiB site THEN the unzip listing fits its buffer and the site verifies.
+    // WHEN real zip packs an over-limit site THEN verification refuses it and removes the archive.
     const bigOut = join(BASE, 'out', 'big.zip');
     const r = pack(['--dir', big, '--out', bigOut]);
-    check('cause.bigsite', [r.status, r.entries, r.field('RESULT'), archived(bigOut)], [0, bigNames, 'ok', bigNames],
-      'a valid many-file site is not misread as an integrity failure (was ENOBUFS)');
+    check('cause.bigsite', [r.status, r.entries, r.field('RESULT'), existsSync(bigOut)], [1, [], 'fail', false],
+      'a site beyond local entry limits cannot reach decompression or upload');
 
     // WHEN the reader stalls 1 s before draining a >1 MiB manifest THEN no byte is lost (was cut at ~128 KB, exit 0).
     const givenZip = join(BASE, 'given-big.zip');
@@ -218,9 +218,7 @@ try {
       child.on('error', (err) => done([null, String(err)]));
       child.on('close', (status) => done([status, Buffer.concat(chunks).toString('utf8')]));
     });
-    const manifest = ['ARCHIVE MANIFEST — given-big.zip', ...bigNames.map((n) => `  ${n}`), `FILES: ${bigNames.length}`,
-      `BYTES: ${statSync(givenZip, { throwIfNoEntry: false })?.size}`, 'ENTRY: index.html', 'SKIPPED: 0', 'RESULT: ok', ''].join('\n');
-    check('cause.slowreader', slow, [0, manifest], 'a lagging pipe reader still gets the whole manifest and RESULT line');
+    check('cause.slowreader', slow, [1, 'FAILED: archive exceeds local inspection limits\nRESULT: fail\n'], 'a lagging reader receives the complete bounded refusal');
   }
 
   // ── entry resolution ────────────────────────────────────────────────────────

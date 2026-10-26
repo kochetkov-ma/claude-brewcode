@@ -25,7 +25,7 @@ Publishes HTML/Markdown, JSON, files and multi-file sites to **brewpage.app** (f
    exact text to publish, never a summary of it.
 3. Ask: a sentence with no path and no inline text/JSON has nothing to publish -> ONE `AskUserQuestion`
    asking what to publish. Namespace and password -> the two dedicated `AskUserQuestion` calls in Steps
-   4-5; nothing else asks. Headless or unanswered -> the Step 4-5 defaults; nothing blocks.
+   4-5; nothing else asks. Headless or unanswered -> stop before upload unless this workflow already has explicit namespace and password choices.
 
 Print once, before the first tool action, including filesystem probes and questions (labels literal,
 values in the conversation language). Use `unresolved` for type/namespace/password until determined;
@@ -124,7 +124,7 @@ Namespace decides who can find the publication; it also appears in its address o
 
 Options:
 1) public — public pages, sites and files are listed in the public gallery and the sitemap, so Google, Bing and AI search can find and index them and people can discover them. Use it for anything meant to be found or shared: docs, guides, demos, portfolios, reports, landing pages. Public pages are served right on the brewpage.app domain, which gives them the strongest reach in search; a page whose code needs its own origin (cookies, storage) gets its own subdomain automatically. Anyone can find and read a public publication: never put secrets, tokens or personal data there.
-2) {suggested slug} — private (default): unlisted and not indexed; anyone who has the link can still open it (a password restricts access).
+2) {suggested slug} — private: unlisted and not indexed; anyone who has the link can still open it (a password restricts access).
 3) Enter custom namespace (private, like 2)
 4) Skip → use suggested slug (private)
 
@@ -134,7 +134,8 @@ Reply with a number or your custom namespace (1-32 lowercase letters, digits or 
 Suggested slug: 3-16 chars of `a-z0-9-` named after the content (`api-docs`, `report-q2`,
 `pricing`, `user-config`), else the project or directory name; never random strings or truncated filenames.
 
-Resolution: `2`, `4`, empty, or no answer (headless) → suggested slug | `1` → `public` | `3` or any other string → use as-is.
+Resolution: explicit `2` or `4` → suggested slug | `1` → `public` | custom slug → validate it.
+An empty, unavailable, ambiguous or unanswered choice → stop before upload. Never infer publication consent from silence.
 
 ### Step 5: Ask Password
 
@@ -144,17 +145,18 @@ Use **AskUserQuestion**:
 Password protection (if set, page is hidden from gallery):
 
 Options:
-1) No password (default)
+1) No password (explicit choice)
 2) Use an existing local password file (min 4 characters)
 3) Skip → no password
 
 Reply with a number and, for option 2, the absolute local file path. Do not paste password contents.
 ```
 
-Resolution: `1`, `3`, empty, or no answer → `{password_file}` = `''` (no password; every password file,
+Resolution: explicit `1` or `3` → `{password_file}` = `''` (no password; every password file,
 stale ones included, is ignored). `2` + an existing local file path → `{password_file}` = that absolute
 path: the script moves the bytes via private header files (never shell literals or curl argv) and rejects
 control characters (header injection). Never Read, generate or print the password contents.
+An empty, unavailable, ambiguous or unanswered choice → stop before upload. A previous explicit choice for this content/workflow may be reused; never invent one.
 
 ### Step 6: Publish and Save Token (secure)
 
@@ -250,14 +252,17 @@ a value that still cannot be stored is a 400, not a 409.
 
 ## Notes
 
+- Requires `bash`, `curl`, `jq`, `python3` (secure atomic history); sites also `node`, `zip`, `unzip`.
+- History writes reject symlinks, hardlinks, tracked history and directories writable by others; failure stops publication. Archive inspection caps 25 MiB compressed, 40 MiB expanded, 200 files, 400 entries, 5 MiB/member and 1 MiB metadata; ZIP64/split archives are refused.
+
 - **`format` is a query param**: `/api/html` reads only `?format=` from the URL; a body `format` key is ignored and the default `html` stores markdown as raw text.
 - History: `<project-root>/.claude/brewpage-history.md` (root: `CLAUDE_PROJECT_DIR` → git toplevel → upward `.git`/`.claude` walk (a `.claude` in HOME or in the profile parent, the dir whose `.claude` IS the active config dir, is skipped; a `.git` there still counts) → `PWD`, via `scripts/brewpage-lib.sh`), mode `600`, added to the project `.gitignore`. Its header holds the **delete** command for the owner token.
 - Run dirs: private `brewpage.XXXXXX` under `$TMPDIR` (else `/tmp`), outside the protected `.claude/`; only `scripts/brewpage-run.sh` creates, fills and removes them, so the skill needs no `Write`/`Edit` grant.
 - Permissions: model-invocable, so `allowed-tools` holds one scoped Bash rule that matches every step above, in `default`, `dontAsk` and headless runs alike (verified on CC 2.1.296). A script path containing spaces breaks the unquoted command shape.
 - History TTL = requested days; stored `createdAt`/`expiresAt` are authoritative: a deduplicated winner keeps its original expiry, and ordinary PUT/update does not renew it.
 - Owner API calls use the returned `ownerLink` and stored identity metadata, never a NEW root hostname parsed for namespace/ID; OLD rows without metadata keep their existing API identifiers.
-- **Update a site**: `PUT` the new bundle to its apex owner API with `X-Owner-Token`; it replaces the file set and keeps the host. No `X-Delivery-Mode` on ordinary PUT/update. Old publications (made before 5 October 2026) are read-only: 409 OLD_PUBLICATION_READ_ONLY; publish anew; report the new URL and owner token.
+- **Update a site**: `PUT` the new bundle to its apex owner API with `X-Owner-Token`; it replaces the file set and keeps the host. No `X-Delivery-Mode` on ordinary PUT/update. Old publications (made before 5 October 2026) are read-only: 409 OLD_PUBLICATION_READ_ONLY; publish anew; report only the new URL; the owner token stays in private history, never chat.
 - Hosting change, NEW publications without a required subdomain only (OLD, sites and non-public HTML pages keep their mode, 200 with a notice): owner-only `PATCH /api/{type}/{ns}/{id}/hosting` with `{"deliveryMode":"subdomain","expectedVersion":1}` from current identity metadata; then use the returned URL/version.
 - NEW password-protected links stay clean: never generate or append `?p=`. API password requests use `X-Password`; OLD password behavior is unchanged.
-- **SITE bundles are allowlisted**: `pack` drops dot-entries (`.env`, `.git/`, `.DS_Store`; the root `.well-known/` stays, extension-less files included), `node_modules/`, `__MACOSX/`, symlinks and unknown types, and verifies the archive (`unzip -t`, name set) before `curl`, else deletes it and exits 1. `inspect` never rewrites a supplied ZIP; it exits 2 when anything unexpected, hidden or sensitive is inside (system files the server drops are left alone).
+- **SITE bundles are allowlisted**: `pack` drops dot-entries (`.env`, `.git/`, `.DS_Store`; the root `.well-known/` stays, extension-less files included), `node_modules/`, `__MACOSX/`, symlinks and unknown types, and verifies the archive (bounded central-directory budgets, `unzip -t` with a 10-second timeout, name set) before `curl`, else deletes it and exits 1. `inspect` never rewrites a supplied ZIP; it exits 2 when anything unexpected, hidden or sensitive is inside (system files the server drops are left alone).
 - Keep `.link` exact (NEW subdomain roots keep `/`, OLD links their form); never reconstruct a host from IDs. Verify NEW native sites at the exact URL and asset paths in a browser; OLD sites may redirect via a landing page: check in a browser or fetch the explicit entry asset.

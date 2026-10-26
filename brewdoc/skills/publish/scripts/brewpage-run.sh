@@ -104,7 +104,7 @@ cmd_cleanup() {
 }
 
 cmd_publish() {
-  local type="${1:-}" ns="" days=15 entry="" mode="" pwfile="" text="" run="" path="" have_text=0 sources=0
+  local type="${1:-}" ns="" days=15 entry="" mode="" pwfile="" text="" run="" path="" have_text=0 sources=0 have_password=0
   if [ "$#" -gt 0 ]; then shift; fi
   BREWPAGE_CONFIRMED=0
   while [ "$#" -gt 0 ]; do
@@ -113,7 +113,7 @@ cmd_publish() {
       --ttl) need "$#" "$1"; days="${2:-15}"; shift 2 ;;
       --entry) need "$#" "$1"; entry="$2"; shift 2 ;;
       --delivery-mode) need "$#" "$1"; mode="$2"; shift 2 ;;
-      --password-file) need "$#" "$1"; pwfile="$2"; shift 2 ;;
+      --password-file) need "$#" "$1"; pwfile="$2"; have_password=1; shift 2 ;;
       --text) need "$#" "$1"; text="$2"; have_text=1; sources=$((sources + 1)); shift 2 ;;
       --run) need "$#" "$1"; run="$2"; sources=$((sources + 1)); shift 2 ;;
       --path) need "$#" "$1"; path="$2"; sources=$((sources + 1)); shift 2 ;;
@@ -121,6 +121,8 @@ cmd_publish() {
       *) die "unknown publish argument: $1" ;;
     esac
   done
+  [ "$have_password" -eq 1 ] || die "explicit --password-file choice required (empty means no password)"
+  command -v python3 >/dev/null || die "python3 required for secure history"
   [ "$sources" -eq 1 ] || die "publish needs exactly one of --text, --run, --path"
   case "$type" in
     html) : ;;

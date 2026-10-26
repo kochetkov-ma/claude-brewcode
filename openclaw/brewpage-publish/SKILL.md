@@ -95,7 +95,7 @@ Namespace decides who can find the publication; it also appears in its address o
 
 Options:
 1) public — public pages, sites and files are listed in the public gallery and the sitemap, so Google, Bing and AI search can find and index them and people can discover them. Use it for anything meant to be found or shared: docs, guides, demos, portfolios, reports, landing pages. Public pages are served right on the brewpage.app domain, which gives them the strongest reach in search; a page whose code needs its own origin (cookies, storage) gets its own subdomain automatically. Anyone can find and read a public publication: never put secrets, tokens or personal data there.
-2) {suggested slug} — private (default): unlisted and not indexed; anyone who has the link can still open it (a password restricts access).
+2) {suggested slug} — private: unlisted and not indexed; anyone who has the link can still open it (a password restricts access).
 3) Enter custom namespace (private, like 2)
 4) Skip → use suggested slug (private)
 
@@ -110,9 +110,10 @@ Auto-suggest: generate a **meaningful short slug** (3-16 chars, lowercase alphan
 Never use random strings or truncated filenames — the slug should be human-readable and describe what's being published.
 
 Resolution:
-- `2`, `4`, empty, or no answer (headless) → suggested slug (private)
+- Explicit `2` or `4` → suggested slug (private)
 - `1` → `public`
-- `3` or any other string → use as-is
+- Custom slug → validate it; `3` alone still needs the slug.
+- An empty, unavailable, ambiguous or unanswered choice → stop before upload. Never infer publication consent from silence.
 
 ### Step 5: Ask Password
 
@@ -122,17 +123,18 @@ Ask the user:
 Password protection (if set, page is hidden from gallery):
 
 Options:
-1) No password (default)
+1) No password (explicit choice)
 2) Use an existing local password file (min 4 characters)
 3) Skip → no password
 
 Reply with a number and, for option 2, the absolute local file path. Do not paste password contents.
 ```
 
-Resolution: `1`, `3`, or empty → `{password_file}` = `''` (no password). `2` + an existing local file
+Resolution: explicit `1` or `3` → `{password_file}` = `''` (no password). `2` + an existing local file
 path → `{password_file}` = that absolute path: the script moves the bytes via private header files
 (never shell literals or curl argv) and rejects control characters (header injection). Never read,
 generate or print the password contents.
+An empty, unavailable, ambiguous or unanswered choice → stop before upload. A previous explicit choice for this content/workflow may be reused; never invent one.
 
 ### Step 6: Publish and Save Token (secure)
 
@@ -229,16 +231,18 @@ a value that still cannot be stored is a 400, not a 409.
 
 ## Notes
 
-- Scripts: `scripts/brewpage-run.sh` (the only entry), `scripts/brewpage-lib.sh` (sourced helpers), `scripts/publish.mjs` (offline SITE bundle build/verify). Requires `bash`, `curl`, `jq`; sites also `node`, `zip`, `unzip`.
+- History writes reject symlinks, hardlinks, tracked history and directories writable by others; failure stops publication. Archive inspection caps 25 MiB compressed, 40 MiB expanded, 200 files, 400 entries, 5 MiB/member and 1 MiB metadata; ZIP64/split archives are refused.
+
+- Scripts: `scripts/brewpage-run.sh` (the only entry), `scripts/brewpage-lib.sh` (sourced helpers), `scripts/publish.mjs` (offline SITE bundle build/verify). Requires `bash`, `curl`, `jq`, `python3` (secure atomic history); sites also `node`, `zip`, `unzip`.
 - **`format` is a query param**: `/api/html` reads only `?format=` from the URL; a body `format` key is ignored and the default `html` stores markdown as raw text.
 - History: `./brewpage-history.md` in the workspace (the shell's working directory), mode `600`, added to `./.gitignore` inside a git repo. Its header holds the **delete** command for the owner token.
 - Run dirs: private `brewpage.XXXXXX` under `$TMPDIR` (else `/tmp`); only `scripts/brewpage-run.sh` creates, fills and removes them.
 - TTL default is `15` days. Namespace must match `^[a-z0-9-]{1,32}$`, default the suggested private slug.
 - Use returned `ownerLink` and stored identity metadata for owner API operations; never parse NEW root hosts for namespace/ID. OLD history without metadata retains its existing API identifiers.
-- To **update a published site**, `PUT` the replacement bundle to its apex owner API with `X-Owner-Token`; retain the host and omit `X-Delivery-Mode` on ordinary PUT/update. Old publications (made before 5 October 2026) are read-only: 409 OLD_PUBLICATION_READ_ONLY; publish anew; report the new URL and owner token.
+- To **update a published site**, `PUT` the replacement bundle to its apex owner API with `X-Owner-Token`; retain the host and omit `X-Delivery-Mode` on ordinary PUT/update. Old publications (made before 5 October 2026) are read-only: 409 OLD_PUBLICATION_READ_ONLY; publish anew; report only the new URL; the owner token stays in private history, never chat.
 - Only NEW publications without a required subdomain allow owner-only `PATCH /api/{type}/{ns}/{id}/hosting` with `{"deliveryMode":"subdomain","expectedVersion":1}` from current identity metadata. OLD, sites and non-public HTML pages keep their mode (200 with a notice). Use the returned URL/version afterward.
 - NEW password-protected links stay clean: never generate or append `?p=`. API requests still use `X-Password`; OLD password behavior remains unchanged.
-- **SITE bundles are allowlisted**: the directory build drops dot-entries (`.env`, `.git/`, `.DS_Store`; the root `.well-known/` stays, extension-less files included), `node_modules/`, `__MACOSX/`, symlinks and unknown types (`*.map`, `*.log`, `Thumbs.db`), flags kept names that look sensitive (`secret`, `token`, `password`, `credential`) for confirmation, and verifies the archive (`unzip -t`, name set) before upload. A supplied ZIP is never rewritten; anything unexpected, hidden or sensitive inside it needs confirmation (system files the server drops are left alone).
+- **SITE bundles are allowlisted**: the directory build drops dot-entries (`.env`, `.git/`, `.DS_Store`; the root `.well-known/` stays, extension-less files included), `node_modules/`, `__MACOSX/`, symlinks and unknown types (`*.map`, `*.log`, `Thumbs.db`), flags kept names that look sensitive (`secret`, `token`, `password`, `credential`) for confirmation, and verifies the archive (bounded central-directory budgets, `unzip -t` with a 10-second timeout, name set) before upload. A supplied ZIP is never rewritten; anything unexpected, hidden or sensitive inside it needs confirmation (system files the server drops are left alone).
 - Preserve `.link` exactly: NEW subdomain roots retain `/`; OLD links retain their existing form. Never reconstruct a host from IDs.
 - Verify NEW native sites at the exact returned URL and asset paths; a browser proves rendering. OLD sites may still use the landing-page redirect; verify those in a browser or fetch their explicit entry asset.
 
