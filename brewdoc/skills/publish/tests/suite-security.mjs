@@ -113,3 +113,12 @@ test('runner help describes the required explicit password choice', () => {
   const result = spawnSync('bash', [join(scripts, 'brewpage-run.sh'), '--help'], { encoding: 'utf8' });
   assert.deepEqual([result.status, result.stdout.includes('--password-file <ABS|\'\'>'), result.stdout.includes("--password-file '' explicitly selects no password."), result.stdout.includes('Empty flag values count as omitted.')], [0, true, true, false], 'help cannot imply missing privacy choice is allowed');
 });
+
+for (const [file, bytes] of [['config', '[invalid\n'], ['index', 'invalid index']]) test(`broken Git ${file} fails closed before history write`, () => {
+  // GIVEN malformed repository metadata WHEN initializing THEN no sensitive history is created.
+  const project = mkdtempSync(join(base, 'broken-git-'));
+  assert.equal(spawnSync('git', ['init', '-q', project]).status, 0, 'fixture repository initializes');
+  writeFileSync(join(project, '.git', file), bytes);
+  const result = spawnSync('python3', [join(scripts, 'history.py'), 'init', project, 'brewpage-history.md'], { input: 'fixture secret\n', encoding: 'utf8' });
+  assert.deepEqual([result.status, existsSync(join(project, 'brewpage-history.md'))], [1, false], 'Git operational errors fail before history write');
+});

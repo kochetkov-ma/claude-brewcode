@@ -51,6 +51,31 @@ def read(directory, name):
         return source.read(8 * 1024 * 1024 + 1)
 
 
+def git(root, arguments, allowed=(0, 1)):
+    result = subprocess.run(['git', '-C', root] + arguments, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env={**os.environ, 'LC_ALL': 'C'})
+    if result.returncode not in allowed:
+        raise ValueError('Git safety check failed; repair repository configuration before publishing')
+    return result
+
+
+def repository(root):
+    if shutil.which('git') is None:
+        parent = root
+        while True:
+            if os.path.lexists(os.path.join(parent, '.git')) or os.environ.get('GIT_DIR'):
+                raise ValueError('git required to protect history in a repository')
+            ancestor = os.path.dirname(parent)
+            if ancestor == parent:
+                return False
+            parent = ancestor
+    result = git(root, ['rev-parse', '--git-dir'], (0, 128))
+    if result.returncode == 0:
+        return True
+    if result.stderr.strip() == b'fatal: not a git repository (or any of the parent directories): .git':
+        return False
+    raise ValueError('Git repository detection failed; repair repository configuration before publishing')
+
+
 def main():
     mode, root, relative = sys.argv[1:]
     if mode not in ('init', 'append') or relative not in ('.claude/brewpage-history.md', 'brewpage-history.md'):
@@ -81,9 +106,9 @@ def main():
             data = read(parent, parts[-1])
             if data is not None and len(data) > 8 * 1024 * 1024:
                 raise ValueError('history exceeds local 8 MiB limit')
-            git_repo = shutil.which('git') is not None and subprocess.run(['git', '-C', root, 'rev-parse', '--git-dir'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+            git_repo = repository(root)
             if git_repo:
-                tracked = subprocess.run(['git', '-C', root, 'ls-files', '--error-unmatch', '--', relative], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                tracked = git(root, ['ls-files', '--error-unmatch', '--', relative])
                 if tracked.returncode == 0:
                     raise ValueError('history is tracked by git; remove it from the index before publishing')
             ignore = read(directory, '.gitignore')
@@ -92,10 +117,10 @@ def main():
             if git_repo or ignore is not None:
                 ignore = ignore or b''
                 entry = relative.encode()
-                ignored = git_repo and subprocess.run(['git', '-C', root, 'check-ignore', '--no-index', '--quiet', '--', relative], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+                ignored = git_repo and git(root, ['check-ignore', '--no-index', '--quiet', '--', relative]).returncode == 0
                 if entry not in ignore.splitlines() or (git_repo and not ignored):
                     replace(directory, '.gitignore', ignore + (b'\n' if ignore and not ignore.endswith(b'\n') else b'') + entry + b'\n', 0o644)
-                if git_repo and subprocess.run(['git', '-C', root, 'check-ignore', '--no-index', '--quiet', '--', relative], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
+                if git_repo and git(root, ['check-ignore', '--no-index', '--quiet', '--', relative]).returncode != 0:
                     raise ValueError('history is not effectively ignored by git; resolve nested ignore overrides before publishing')
             incoming = sys.stdin.buffer.read(1024 * 1024 + 1)
             if len(incoming) > 1024 * 1024:

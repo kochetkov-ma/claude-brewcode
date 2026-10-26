@@ -252,7 +252,7 @@ a value that still cannot be stored is a 400, not a 409.
 
 ## Notes
 
-- Requires a POSIX runtime (macOS/Linux or WSL), `bash`, `curl`, `jq`, POSIX `python3` with `fcntl` (secure atomic history); sites also `node`, `zip`, `unzip`. Native Windows Python is unsupported and fails before upload.
+- Requires a POSIX runtime (macOS/Linux or WSL), `bash`, `curl`, `jq`, POSIX `python3` with `fcntl` (secure atomic history), and `git` inside repositories; sites also `node`, `zip`, `unzip`. Native Windows Python is unsupported and fails before upload.
 - History writes reject symlinks, hardlinks, tracked history and directories writable by others; failure stops publication. Archive inspection caps 25 MiB compressed, 40 MiB expanded, 200 files, 400 entries, 5 MiB/member and 1 MiB metadata; ZIP64/split archives are refused.
 
 - **`format` is a query param**: `/api/html` reads only `?format=` from the URL; a body `format` key is ignored and the default `html` stores markdown as raw text.
