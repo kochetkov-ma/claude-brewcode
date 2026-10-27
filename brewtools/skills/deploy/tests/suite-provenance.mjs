@@ -32,6 +32,9 @@ const parse = (str) => {
 const pairs = [
   ['source', parse(readFileSync(join(ROOT, '.github/workflows/docs.yml'), 'utf8')), parse(readFileSync(join(ROOT, '.github/workflows/deploy-docs.yml'), 'utf8')), {
     buildStep: 'Build docs image',
+    releaseOutputs: ['publish=true', 'product_version=1.2.3'],
+    prereleaseStatus: 1,
+    gateJob: 'publication',
     branchRuns: [
       ['branch push', 'push', 'feature/one', 1, '1.2.3'],
       ['manual branch', 'workflow_dispatch', 'feature/one', 0, '1.2.3-manual-123'],
@@ -41,13 +44,16 @@ const pairs = [
   }],
   ['template', parse(expand(fences[0])), parse(expand(fences[1])), {
     buildStep: 'Build and push',
+    releaseOutputs: [],
+    prereleaseStatus: 0,
+    gateJob: 'deploy',
     branchRuns: [
       ['branch push', 'push', 'feature/one', 0, '1.2.3-feature-one-2'],
       ['untrusted branch push', 'push', 'feature$(touch HACKED)', 0, '1.2.3-feature--touch-HACKED--2'],
     ],
   }],
 ];
-const step = (doc, name) => doc.jobs[Object.keys(doc.jobs)[0]].steps.find((item) => item.name === name);
+const step = (doc, name) => Object.values(doc.jobs).flatMap((job) => job.steps ?? []).find((item) => item.name === name);
 const temp = mkdtempSync(join(tmpdir(), 'brewcode-provenance-'));
 const bin = join(temp, 'bin');
 mkdirSync(bin);
@@ -141,6 +147,7 @@ const { DOCKER_CONFIG: _inherited, ...hostEnv } = process.env;
 const base = {
   ...hostEnv, HOME: home, PATH: bin + ':' + process.env.PATH, IMAGE,
   FIX_SHA: SHA, FIX_IMAGE_SHA: SHA, FIX_VERSION: '1.2.3', FIX_RUN: '123', FIX_ATTEMPT: '1', GITHUB_RUN_ATTEMPT: '1',
+  PUBLISH_REQUESTED: 'false',
   FIX_DIGEST: DIGEST, FIX_INFO: join(temp, 'info'), FIX_PAGE: join(temp, 'page'),
   FIX_HASH: HASH, FIX_LOG: join(temp, 'commands.log'), FIX_STDIN_LOG: join(temp, 'login-stdin.log'),
 };
@@ -191,6 +198,8 @@ try {
   for (const [label, producer, consumer, policy] of pairs) {
     const cwd = join(temp, label), output = join(cwd, 'output');
     mkdirSync(cwd);
+    mkdirSync(join(cwd, 'brewcode/.claude-plugin'), { recursive: true });
+    writeFileSync(join(cwd, 'brewcode/.claude-plugin/plugin.json'), JSON.stringify({ version: '1.2.3' }));
     writeFileSync(output, '');
     // GIVEN the actual producer WHEN building a release THEN its metadata feeds the verifier unchanged.
     check(bash(step(producer, 'Compute image tags').run, {
@@ -200,6 +209,7 @@ try {
     check(JSON.parse(readFileSync(metadataPath, 'utf8')), info, label + ': exact version/SHA/run JSON');
     check(readFileSync(output, 'utf8').split('\n').filter(Boolean), [
       'tags=' + IMAGE + ':1.2.3,' + IMAGE + ':sha-' + SHA + '-123-1', 'version=1.2.3', 'sha=' + SHA,
+      ...policy.releaseOutputs,
     ], label + ': bounded tags and actual checkout SHA');
     check(step(producer, policy.buildStep).with.labels.trim().split('\n').sort(), [
       'io.brewcode.docs.build-attempt=${{ github.run_attempt }}',
@@ -214,6 +224,7 @@ try {
     }, cwd).status, 0, label + ': rerun producer succeeds');
     check(readFileSync(output, 'utf8').split('\n').filter(Boolean), [
       'tags=' + IMAGE + ':1.2.3,' + IMAGE + ':sha-' + SHA + '-123-2', 'version=1.2.3', 'sha=' + SHA,
+      ...policy.releaseOutputs,
     ], label + ': second attempt publishes its own alias');
     check(JSON.parse(readFileSync(metadataPath, 'utf8')), info,
       label + ': rerun preserves the public three-field metadata contract');
@@ -232,7 +243,7 @@ try {
       }, cwd).status, status, label + ': manual tag ' + JSON.stringify(tag));
     }
     check(bash(step(consumer, 'Resolve image tag').run, {
-      EVENT_NAME: 'workflow_run', UPSTREAM_SHA: SHA, UPSTREAM_RUN_ID: '123', UPSTREAM_RUN_ATTEMPT: '1', UPSTREAM_REF: 'v1.2.3', GITHUB_OUTPUT: output,
+      EVENT_NAME: 'workflow_run', UPSTREAM_EVENT: 'push', UPSTREAM_SHA: SHA, UPSTREAM_RUN_ID: '123', UPSTREAM_RUN_ATTEMPT: '1', UPSTREAM_REF: 'v1.2.3', GITHUB_OUTPUT: output,
     }, cwd).status, 0, label + ': upstream run selects SHA/run alias');
     // GIVEN producer-shaped labels/metadata WHEN verifying THEN any mismatch fails closed.
     const imageEnv = { REQUEST_TAG: '1.2.3', UPSTREAM_SHA: SHA, UPSTREAM_RUN_ID: '123', UPSTREAM_RUN_ATTEMPT: '1', GITHUB_OUTPUT: output, FIX_INFO: metadataPath };
@@ -353,13 +364,13 @@ try {
     }
     check(existsSync(join(cwd, 'HACKED')), false, label + ': malicious release ref/tag input never executes');
   }
-  // GIVEN the shipped deploy workflow and template WHEN the producing build is not a release tag THEN nothing deploys.
-  for (const [label, , deploy] of pairs) {
+  // GIVEN each release policy WHEN routing a push build THEN branch previews never deploy.
+  for (const [label, , deploy, policy] of pairs) {
     const gateDir = join(temp, label + '-gate');
     mkdirSync(gateDir);
-    for (const [ref, status] of [['v1.2.3', 0], ['v1.2.3-rc.1', 0], ['feature/one', 1], ['main', 1], ['', 1]]) {
+    for (const [ref, status] of [['v1.2.3', 0], ['v1.2.3-rc.1', policy.prereleaseStatus], ['feature/one', 1], ['main', 1], ['', 1]]) {
       check(bash(step(deploy, 'Resolve image tag').run, {
-        EVENT_NAME: 'workflow_run', UPSTREAM_SHA: SHA, UPSTREAM_RUN_ID: '123', UPSTREAM_RUN_ATTEMPT: '1', UPSTREAM_REF: ref,
+        EVENT_NAME: 'workflow_run', UPSTREAM_EVENT: 'push', UPSTREAM_SHA: SHA, UPSTREAM_RUN_ID: '123', UPSTREAM_RUN_ATTEMPT: '1', UPSTREAM_REF: ref,
         GITHUB_OUTPUT: join(gateDir, 'output'),
       }, gateDir).status, status, label + ': upstream ref ' + JSON.stringify(ref));
     }
@@ -371,10 +382,10 @@ try {
         { BUILD_SHA: SHA, BUILD_RUN_ID: '123', BUILD_ATTEMPT: '1', BUILD_VERSION: version }, { head_branch: headBranch })).status,
         expected, label + ': source build ' + name);
     }
-    check(deploy.jobs.deploy.if.includes("startsWith(github.event.workflow_run.head_branch, 'v')"), true,
-      label + ': a branch-triggered upstream run skips the deploy job');
-    check(deploy.jobs.deploy.if.includes("github.event.workflow_run.event == 'push'"), true,
-      label + ': only a push-triggered upstream build deploys');
+    check(deploy.jobs[policy.gateJob].if.includes("startsWith(github.event.workflow_run.head_branch, 'v')"), true,
+      label + ': push publication requires a release-shaped ref');
+    check(deploy.jobs[policy.gateJob].if.includes("github.event.workflow_run.event == 'push'"), true,
+      label + ': release publication checks the upstream push event');
   }
   // GIVEN live release.yml + footer WHEN its changelog step runs as Actions does THEN body = section + --- + footer in RUNNER_TEMP (H3).
   const releaseSrc = readFileSync(process.env.RELEASE_YML || join(ROOT, '.github/workflows/release.yml'), 'utf8');
