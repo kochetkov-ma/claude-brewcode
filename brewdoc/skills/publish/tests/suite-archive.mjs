@@ -182,13 +182,19 @@ try {
       const r = pack(['--dir', dir, '--out', out], env);
       return [r.status, r.out, existsSync(out)];
     };
+    // Amplify only ZIP stdin transport: valid selected files still exercise real OS EPIPE without violating snapshot budgets.
+    const amplify = join(BASE, 'amplify-zip-input.cjs');
+    writeFileSync(amplify, `const cp=require('node:child_process'),run=cp.spawn;
+cp.spawn=(bin,args,options)=>{const child=run(bin,args,options);if(bin==='zip'){const end=child.stdin.end.bind(child.stdin);child.stdin.end=input=>end(input.repeat(Math.ceil(2097152/input.length)));}return child;};
+require('node:module').syncBuiltinESMExports();\n`);
+    const transport = { NODE_OPTIONS: `--require=${amplify}` };
 
     // WHEN zip exits 0 without reading the list THEN the pipe error is named, not "zip exited 0".
-    check('cause.zip.epipe', packOutcome(big, 'epipe.zip', fakeBin('zip', 'epipe', 'exit 0')),
+    check('cause.zip.epipe', packOutcome(SITE, 'epipe.zip', { ...fakeBin('zip', 'epipe', 'exit 0'), ...transport }),
       [1, 'FAILED: zip failed (EPIPE) — no archive produced\nRESULT: fail\n', false], 'EPIPE named, no manifest, no archive');
 
     // WHEN zip exits 3 without reading the list THEN its own status wins over the EPIPE it caused.
-    check('cause.zip.status', packOutcome(big, 'exit3.zip', fakeBin('zip', 'exit3', 'exit 3')),
+    check('cause.zip.status', packOutcome(SITE, 'exit3.zip', { ...fakeBin('zip', 'exit3', 'exit 3'), ...transport }),
       [1, 'FAILED: zip exited 3 — no archive produced\nRESULT: fail\n', false], 'non-zero status named, no manifest, no archive');
 
     // WHEN zip reads the list, then dies on a signal THEN the signal is named.

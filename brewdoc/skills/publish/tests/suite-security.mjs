@@ -5,7 +5,7 @@ import test, { after } from 'node:test';
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, symlinkSync, rmSync, statSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, symlinkSync, rmSync, statSync, existsSync, utimesSync, watch } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +15,107 @@ const base = mkdtempSync(join(tmpdir(), 'publish-security-'));
 const bin = join(base, 'bin'); mkdirSync(bin);
 writeFileSync(join(bin, 'curl'), '#!/bin/sh\nprintf \'{"link":"https://example.invalid/fixture","ownerToken":"fixture"}\\n\'\n', { mode: 0o755 });
 after(() => rmSync(base, { recursive: true, force: true }));
+
+for (const mode of ['direct', 'runner']) for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) test(`${mode} cancellation with ${signal} removes snapshot and partial archive`, async () => {
+  // GIVEN a real pack suspended inside ZIP after benign snapshot bytes and a partial archive exist.
+  const fixture = mkdtempSync(join(base, 'pack-cancel-'));
+  const site = join(fixture, 'site'); mkdirSync(site);
+  writeFileSync(join(site, 'index.html'), '<h1>cancel fixture</h1>');
+  const temp = join(fixture, 'tmp'); mkdirSync(temp);
+  const localBin = join(fixture, 'bin'); mkdirSync(localBin);
+  const marker = join(fixture, 'ready');
+  const request = join(fixture, 'request');
+  writeFileSync(join(localBin, 'curl'), `#!/usr/bin/env node\nrequire('node:fs').writeFileSync(${JSON.stringify(request)},'unexpected');\n`, { mode: 0o700 });
+  writeFileSync(join(localBin, 'zip'), `#!/usr/bin/env node
+const fs=require('node:fs'),path=require('node:path');
+const out=process.argv.at(-1);fs.writeFileSync(out,'PARTIAL_BENIGN_ARCHIVE');
+const ready={snapshot:process.cwd(),payload:fs.readFileSync('index.html','utf8'),out};
+fs.writeFileSync(${JSON.stringify(marker + '.tmp')},JSON.stringify(ready));
+fs.renameSync(${JSON.stringify(marker + '.tmp')},${JSON.stringify(marker)});
+setInterval(()=>{},1000);
+`, { mode: 0o700 });
+  let watcher;
+  let timeout;
+  const ready = new Promise((resolve, reject) => {
+    watcher = watch(fixture, (_event, name) => { if (name === 'ready') resolve(JSON.parse(readFileSync(marker, 'utf8'))); });
+    timeout = setTimeout(() => reject(new Error('ZIP boundary was not reached')), 5000);
+  });
+  const commands = {
+    direct: ['node', [join(scripts, 'publish.mjs'), 'pack', '--dir', site, '--out', join(fixture, 'out.zip')]],
+    runner: ['bash', [join(scripts, 'brewpage-run.sh'), 'publish', 'site-dir', '--ns', 'fixture', '--password-file', '', '--path', site]],
+  };
+  const [command, args] = commands[mode];
+  const child = spawn(command, args, { detached: true, cwd: fixture, env: { ...process.env, CLAUDE_PROJECT_DIR: fixture, TMPDIR: temp, PATH: localBin + ':' + process.env.PATH } });
+  const closed = new Promise(resolve => child.on('close', (status, caught) => resolve({ status, signal: caught })));
+  child.stdout.resume(); child.stderr.resume();
+  try {
+    const staged = await ready;
+    clearTimeout(timeout); watcher.close();
+    assert.deepEqual([staged.payload, readFileSync(staged.out, 'utf8'), statSync(staged.snapshot).mode & 0o777], ['<h1>cancel fixture</h1>', 'PARTIAL_BENIGN_ARCHIVE', 0o700], 'precondition proves live private payload and partial archive');
+    // WHEN only the direct helper, or the real runner process group, receives an ordinary signal THEN cleanup completes.
+    process.kill(mode === 'runner' ? -child.pid : child.pid, signal);
+    const result = await closed;
+    assert.deepEqual({ snapshot: existsSync(staged.snapshot), archive: existsSync(staged.out), temporary: readdirSync(temp), request: existsSync(request), success: result.status === 0 }, { snapshot: false, archive: false, temporary: [], request: false, success: false }, 'cancellation leaves no retained payload, partial artifact, upload or success');
+  } finally {
+    clearTimeout(timeout); watcher.close();
+    try { process.kill(-child.pid, 'SIGTERM'); } catch (error) { assert.equal(error.code, 'ESRCH', 'only an already-exited owned process group may be absent'); }
+  }
+});
+
+for (const phase of ['snapshot', 'zip']) for (const target of ['leaf', 'parent', 'root']) test(`directory pack binds bytes across ${target} swap before ${phase}`, () => {
+  // GIVEN benign source/outside fixtures and an exact subprocess-boundary swap.
+  const fixture = mkdtempSync(join(base, 'pack-race-'));
+  const site = join(fixture, 'site'); mkdirSync(join(site, 'assets', 'deep'), { recursive: true });
+  const outside = join(fixture, 'outside'); mkdirSync(join(outside, 'assets', 'deep'), { recursive: true });
+  const intended = 'INTENDED_SITE_FIXTURE';
+  const sentinel = 'OUTSIDE_BENIGN_FIXTURE';
+  writeFileSync(join(site, 'index.html'), '<h1>fixture</h1>');
+  writeFileSync(join(site, 'assets', 'deep', 'safe.txt'), intended);
+  utimesSync(join(site, 'assets', 'deep', 'safe.txt'), 978350400, 978350400);
+  writeFileSync(join(outside, 'index.html'), '<h1>outside</h1>');
+  writeFileSync(join(outside, 'assets', 'deep', 'safe.txt'), sentinel);
+  const temp = join(fixture, 'tmp'); mkdirSync(temp);
+  const localBin = join(fixture, 'bin'); mkdirSync(localBin);
+  const tool = phase === 'snapshot' ? 'python3' : 'zip';
+  const lookup = spawnSync('which', [tool], { encoding: 'utf8' });
+  assert.equal(lookup.status, 0, 'real offline tool resolves before installing the boundary shim');
+  const selected = { leaf: join(site, 'assets', 'deep', 'safe.txt'), parent: join(site, 'assets'), root: site }[target];
+  const replacement = { leaf: join(outside, 'assets', 'deep', 'safe.txt'), parent: join(outside, 'assets'), root: outside }[target];
+  const modes = join(fixture, 'modes.json');
+  const marker = join(fixture, 'swapped');
+  writeFileSync(join(localBin, tool), `#!/usr/bin/env node
+const fs=require('node:fs'),cp=require('node:child_process'),path=require('node:path');
+fs.renameSync(${JSON.stringify(selected)},${JSON.stringify(selected + '.original')});
+fs.symlinkSync(${JSON.stringify(replacement)},${JSON.stringify(selected)});
+fs.writeFileSync(${JSON.stringify(marker)},'done');
+const cwd=process.cwd();
+if (${JSON.stringify(phase)}==='zip') fs.writeFileSync(${JSON.stringify(modes)},JSON.stringify(['','assets','assets/deep','assets/deep/safe.txt','index.html'].map(p=>fs.statSync(path.join(cwd,p)).mode&511)));
+const result=cp.spawnSync(${JSON.stringify(lookup.stdout.trim())},process.argv.slice(2),{stdio:'inherit'});
+process.exit(result.status ?? 99);
+`, { mode: 0o700 });
+  const zip = join(fixture, 'out.zip');
+  // WHEN a source component becomes a symlink THEN only descriptor-bound snapshot bytes may archive.
+  const run = spawnSync('node', [join(scripts, 'publish.mjs'), 'pack', '--dir', site, '--out', zip], { encoding: 'utf8', timeout: 15000, env: { ...process.env, TMPDIR: temp, PATH: localBin + ':' + process.env.PATH } });
+  assert.equal(readFileSync(marker, 'utf8'), 'done', 'the exact source swap actually ran');
+  const actual = { status: run.status, output: run.stdout, archive: existsSync(zip), temporary: readdirSync(temp) };
+  const expected = {
+    snapshot: { status: 1, output: 'FAILED: source could not be snapshotted safely\nRESULT: fail\n', archive: false, temporary: [] },
+    zip: { status: 0, output: run.stdout, archive: true, temporary: [] },
+  };
+  assert.deepEqual(actual, expected[phase], 'snapshot failure and successful packing both clean private staging');
+  const verify = {
+    snapshot: () => assert.equal(existsSync(modes), false, 'refused snapshot never starts ZIP'),
+    zip: () => {
+      const payload = spawnSync('unzip', ['-p', zip, 'assets/deep/safe.txt'], { encoding: 'utf8' });
+      assert.deepEqual([payload.status, payload.stdout], [0, intended], 'real ZIP retains selected original bytes after source replacement');
+      const timestamp = spawnSync('python3', ['-I', '-S', '-c', 'import zipfile,sys; print(zipfile.ZipFile(sys.argv[1]).getinfo("assets/deep/safe.txt").date_time[0])', zip], { encoding: 'utf8' });
+      assert.deepEqual([timestamp.status, timestamp.stdout], [0, '2001\n'], 'snapshot preserves source modification time for deterministic review digests');
+      assert.match(run.stdout, /RESULT: ok\n$/, 'unchanged selected names keep the normal manifest verdict');
+      assert.deepEqual(JSON.parse(readFileSync(modes, 'utf8')), [0o700, 0o700, 0o700, 0o600, 0o600], 'all snapshot directories and files remain private');
+    },
+  };
+  verify[phase]();
+});
 
 for (const type of ['site-dir', 'site-zip']) test(`${type} confirmation binds exact reviewed bytes without retaining payloads`, () => {
   // GIVEN benign flagged content and an offline curl capture WHEN review returns THEN no upload or retained payload exists.

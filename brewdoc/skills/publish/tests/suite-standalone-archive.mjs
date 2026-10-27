@@ -48,12 +48,11 @@ const FAILURES = [
   ['empty archive', READ_LIST + ': > "$4"\nexit 0', 'FAILED: zip produced no usable archive'],
   ['corrupt archive', READ_LIST + 'printf invalid > "$4"\nexit 0', 'FAILED: archive has no valid central directory'],
 ];
-// Fakes that never read a ~4x-pipe (64 KiB) list: EPIPE every run, so the race above becomes the deterministic case.
+// Unread ZIP stdin amplified by a test preload: actual OS EPIPE with a valid source tree.
 const UNREAD_FAILURES = [
   ['zip exits 0 unread', 'exit 0', 'FAILED: zip failed (EPIPE) — no archive produced'],
   ['zip exits 3 unread', 'exit 3', 'FAILED: zip exited 3 — no archive produced'],
 ];
-const BIG_NAMES = ['index.html', ...Array.from({ length: 350 }, (_, i) => `p/${'a'.repeat(250)}/${'b'.repeat(250)}/${String(i).padStart(5, '0')}${'c'.repeat(240)}.html`)];
 const confirmLine = digest => `CONFIRM: review this manifest, then re-run with --confirmed --review-sha256 ${digest}`;
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), 'standalone-archive-')));
@@ -114,8 +113,12 @@ const lastLine = out => out.trimEnd().split('\n').pop();
 const clearUpload = () => ['curl-args', 'uploaded.zip'].forEach(name => rmSync(join(base, name), { force: true }));
 
 after(() => rmSync(base, { recursive: true, force: true }));
-const bigSite = join(base, 'big-site');
-writeTree(bigSite, Object.fromEntries(BIG_NAMES.map(name => [name, '<p>x</p>'])));
+const pipeSite = join(base, 'pipe-site');
+writeTree(pipeSite, { 'index.html': '<p>x</p>' });
+const amplify = join(base, 'amplify-zip-input.cjs');
+writeFileSync(amplify, `const cp=require('node:child_process'),run=cp.spawn;
+cp.spawn=(bin,args,options)=>{const child=run(bin,args,options);if(bin==='zip'){const end=child.stdin.end.bind(child.stdin);child.stdin.end=input=>end(input.repeat(Math.ceil(2097152/input.length)));}return child;};
+require('node:module').syncBuiltinESMExports();\n`);
 
 for (const copy of COPIES) {
   for (const [kind, uploadSuffix] of [['site-dir', ''], ['site-zip', '.zip']]) {
@@ -201,11 +204,11 @@ for (const copy of COPIES) {
 
   for (const [failure, stub, message] of UNREAD_FAILURES) {
     test(`${copy.name}: ${failure} names the real cause and aborts before upload`, () => {
-      // GIVEN the shared site with a 264261-byte zip -@ list and a fake zip that never reads it.
-      assert.equal(Buffer.byteLength(BIG_NAMES.join('\n') + '\n'), 264261, 'GIVEN a list 4x the 64 KiB pipe buffer');
+      // GIVEN a valid site and transport-only amplification to exceed the OS pipe/socket buffer.
+      assert.deepEqual(readdirSync(pipeSite), ['index.html'], 'GIVEN source selection stays within snapshot budgets');
       clearUpload();
       // WHEN the path fence packs it THEN the cause is exact, curl never runs and the run dir goes.
-      const r = runSync(copy, siteFence(copy, slots('site-dir')), bigSite, binWith({ curl: UPLOAD_STUB, zip: stub }));
+      const r = runSync(copy, siteFence(copy, slots('site-dir')), pipeSite, binWith({ curl: UPLOAD_STUB, zip: stub }), { NODE_OPTIONS: `--require=${amplify}` });
       assert.deepEqual([r.status, r.stdout, existsSync(join(base, 'curl-args')), runNames()],
         [1, `${message}\nRESULT: fail\n${NOT_VERIFIED}\n`, false, []], 'real cause named, curl never called, run dir removed');
     });
