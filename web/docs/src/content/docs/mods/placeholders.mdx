@@ -34,7 +34,7 @@ Type `++r` and Claude gets a saved instruction block along with your prompt. Rea
 
 Then run `/reload-plugins`. Works on Team organizations.
 
-<Spoiler title="Update, dev mode, requirements">
+<Spoiler id="update" title="Update, dev mode, requirements">
 
 <InstallPrompt plugin="brewmod-placeholders" mode="update" />
 
@@ -62,34 +62,25 @@ Claude reads  ++r check the diff                     <- your prompt, unchanged
 
 | Token | Normal mode | Plan mode |
 |---|---|---|
-| `++m` | `Manager mode is active`: `[ROLE: MANAGER]`, delegate, never code (29 lines) | `Manager + Plan Mode is active`: the same text **+ `[ADDON: PLAN MODE]`**: stay read-only; the plan opens with the role and the full task graph (48 lines) |
-| `++a` | `Architecture-first`: delegate the design to expert agents before implementing | same text: `++a` has no plan part |
-| `++r` | `[REVIEW DISCIPLINE: DOUBLE-CHECK]`: review, reproduce, fix confirmed findings only (11 lines) | same text: `++r` has no plan part |
-| `++rr` | `Anti-regression review`: regression, project standard and functional correctness axes | same text: `++rr` has no plan part |
-| `+++` | `Anti-drift cron is active`: `[ADDON: ANTI-DRIFT CRON]`, asks Claude to create one unique session cron for the current task now (9 lines) | `plan the task anti-drift cron`: the same text **+ `[ADDON: ANTI-DRIFT CRON PLAN]`**: create no cron now, plan it as an execution step (13 lines) |
+| [`++m`](#manager-mode) | `Manager mode is active`: `[ROLE: MANAGER]`, delegate, never code (29 lines) | `Manager + Plan Mode is active`: the same text **+ `[ADDON: PLAN MODE]`**: stay read-only; the plan opens with the role and the full task graph (48 lines) |
+| [`++a`](#architecture-first) | `Architecture-first`: delegate the design to expert agents before implementing | same text: `++a` has no plan part |
+| [`++r`](#two-phase-review) | `[REVIEW DISCIPLINE: DOUBLE-CHECK]`: review, reproduce, fix confirmed findings only (11 lines) | same text: `++r` has no plan part |
+| [`++rr`](#anti-regression-review) | `Anti-regression review`: regression, project standard and functional correctness axes | same text: `++rr` has no plan part |
+| [`+++`](#anti-drift-cron) | `Anti-drift cron is active`: `[ADDON: ANTI-DRIFT CRON]`, asks Claude to create one unique session cron for the current task now (9 lines) | `plan the task anti-drift cron`: the same text **+ `[ADDON: ANTI-DRIFT CRON PLAN]`**: create no cron now, plan it as an execution step (13 lines) |
 | `++rr` + `++r` | only `++rr` is sent (one review per message) | same |
 
 Every placeholder is sent in every mode. A placeholder with a plan part sends that part as an addition in plan mode only. Line counts are lines of the sent text, header line included: the numbers the band uses.
 
-<Spoiler title="++r text as sent">
+<Spoiler id="manager-mode" title="++m — Manager mode">
 
-```text
-User typed `++r` — Two-phase review discipline is active for this turn:
+**Methodology**
 
-[REVIEW DISCIPLINE: DOUBLE-CHECK]
-Every significant change: multi-agent review (matching reviewer expert, else
-general-purpose), simplification pass first.
-1) Review - finding = defect with path:line + evidence (failing command/input).
-2) Double-check - reproduce each finding.
-3) Fix - confirmed findings only.
-Big review -> split by area, never one long pass. Brief each: goal + area +
-acceptance, what's covered (don't re-litigate), who consumes the verdict;
-return verdict first, then findings.
-```
+- **Purpose:** Make `++m` keep the main session focused on coordination while agents do the implementation.
+- **How it works:** Build or reuse the full task graph, assign bounded work, validate agent reports and integrate results. In Plan mode, stay read-only and carry the role and full graph into the plan.
+- **Problem addressed:** Long, loosely assigned agent tasks can drift, overlap or stop before the whole job is done.
+- **Benefit:** Owners, dependencies and acceptance criteria stay explicit, so the manager can identify missing work and route failures back to agents.
 
-</Spoiler>
-
-<Spoiler title="++m text as sent, normal and plan mode">
+Text sent in normal mode:
 
 ```text
 User typed `++m` — Manager mode is active for this turn:
@@ -148,7 +139,116 @@ Deliver the embedded role + graph, not implementation code.
 
 </Spoiler>
 
-<Spoiler title="+++ text as sent, normal and plan mode">
+<Spoiler id="architecture-first" title="++a — Architecture-first">
+
+**Methodology**
+
+- **Purpose:** Use `++a` to settle the design before implementation.
+- **How it works:** Delegate to a matching architect or reviewer, split large designs by area and require a concrete handoff covering components, boundaries, data flow, reuse and trade-offs.
+- **Problem addressed:** Implementation can introduce incompatible patterns or unnecessary abstractions when design and reuse decisions are left implicit.
+- **Benefit:** Implementers receive a bounded plan that fits existing architecture and names what to reuse before adding new structures.
+
+The same text is sent in every mode; in Plan mode the design goes into the plan.
+
+```text
+User typed `++a` — Architecture-first discipline is active for this turn:
+
+[DIRECTIVE: ARCHITECTURE-FIRST]
+
+Before implementing, delegate the design to a matching architect/reviewer
+expert agent, else general-purpose - never design inline. Split a large
+design by area across several agents, never one long pass. Brief each: area +
+out-of-bounds, what's decided (must not reopen), who consumes the design next.
+
+Required of the design:
+- Fits existing architecture/patterns/rules/conventions - breaks nothing that
+  works.
+- As simple as possible while staying scalable - no over-engineering.
+- Abstractions only where earned: reuse the closest well-built repo
+  counterpart's patterns/classes, new pattern only if nothing fits - additive
+  to conventions/rules/docs, never instead.
+- Clean seams/boundaries so the code stays easy to modify.
+
+Deliverable before coding: a short, concrete plan - components, boundaries,
+data flow, reused-vs-new, trade-offs - handed to implementers. In plan mode,
+write it into the plan.
+```
+
+</Spoiler>
+
+<Spoiler id="two-phase-review" title="++r — Two-phase review">
+
+**Methodology**
+
+- **Purpose:** Use `++r` to check significant changes and validate review findings before fixing them.
+- **How it works:** Simplify first, run a multi-agent review, require a defect location and failing input or command, then reproduce each finding and fix confirmed defects only.
+- **Problem addressed:** Unverified review claims can trigger unnecessary edits, while broad reviews can lose concrete evidence.
+- **Benefit:** Fixes have reproducible reasons, and reviewers receive bounded areas with clear acceptance criteria.
+
+The same text is sent in every mode; when `++rr` is also present, only `++rr` is sent.
+
+```text
+User typed `++r` — Two-phase review discipline is active for this turn:
+
+[REVIEW DISCIPLINE: DOUBLE-CHECK]
+Every significant change: multi-agent review (matching reviewer expert, else
+general-purpose), simplification pass first.
+1) Review - finding = defect with path:line + evidence (failing command/input).
+2) Double-check - reproduce each finding.
+3) Fix - confirmed findings only.
+Big review -> split by area, never one long pass. Brief each: goal + area +
+acceptance, what's covered (don't re-litigate), who consumes the verdict;
+return verdict first, then findings.
+```
+
+</Spoiler>
+
+<Spoiler id="anti-regression-review" title="++rr — Anti-regression review">
+
+**Methodology**
+
+- **Purpose:** Use `++rr` to make preserving existing behavior the first review priority.
+- **How it works:** Review regression risk, project conventions and new functionality at each significant phase; reproduce findings, review fixes again and finish with a cross-review of all phases.
+- **Problem addressed:** A change can work in isolation while breaking an existing caller or diverging from project patterns.
+- **Benefit:** Review covers both the new behavior and its effect on existing behavior, with evidence required before fixes.
+
+The same text is sent in every mode; `++rr` takes precedence over `++r`.
+
+```text
+User typed `++rr` — Anti-regression review discipline is active for this turn:
+
+[REVIEW DISCIPLINE: ANTI-REGRESSION]
+Every significant phase: one review (matching reviewer expert, else
+general-purpose), simplification pass first.
+Axes: 1) no regression (primary) - existing behavior intact; 2) project
+standard - existing conventions/patterns; 3) functional correctness - the new
+functionality works.
+a) Review - finding = defect on an axis with path:line + evidence (failing
+command/input or broken caller).
+b) Double-check - reproduce each finding before acting.
+c) Fix - confirmed findings only, then re-review the fix.
+Task end: final cross-review across all phases, regression first.
+Large review -> split by area across reviewers, never one long pass. Brief
+each: goal + area + acceptance, what's reviewed (don't re-litigate), who
+consumes the verdict; return verdict first, then findings.
+```
+
+</Spoiler>
+
+<Spoiler id="anti-drift-cron" title="+++ — Anti-drift cron">
+
+**Methodology**
+
+- **Purpose:** Use `+++` to check that ongoing work still serves the current task's goal.
+- **How it works:** Ask the main session to create one timer, hourly unless you choose another interval. Each tick rereads the goal and methodology, collects agent updates, reconciles the task graph and checks remaining acceptance criteria.
+- **Problem addressed:** During long work, activity and completed subtasks can obscure drift from the requested result or leave unfinished work out of the active graph.
+- **Benefit:** Periodic reports make remaining work, blockers and the drift verdict visible. Completion or cancellation stops the timer; unavailable scheduling is reported rather than presented as active.
+
+In Plan mode, the timer is planned as an execution step instead of being created immediately.
+
+This periodic progress check is separate from the [`intent-guard` agent](/brewcode/skills/superreview-setup/#intent-guard), which compares the request with the delivered result during review; `+++` does not launch that agent. See [task methodology and session anti-drift](/brewtools/skills/task-board-setup/#task-methodology-and-session-anti-drift) for timer lifecycle, scheduling limits and reports.
+
+Text sent in normal mode:
 
 ```text
 User typed `+++` — Anti-drift cron is active for this turn:
@@ -307,7 +407,7 @@ Two files that resolve to the same placeholder name and part (through a front ma
 
 Layers, highest wins file by file: project > its brewtools override > global > its brewtools override > plugin defaults. Keys and verification tables: [definition files](#definition-files), [verified](#verified).
 
-<Spoiler title="With brewtools">
+<Spoiler id="with-brewtools" title="With brewtools">
 
 brewtools 6.8.0+ ships no codeword hook, so this mod is the only provider of `++m`, `++a`, `++r`, `++rr` and `+++`. brewtools 6.7.x also injects them, so each block appears twice: use 6.8.0+. Override files under `.claude/brewtools/manager/prompts/` and `<config>/manager/prompts/` are read through the `legacy` key, whatever the brewtools version. To silence a token, give your override an empty body (it stays silent in plan mode too). The brewtools-side notes live in [Codewords](/brewtools/prompt-injection/).
 

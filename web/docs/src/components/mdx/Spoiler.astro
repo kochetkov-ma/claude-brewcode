@@ -14,6 +14,7 @@ const { title, id, open = false, meta } = Astro.props;
     <span class="spoiler-icon" aria-hidden="true">▶</span>
     <span class="spoiler-title">{title}</span>
     {meta && <span class="spoiler-meta">{meta}</span>}
+    {id && <a class="spoiler-permalink" href={`#${encodeURIComponent(id)}`} aria-label={`Link to ${title}`}>#</a>}
   </summary>
   <div class="spoiler-content prose">
     <slot />
@@ -26,7 +27,13 @@ const { title, id, open = false, meta } = Astro.props;
   function openSpoilerForHash() {
     const hash = window.location.hash.slice(1);
     if (!hash) return;
-    const target = document.getElementById(hash);
+    let targetId = hash;
+    try {
+      targetId = decodeURIComponent(hash);
+    } catch {
+      // Keep malformed percent escapes usable as literal IDs.
+    }
+    const target = document.getElementById(targetId);
     if (!target) return;
     let el: Element | null = target.closest('details.spoiler');
     if (!el) return;
@@ -46,6 +53,10 @@ const { title, id, open = false, meta } = Astro.props;
     document.addEventListener('click', (e) => {
       const link = (e.target as HTMLElement)?.closest('a[href^="#"]') as HTMLAnchorElement | null;
       if (!link) return;
+      if (link.classList.contains('spoiler-permalink')) {
+        const spoiler = link.closest('details.spoiler') as HTMLDetailsElement | null;
+        if (spoiler) spoiler.open = true;
+      }
       setTimeout(openSpoilerForHash, 0);
     });
   }
@@ -114,6 +125,23 @@ const { title, id, open = false, meta } = Astro.props;
     font-weight: 400;
     color: #A8A29E;
     white-space: nowrap;
+  }
+
+  .spoiler-permalink {
+    flex-shrink: 0;
+    padding: 0.15rem 0.4rem;
+    color: #EBBB40;
+    text-decoration: none;
+    border-radius: 0.2rem;
+  }
+
+  .spoiler-permalink:hover {
+    text-decoration: underline;
+  }
+
+  .spoiler-permalink:focus-visible {
+    outline: 2px solid #EBBB40;
+    outline-offset: 2px;
   }
 
   .spoiler .spoiler {

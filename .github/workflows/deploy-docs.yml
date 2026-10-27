@@ -1,4 +1,4 @@
-# Deploys successful release-tag Docs builds only; manual builds never reach production.
+# Deploys successful release-tag or explicitly authorized main-branch Docs builds.
 name: Deploy Docs
 on:
   workflow_run:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: "Release-tag Docs build only: X.Y.Z or sha-<sha>-<run>-<attempt> tag (branch previews are rejected)"
+        description: "Published Docs build: X.Y.Z, X.Y.Z-manual-<run>, or sha-<sha>-<run>-<attempt>"
         required: true
 concurrency:
   group: deploy-docs
@@ -22,15 +22,38 @@ permissions:
   packages: read
   deployments: write
 jobs:
-  deploy:
+  publication:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 3
+    outputs:
+      authorized: ${{ steps.source.outputs.result }}
     if: >
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       startsWith(github.event.workflow_run.head_branch, 'v') &&
+       ((github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_branch, 'v')) ||
+        (github.event.workflow_run.event == 'workflow_dispatch' && github.event.workflow_run.head_branch == 'main')) &&
        github.event.workflow_run.head_repository.full_name == github.repository)
+    steps:
+      - name: Check source publication authorization
+        id: source
+        uses: actions/github-script@v9.0.0
+        with:
+          script: |
+            if (context.eventName === 'workflow_dispatch') return true;
+            const run = context.payload.workflow_run;
+            if (run.event === 'push') return /^v\d+\.\d+\.\d+$/.test(run.head_branch);
+            // A build-only dispatch skips this gate and must not create a deployment.
+            const jobs = await github.paginate('GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs', {
+              ...context.repo, run_id: run.id, attempt_number: run.run_attempt, per_page: 100,
+            });
+            return jobs.some(job => job.name === 'build' && job.head_sha === run.head_sha &&
+              job.conclusion === 'success' && job.steps?.some(step =>
+                step.name === 'Authorize manual docs publication' && step.status === 'completed' && step.conclusion === 'success'));
+  deploy:
+    needs: publication
+    if: needs.publication.outputs.authorized == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - name: Resolve image tag
         id: request
@@ -41,6 +64,7 @@ jobs:
           UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id }}
           UPSTREAM_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           UPSTREAM_REF: ${{ github.event.workflow_run.head_branch }}
+          UPSTREAM_EVENT: ${{ github.event.workflow_run.event }}
         run: |
           set -euo pipefail
           if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
@@ -50,7 +74,8 @@ jobs:
             TAG="$INPUT_TAG"
           else
             [[ "$UPSTREAM_SHA" =~ ^[0-9a-f]{40}$ && "$UPSTREAM_RUN_ID" =~ ^[1-9][0-9]*$ && "$UPSTREAM_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]] || { echo "::error::Build provenance validation failed"; exit 1; }
-            [[ "$UPSTREAM_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([._-][A-Za-z0-9._-]+)?$ ]] || { echo "::error::Only a release tag build deploys"; exit 1; }
+            [[ ( "$UPSTREAM_EVENT" == push && "$UPSTREAM_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ) ||
+               ( "$UPSTREAM_EVENT" == workflow_dispatch && "$UPSTREAM_REF" == main ) ]] || { echo "::error::Only release tags or authorized main builds deploy"; exit 1; }
             TAG="sha-${UPSTREAM_SHA}-${UPSTREAM_RUN_ID}-${UPSTREAM_RUN_ATTEMPT}"
           fi
           printf 'tag=%s\n' "$TAG" >> "$GITHUB_OUTPUT"
@@ -106,11 +131,29 @@ jobs:
             });
             const { data: workflow } = await github.rest.actions.getWorkflow({ ...context.repo, workflow_id: run.workflow_id });
             if (run.status !== 'completed' || run.conclusion !== 'success' ||
-                run.head_sha !== process.env.BUILD_SHA || run.run_attempt !== attempt || run.event !== 'push' ||
+                run.head_sha !== process.env.BUILD_SHA || run.run_attempt !== attempt ||
                 run.head_repository?.full_name !== context.repo.owner + '/' + context.repo.repo ||
-                run.head_branch !== 'v' + process.env.BUILD_VERSION ||
                 workflow.path !== '.github/workflows/docs.yml') {
               throw new Error('Image does not match a successful same-repository Docs build');
+            }
+            if (run.event === 'push') {
+              if (!/^\d+\.\d+\.\d+$/.test(process.env.BUILD_VERSION) || run.head_branch !== 'v' + process.env.BUILD_VERSION) {
+                throw new Error('Source build is not a stable release tag');
+              }
+            } else if (run.event === 'workflow_dispatch') {
+              if (run.head_branch !== 'main' || !new RegExp('^\\d+\\.\\d+\\.\\d+-manual-' + id + '$').test(process.env.BUILD_VERSION)) {
+                throw new Error('Manual source build must publish from main');
+              }
+              // Run metadata omits dispatch inputs; the exact-attempt gate proves publish=true was accepted.
+              const jobs = await github.paginate('GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs', {
+                ...context.repo, run_id: id, attempt_number: attempt, per_page: 100,
+              });
+              const authorized = jobs.some(job => job.name === 'build' && job.head_sha === run.head_sha &&
+                job.conclusion === 'success' && job.steps?.some(step =>
+                  step.name === 'Authorize manual docs publication' && step.status === 'completed' && step.conclusion === 'success'));
+              if (!authorized) throw new Error('Manual docs publication input is not proven');
+            } else {
+              throw new Error('Unsupported source build event');
             }
       - name: Checkout verified source
         uses: actions/checkout@v7.0.1

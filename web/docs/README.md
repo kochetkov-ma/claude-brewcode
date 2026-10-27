@@ -4,7 +4,7 @@ Documentation site `doc-claude.brewcode.app`. Astro 5 + Caddy + Docker.
 
 ## Development
 
-Node.js 24 (build image pins `node:24.21.0-alpine3.23`), npm.
+Node.js 24 (build image pins `node:24.22.1-alpine3.23`), npm.
 
 ```bash
 npm install       # dependencies
@@ -23,18 +23,29 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 
 Full operator guide: [`web/DEPLOY.md`](../DEPLOY.md).
 
-### CI/CD (automatic)
+### CI/CD
 
-Workflow `.github/workflows/docs.yml` builds the image and pushes it to GHCR on `v*.*.*` tags and non-`main` branch pushes. No `latest` tag.
+Workflow `.github/workflows/docs.yml` builds `linux/amd64` images. Stable `vX.Y.Z` release tags publish automatically; branch pushes do not run it. Manual runs build and verify only unless `publish=true` is explicitly requested from `main`. No `latest` tag.
 
-| Event | Image tags | Example |
-|-------|-----------|---------|
-| Tag `v3.5.0` | `3.5.0` + `sha-<sha>-<run>-<attempt>` | `ghcr.io/.../docs:3.5.0` |
-| Branch push | `{version}-{branch}-{N}` + `sha-<sha>-<run>-<attempt>` | `ghcr.io/.../docs:3.4.6-web-1` |
+| Event | Image tags | Publication |
+|-------|------------|-------------|
+| Stable tag `vX.Y.Z` | `X.Y.Z` + `sha-<sha>-<run>-<attempt>` | Automatic |
+| Manual run, `publish=false` (default) | `<product-version>-manual-<run>` + `sha-<sha>-<run>-<attempt>` | Build and verify only |
+| Manual run on `main`, `publish=true` | `<product-version>-manual-<run>` + `sha-<sha>-<run>-<attempt>` | Publish and deploy documentation |
 
-Platform: `linux/amd64`.
+To check a branch without publishing, run from the repository root:
 
-`.github/workflows/deploy-docs.yml` deploys only release-tag (`v*.*.*`) builds; branch images are previews and never reach production.
+```bash
+gh workflow run docs.yml --ref <branch>
+```
+
+To publish a documentation-only update already committed and pushed to `main`:
+
+```bash
+gh workflow run docs.yml --ref main -f publish=true
+```
+
+This does not bump product versions or create a release tag. A successful published build triggers `.github/workflows/deploy-docs.yml`, which verifies the image digest, source SHA, exact build run and attempt, and the publication authorization before deployment. Build-only manual runs cannot deploy.
 
 ### Manual build
 
@@ -63,7 +74,16 @@ A/AAAA record `doc-claude.brewcode.app` -> server IP. The shared Caddy proxy on 
 
 ### Updating
 
-Push a new release tag `vX.Y.Z`. To redeploy an existing release, run **Deploy Docs** (`workflow_dispatch`) with its exact `image_tag`.
+For a documentation-only update, use the explicit `main` publication command above. Product releases still publish documentation through stable `vX.Y.Z` tags.
+
+To redeploy a previously published build, run **Deploy Docs** with its exact provenance tag from the source Docs run:
+
+```bash
+gh workflow run deploy-docs.yml --ref main \
+  -f image_tag=sha-<sha>-<run>-<attempt>
+```
+
+The deployment rechecks that the image came from a successful stable release build or an explicitly authorized publication from `main`.
 
 ## Structure
 

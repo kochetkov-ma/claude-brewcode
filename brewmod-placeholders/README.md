@@ -53,31 +53,22 @@ Claude reads  ++r check the diff                     <- your prompt, unchanged
 
 | Token | Normal mode | Plan mode |
 |---|---|---|
-| `++m` | `Manager mode is active`: `[ROLE: MANAGER]`, delegate, never code (29 lines) | `Manager + Plan Mode is active`: the same text **+ `[ADDON: PLAN MODE]`**: stay read-only; the plan opens with the role and the full task graph (48 lines) |
-| `++a` | `Architecture-first`: delegate the design to expert agents before implementing | same text: `++a` has no plan part |
-| `++r` | `[REVIEW DISCIPLINE: DOUBLE-CHECK]`: review, reproduce, fix confirmed findings only (11 lines) | same text: `++r` has no plan part |
-| `++rr` | `Anti-regression review`: regression, project standard and functional correctness axes | same text: `++rr` has no plan part |
-| `+++` | `Anti-drift cron is active`: `[ADDON: ANTI-DRIFT CRON]`, asks Claude to create one unique session cron for the current task now (9 lines) | `plan the task anti-drift cron`: the same text **+ `[ADDON: ANTI-DRIFT CRON PLAN]`**: create no cron now, plan it as an execution step (13 lines) |
+| [`++m`](#manager-mode) | `Manager mode is active`: `[ROLE: MANAGER]`, delegate, never code (29 lines) | `Manager + Plan Mode is active`: the same text **+ `[ADDON: PLAN MODE]`**: stay read-only; the plan opens with the role and the full task graph (48 lines) |
+| [`++a`](#architecture-first) | `Architecture-first`: delegate the design to expert agents before implementing | same text: `++a` has no plan part |
+| [`++r`](#two-phase-review) | `[REVIEW DISCIPLINE: DOUBLE-CHECK]`: review, reproduce, fix confirmed findings only (11 lines) | same text: `++r` has no plan part |
+| [`++rr`](#anti-regression-review) | `Anti-regression review`: regression, project standard and functional correctness axes | same text: `++rr` has no plan part |
+| [`+++`](#anti-drift-cron) | `Anti-drift cron is active`: `[ADDON: ANTI-DRIFT CRON]`, asks Claude to create one unique session cron for the current task now (9 lines) | `plan the task anti-drift cron`: the same text **+ `[ADDON: ANTI-DRIFT CRON PLAN]`**: create no cron now, plan it as an execution step (13 lines) |
 | `++rr` + `++r` | only `++rr` is sent (one review per message) | same |
 
 Every placeholder is sent in every mode. A placeholder with a plan part sends that part as an addition in plan mode only. Line counts are lines of the sent text, header line included: the numbers the band uses.
 
-<details><summary><code>++r</code> text as sent</summary>
+### Manager mode
 
-```text
-User typed `++r` — Two-phase review discipline is active for this turn:
+- **Purpose:** `++m` keeps the main context on orchestration and delegation.
+- **How it works:** Builds or reuses the full task graph, delegates bounded work and validates agent reports. In Plan mode it carries the manager role and task graph into the execution plan.
+- **Problem addressed:** Coding in the main context can crowd out coordination, obscure dependencies and leave agent work unchecked.
+- **Benefit:** Owners, dependencies, acceptance criteria and remaining work stay explicit for the coordinating session.
 
-[REVIEW DISCIPLINE: DOUBLE-CHECK]
-Every significant change: multi-agent review (matching reviewer expert, else
-general-purpose), simplification pass first.
-1) Review - finding = defect with path:line + evidence (failing command/input).
-2) Double-check - reproduce each finding.
-3) Fix - confirmed findings only.
-Big review -> split by area, never one long pass. Brief each: goal + area +
-acceptance, what's covered (don't re-litigate), who consumes the verdict;
-return verdict first, then findings.
-```
-</details>
 <details><summary><code>++m</code> text as sent, normal and plan mode</summary>
 
 ```text
@@ -136,6 +127,105 @@ Deliver the embedded role + graph, not implementation code.
 ```
 
 </details>
+
+### Architecture-first
+
+- **Purpose:** `++a` establishes the design before implementation starts.
+- **How it works:** Delegates design to a matching expert, requires reuse of fitting architecture and patterns, and hands implementers a concrete plan with boundaries and trade-offs. The same text is sent in every mode.
+- **Problem addressed:** Implementation can introduce incompatible patterns or unnecessary abstractions before the design is checked.
+- **Benefit:** Implementers receive an explicit design and reuse decisions to work from.
+
+<details><summary><code>++a</code> text as sent</summary>
+
+```text
+User typed `++a` — Architecture-first discipline is active for this turn:
+
+[DIRECTIVE: ARCHITECTURE-FIRST]
+
+Before implementing, delegate the design to a matching architect/reviewer
+expert agent, else general-purpose - never design inline. Split a large
+design by area across several agents, never one long pass. Brief each: area +
+out-of-bounds, what's decided (must not reopen), who consumes the design next.
+
+Required of the design:
+- Fits existing architecture/patterns/rules/conventions - breaks nothing that
+  works.
+- As simple as possible while staying scalable - no over-engineering.
+- Abstractions only where earned: reuse the closest well-built repo
+  counterpart's patterns/classes, new pattern only if nothing fits - additive
+  to conventions/rules/docs, never instead.
+- Clean seams/boundaries so the code stays easy to modify.
+
+Deliverable before coding: a short, concrete plan - components, boundaries,
+data flow, reused-vs-new, trade-offs - handed to implementers. In plan mode,
+write it into the plan.
+```
+
+</details>
+
+### Two-phase review
+
+- **Purpose:** `++r` adds review and reproduction of findings to significant changes.
+- **How it works:** Runs a simplification pass, splits large reviews by area, reproduces each finding and fixes confirmed defects only. The same text is sent in every mode.
+- **Problem addressed:** Unverified review claims can trigger unnecessary or incorrect fixes.
+- **Benefit:** Findings carry reproducible evidence before they become implementation work.
+
+<details><summary><code>++r</code> text as sent</summary>
+
+```text
+User typed `++r` — Two-phase review discipline is active for this turn:
+
+[REVIEW DISCIPLINE: DOUBLE-CHECK]
+Every significant change: multi-agent review (matching reviewer expert, else
+general-purpose), simplification pass first.
+1) Review - finding = defect with path:line + evidence (failing command/input).
+2) Double-check - reproduce each finding.
+3) Fix - confirmed findings only.
+Big review -> split by area, never one long pass. Brief each: goal + area +
+acceptance, what's covered (don't re-litigate), who consumes the verdict;
+return verdict first, then findings.
+```
+
+</details>
+
+### Anti-regression review
+
+- **Purpose:** `++rr` prioritizes preserving existing behavior while reviewing a change.
+- **How it works:** Reviews regression, project conventions and functional correctness; reproduces findings, re-reviews fixes and ends with a cross-review. It takes precedence over `++r`; the same text is sent in every mode.
+- **Problem addressed:** A working new feature can still break existing callers or diverge from project conventions.
+- **Benefit:** Review explicitly covers existing behavior as well as the new functionality, with evidence required for findings.
+
+<details><summary><code>++rr</code> text as sent</summary>
+
+```text
+User typed `++rr` — Anti-regression review discipline is active for this turn:
+
+[REVIEW DISCIPLINE: ANTI-REGRESSION]
+Every significant phase: one review (matching reviewer expert, else
+general-purpose), simplification pass first.
+Axes: 1) no regression (primary) - existing behavior intact; 2) project
+standard - existing conventions/patterns; 3) functional correctness - the new
+functionality works.
+a) Review - finding = defect on an axis with path:line + evidence (failing
+command/input or broken caller).
+b) Double-check - reproduce each finding before acting.
+c) Fix - confirmed findings only, then re-review the fix.
+Task end: final cross-review across all phases, regression first.
+Large review -> split by area across reviewers, never one long pass. Brief
+each: goal + area + acceptance, what's reviewed (don't re-litigate), who
+consumes the verdict; return verdict first, then findings.
+```
+
+</details>
+
+### Anti-drift cron
+
+- **Purpose:** `+++` adds periodic checks that active work still matches the goal and acceptance criteria.
+- **How it works:** Asks the main session to create one task timer, hourly unless you choose another interval. Each tick collects agent updates and reconciles the task graph; completion or cancellation stops the timer. Plan mode plans its creation as an execution step; unavailable scheduling is reported.
+- **Problem addressed:** Long tasks can drift as agent results, dependencies and user corrections accumulate.
+- **Benefit:** Periodic reports make verified progress, remaining work and deviations visible while the task is active.
+
+See [task methodology and session anti-drift](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/#task-methodology-and-session-anti-drift) for the timer lifecycle. The separate [intent-guard agent](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/#intent-guard) compares the request with delivered work during review; `+++` does not invoke that agent.
 
 <details><summary><code>+++</code> text as sent, normal and plan mode</summary>
 

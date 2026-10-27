@@ -1,4 +1,4 @@
-# Release tags publish docs; manual runs build and verify without publishing or deploying.
+# Release tags publish docs; manual runs publish only with explicit main-branch authorization.
 
 name: Docs
 
@@ -7,6 +7,12 @@ on:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish and deploy docs from main without a product release"
+        type: boolean
+        default: false
+        required: false
 
 permissions:
   contents: read
@@ -26,6 +32,12 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      - name: Authorize manual docs publication
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == refs/heads/main ]] || { echo "::error::Manual docs publication requires main"; exit 1; }
+
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
         with:
@@ -37,20 +49,26 @@ jobs:
 
       - name: Compute image tags
         id: meta
+        env:
+          PUBLISH_REQUESTED: ${{ inputs.publish == true }}
         run: |
           set -euo pipefail
           SHA=$(git rev-parse HEAD)
           [[ "$SHA" =~ ^[0-9a-f]{40}$ && "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ && "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]] || { echo "::error::Build provenance validation failed"; exit 1; }
+          PRODUCT_VERSION=$(node -p "require('./brewcode/.claude-plugin/plugin.json').version")
+          [[ "$PRODUCT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Invalid product version"; exit 1; }
           if [[ "$GITHUB_EVENT_NAME" == push ]]; then
             [[ "$GITHUB_REF" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Only a release tag publishes docs"; exit 1; }
             VERSION="${GITHUB_REF_NAME#v}"
+            PUBLISH=true
           else
-            BASE_VERSION=$(node -p "require('./brewcode/.claude-plugin/plugin.json').version")
-            VERSION="${BASE_VERSION}-manual-${GITHUB_RUN_ID}"
+            VERSION="${PRODUCT_VERSION}-manual-${GITHUB_RUN_ID}"
+            PUBLISH="$PUBLISH_REQUESTED"
           fi
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([._-][A-Za-z0-9._-]+)?$ && ${#VERSION} -le 128 ]] || { echo "::error::Build provenance validation failed"; exit 1; }
           printf 'tags=%s:%s,%s:sha-%s-%s-%s\nversion=%s\nsha=%s\n' \
             "$IMAGE" "$VERSION" "$IMAGE" "$SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$VERSION" "$SHA" >> "$GITHUB_OUTPUT"
+          printf 'publish=%s\nproduct_version=%s\n' "$PUBLISH" "$PRODUCT_VERSION" >> "$GITHUB_OUTPUT"
           mkdir -p web/docs/public
           printf '{"version":"%s","sha":"%s","buildRunId":"%s"}\n' \
             "$VERSION" "$SHA" "$GITHUB_RUN_ID" > web/docs/public/build-info.json
@@ -75,16 +93,16 @@ jobs:
         with:
           context: web/docs
           platforms: linux/amd64
-          push: ${{ github.event_name == 'push' }}
-          load: ${{ github.event_name == 'workflow_dispatch' }}
+          push: ${{ steps.meta.outputs.publish == 'true' }}
+          load: ${{ steps.meta.outputs.publish != 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
-          build-args: VERSION=${{ steps.meta.outputs.version }}
+          build-args: VERSION=${{ steps.meta.outputs.product_version }}
           labels: |
             org.opencontainers.image.version=${{ steps.meta.outputs.version }}
             org.opencontainers.image.revision=${{ steps.meta.outputs.sha }}
             io.brewcode.docs.build-run-id=${{ github.run_id }}
             io.brewcode.docs.build-attempt=${{ github.run_attempt }}
-          # Lockfile-keyed registry cache is shared across release refs; manual runs only read it.
+          # Only release builds update the shared cache; manual runs read it.
           cache-from: type=registry,ref=${{ env.IMAGE }}:cache-${{ hashFiles('web/docs/package-lock.json') }}
           cache-to: ${{ github.event_name == 'push' && format('type=registry,ref={0}:cache-{1},mode=max', env.IMAGE, hashFiles('web/docs/package-lock.json')) || '' }}
 
@@ -93,9 +111,11 @@ jobs:
         env:
           VERSION: ${{ steps.meta.outputs.version }}
           BUILD_SHA: ${{ steps.meta.outputs.sha }}
+          PUBLISH: ${{ steps.meta.outputs.publish }}
         run: |
           set -euo pipefail
           IMAGE_REF="${IMAGE}:${VERSION}"
+          if [[ "$PUBLISH" == true ]]; then docker pull "$IMAGE_REF"; fi
           EXPECTED_INFO=$(printf '{"version":"%s","sha":"%s","buildRunId":"%s"}' "$VERSION" "$BUILD_SHA" "$GITHUB_RUN_ID")
           [[ "$(docker run --rm --entrypoint cat "$IMAGE_REF" /srv/build-info.json)" == "$EXPECTED_INFO" ]] || { echo "::error::Built image metadata mismatch"; exit 1; }
           docker run --rm --entrypoint sh "$IMAGE_REF" -ec 'test -s /srv/getting-started/index.html; caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile'
@@ -105,10 +125,10 @@ jobs:
           VERSION: ${{ steps.meta.outputs.version }}
           TAGS: ${{ steps.meta.outputs.tags }}
           BUILD_SHA: ${{ steps.meta.outputs.sha }}
-          EVENT_NAME: ${{ github.event_name }}
+          PUBLISH: ${{ steps.meta.outputs.publish }}
         run: |
           {
-            if [[ "$EVENT_NAME" == push ]]; then echo "### Docs image published"; else echo "### Docs image verified (build only)"; fi
+            if [[ "$PUBLISH" == true ]]; then echo "### Docs image published"; else echo "### Docs image verified (build only)"; fi
             echo ""
             echo "**Version:** \`${VERSION}\` / **SHA:** \`${BUILD_SHA}\` / **Build run:** $GITHUB_RUN_ID"
             echo ""
