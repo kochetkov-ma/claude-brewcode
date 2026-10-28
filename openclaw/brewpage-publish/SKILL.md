@@ -238,7 +238,7 @@ a value that still cannot be stored is a 400, not a 409.
 - History writes reject symlinks, hardlinks, tracked history and directories writable by others; failure stops publication. Archive inspection caps 25 MiB compressed, 40 MiB expanded, 200 files, 400 entries, 5 MiB/member and 1 MiB metadata; ZIP64/split archives are refused.
 
 - Scripts: `scripts/brewpage-run.sh` (the only entry), `scripts/brewpage-lib.sh` (sourced helpers), `scripts/publish.mjs` (offline SITE bundle build/verify), `scripts/history.py` (secure atomic history). Requires a POSIX runtime (macOS/Linux or WSL), `bash`, `curl`, `jq`, POSIX `python3` with `fcntl`, and `git` inside repositories; sites also `node`, `zip`, `unzip`. Native Windows Python is unsupported and fails before upload.
-- **`format` is a query param**: `/api/html` reads only `?format=` from the URL; a body `format` key is ignored and the default `html` stores markdown as raw text.
+- **`format`**: `/api/html` takes `?format=` or a JSON body `format`; a non-blank body value wins over the query, neither -> default `html` (markdown stored as raw text). The scripts send `?format=markdown` with a `{content}`-only body.
 - History: `./brewpage-history.md` in the workspace (the shell's working directory), mode `600`, added to `./.gitignore` inside a git repo. Its header holds the **delete** command for the owner token.
 - Run dirs: private `brewpage.XXXXXX` under `$TMPDIR` (else `/tmp`); only `scripts/brewpage-run.sh` creates, fills and removes them.
 - TTL default is `15` days. Namespace must match `^[a-z0-9-]{1,32}$` and be explicitly chosen; unanswered choices stop before upload.
