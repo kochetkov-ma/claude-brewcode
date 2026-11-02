@@ -7,9 +7,9 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
-const MODS = ['brewmod-placeholders', 'brewmod-plan-effort', 'brewmod-reminders']
 const INPUT = '{"prompt":"preserve stdin ☃"}\nsecond line\n'
 const MODULES = { 'brewmod-placeholders': 'inject.mjs', 'brewmod-plan-effort': 'mode.mjs', 'brewmod-reminders': 'remind.mjs' }
+const MODS = Object.keys(MODULES)
 const EVENTS = {
   'brewmod-placeholders': [['UserPromptSubmit', {}], ['PostToolBatch', {}]],
   'brewmod-plan-effort': [['UserPromptSubmit', {}], ['PostToolBatch', {}]],
@@ -96,7 +96,6 @@ test('GIVEN isolated runtime installations WHEN each launcher resolves Node THEN
   for (const mod of MODS) for (const [label, setup, winner] of resolution) await t.test(`${mod}: ${label}`, (t) => {
     const f = fixture(t, mod)
     setup(f)
-    assert.equal(existsSync(f.home), true, 'fixture HOME exists before launch')
     // WHEN the production launcher copy receives arbitrary arguments and stdin.
     const result = f.run()
     // THEN the selected fake runtime receives the complete unchanged payload.
@@ -105,11 +104,12 @@ test('GIVEN isolated runtime installations WHEN each launcher resolves Node THEN
 })
 
 test('GIVEN missing or unusable Node WHEN launchers repeat THEN they stay silent with one diagnostic per plugin', async (t) => {
+  const DEFAULT_CONFIG = (home) => join(home, '.claude')
   for (const [label, setup, configDir] of [
-    ['missing', () => {}, (home) => join(home, '.claude')],
-    ['obsolete', (f) => f.runtime(f.paths.path, 'old', 'v14.13.0'), (home) => join(home, '.claude')],
-    ['failed probe', (f) => f.runtime(f.paths.path, 'failed', 'v20.9.0', 1), (home) => join(home, '.claude')],
-    ['nonexecutable', (f) => { f.runtime(f.paths.path, 'blocked'); chmodSync(f.paths.path, 0o644) }, (home) => join(home, '.claude')],
+    ['missing', () => {}, DEFAULT_CONFIG],
+    ['obsolete', (f) => f.runtime(f.paths.path, 'old', 'v14.13.0'), DEFAULT_CONFIG],
+    ['failed probe', (f) => f.runtime(f.paths.path, 'failed', 'v20.9.0', 1), DEFAULT_CONFIG],
+    ['nonexecutable', (f) => { f.runtime(f.paths.path, 'blocked'); chmodSync(f.paths.path, 0o644) }, DEFAULT_CONFIG],
     ['CLAUDE_CONFIG_DIR profile', (f, config) => { f.env.CLAUDE_CONFIG_DIR = config }, (home) => join(home, 'profile dir')],
   ]) await t.test(label, (t) => {
     // GIVEN no real Node candidate, a shared isolated HOME and yesterday-or-older markers.

@@ -13,7 +13,6 @@ try_node() {
   set -- "$1" $probe_version
   IFS=$probe_old_ifs
   [ "$#" -eq 4 ] || return 1
-  [ -n "$2" ] && [ -n "$3" ] && [ -n "$4" ] || return 1
   if { [ "$2" -gt 14 ] || { [ "$2" -eq 14 ] && { [ "$3" -gt 13 ] || { [ "$3" -eq 13 ] && [ "$4" -ge 1 ]; }; }; }; } 2>/dev/null; then
     node_command=$1
     return 0
@@ -23,7 +22,6 @@ try_node() {
 
 list_nvm_versions() {
   for nvm_install in "$nvm_root"/versions/node/v*/bin/node; do
-    [ -x "$nvm_install" ] || continue
     nvm_version=${nvm_install%/bin/node}
     nvm_version=${nvm_version##*/v}
     case "$nvm_version" in ''|*[!0-9.]*) continue ;; esac
@@ -49,7 +47,7 @@ find_nvm() {
     case "$nvm_alias" in ''|/*|*..*|*[!a-zA-Z0-9_./*+-]*) break ;; esac
     [ -f "$nvm_root/alias/$nvm_alias" ] || break
     nvm_next=
-    { read -r nvm_next < "$nvm_root/alias/$nvm_alias"; } 2>/dev/null || :
+    { read -r nvm_next < "$nvm_root/alias/$nvm_alias"; } 2>/dev/null
     [ -n "$nvm_next" ] || break
     nvm_alias=$nvm_next
     nvm_hops=$((nvm_hops + 1))
@@ -59,28 +57,16 @@ find_nvm() {
   pick_nvm_version ''
 }
 
-path_node=$(command -v node 2>/dev/null) || path_node=
-if try_node "$path_node" || find_nvm; then
-  exec "$node_command" "$@"
-fi
-
-if [ -n "${HOME:-}" ] && try_node "$HOME/.volta/bin/node"; then
-  exec "$node_command" "$@"
-fi
-
 # fnm aliases/default points at a version's installation directory.
 fnm_data=${XDG_DATA_HOME:-${HOME:+$HOME/.local/share}}
-for fnm_root in "${FNM_DIR:-}" "${HOME:+$HOME/Library/Application Support/fnm}" "${fnm_data:+$fnm_data/fnm}" "${HOME:+$HOME/.fnm}"; do
-  [ -n "$fnm_root" ] || continue
-  if try_node "$fnm_root/aliases/default/bin/node"; then
-    exec "$node_command" "$@"
-  fi
-done
-
-for fallback_node in /opt/homebrew/bin/node /usr/local/bin/node "${HOME:+$HOME/.local/bin/node}"; do
-  if try_node "$fallback_node"; then
-    exec "$node_command" "$@"
-  fi
+path_node=$(command -v node 2>/dev/null) || path_node=
+for node_source in "$path_node" nvm "${HOME:+$HOME/.volta/bin/node}" \
+  "${FNM_DIR:+$FNM_DIR/aliases/default/bin/node}" "${HOME:+$HOME/Library/Application Support/fnm/aliases/default/bin/node}" "${fnm_data:+$fnm_data/fnm/aliases/default/bin/node}" "${HOME:+$HOME/.fnm/aliases/default/bin/node}" \
+  /opt/homebrew/bin/node /usr/local/bin/node "${HOME:+$HOME/.local/bin/node}"; do
+  case "$node_source" in
+    nvm) find_nvm ;;
+    *) try_node "$node_source" ;;
+  esac && exec "$node_command" "$@"
 done
 
 # Atomic per-plugin daily markers bound diagnostics without reading stdin.
