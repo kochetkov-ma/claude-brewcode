@@ -47,19 +47,25 @@ Only one? Run `claude plugin marketplace add https://github.com/kochetkov-ma/cla
 
 ## Node runtime
 
-All three mods launch their bundled command hook through `/bin/sh` and `hooks/run-node.sh`. The launcher selects the first usable Node.js runtime at version 14.13.1 or newer, in this order:
+The three mods, brewcode and brewtools start their bundled command hooks through `/bin/sh` and `hooks/run-node.sh`; the launcher is byte-identical in all five. It selects the first usable Node.js runtime at version 14.13.1 or newer, in this order:
 
 | Order | Location |
 |---|---|
-| 1 | `node` found on `PATH` |
-| 2 | NVM under `NVM_DIR`, or `~/.nvm` when unset: the default alias first, then the newest compatible installed version |
-| 3 | `~/.volta/bin/node` |
-| 4 | fnm's `aliases/default/bin/node`, checking `FNM_DIR`, `~/Library/Application Support/fnm`, `${XDG_DATA_HOME:-~/.local/share}/fnm` and `~/.fnm` |
+| 1 | Every absolute `PATH` entry; relative entries are never run |
+| 2 | NVM under `$NVM_DIR`, then `~/.nvm`: the default alias first, then the newest compatible installed version |
+| 3 | `$VOLTA_HOME/bin/node`, then `~/.volta/bin/node` |
+| 4 | fnm under `$FNM_DIR`, `~/Library/Application Support/fnm`, `${XDG_DATA_HOME:-~/.local/share}/fnm`, then `~/.fnm`: `aliases/default`, then the newest compatible version in `node-versions` |
 | 5 | `/opt/homebrew/bin/node` |
-| 6 | `/usr/local/bin/node` |
-| 7 | `~/.local/bin/node` |
+| 6 | `/opt/homebrew/opt/node@*` |
+| 7 | `/usr/local/bin/node` |
+| 8 | `/usr/local/opt/node@*` |
+| 9 | `~/.local/bin/node` |
 
-If none is usable, the command hook skips quietly without blocking your prompt. It records an installation hint in `~/.claude/logs/brewmod-node.log` (`$CLAUDE_CONFIG_DIR/logs/` when that is set) at most once per plugin per UTC day, when the log directory is writable.
+Each candidate gets a 1 s version probe, then it is killed and skipped; there is no overall limit. `X.Y.Z` and `X.Y.Z-suffix` versions count when the numeric part is 14.13.1 or newer.
+
+If none is usable, the launcher exits 0 with no output, the hook is skipped, and one line per plugin per UTC day goes to `<config dir>/logs/brewmod-node.log` (`<config dir>` is `CLAUDE_CONFIG_DIR`, default `~/.claude`). brewcode and brewtools log to the same file, when the log directory is writable. Nothing blocks your prompt.
+
+Without Node.js, brewcode's session banner and post-compaction re-anchor and brewtools' HARD wall notice are skipped silently. The `hardmode-guard` hook is unaffected: `/brewtools:manager-setup` registers it with its own `node` command, not through this launcher.
 
 With NVM installed, install a supported Node.js release and make it the default:
 
@@ -73,7 +79,7 @@ Then run `/reload-plugins` in Claude Code.
 
 | Symptom | Fix |
 |---|---|
-| `Executable not found in $PATH: node` | Update the affected mod and run `/reload-plugins` to use its runtime launcher. If no compatible Node.js is installed, follow [Node runtime](#node-runtime). Check `~/.claude/logs/brewmod-node.log` for the daily installation hint |
+| `Executable not found in $PATH: node` | Update the affected mod and run `/reload-plugins` to use its runtime launcher. If no compatible Node.js is installed, follow [Node runtime](#node-runtime). Check `<config dir>/logs/brewmod-node.log` (`<config dir>` is `CLAUDE_CONFIG_DIR`, default `~/.claude`) for the daily installation hint |
 
 <Spoiler title="How mods differ from plugins" id="technical-details">
   A mod ships no skills and no agents. Its `hooks.json` lists TypeScript hooks modules that the engine loads, plus a small bundled command hook for the parts that need one. Mods are on by default from Claude Code 2.1.287 and are in early access, so the module API can change between releases.

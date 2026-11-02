@@ -31,15 +31,15 @@ claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode &&
 
 Then run `/reload-plugins`. Requires Node.js 14.13.1 or newer. Update with `/brewtools:plugin-update`.
 
-The command-hook launcher finds a compatible Node.js automatically, in this order: `PATH`; nvm (`NVM_DIR` or `~/.nvm`, default alias first, then the newest compatible installation); `~/.volta/bin/node`; fnm's default; `/opt/homebrew/bin/node`; `/usr/local/bin/node`; `~/.local/bin/node`.
+The launcher `hooks/run-node.sh` takes the first usable Node.js, in this order: every absolute `PATH` entry; nvm (`$NVM_DIR`, then `~/.nvm`: default alias, then newest compatible install); Volta (`$VOLTA_HOME/bin/node`, then `~/.volta/bin/node`); fnm (roots `$FNM_DIR`, `~/Library/Application Support/fnm`, `${XDG_DATA_HOME:-~/.local/share}/fnm`, `~/.fnm`: `aliases/default`, then newest compatible install in `node-versions`); `/opt/homebrew/bin/node`; `/opt/homebrew/opt/node@*`; `/usr/local/bin/node`; `/usr/local/opt/node@*`; `~/.local/bin/node`. Each candidate gets a 1 s version probe, then it is killed and skipped; there is no overall limit. `X.Y.Z` and `X.Y.Z-suffix` versions count when the numeric part is 14.13.1 or newer.
 
-If Node.js is missing, too old, or unusable, the command hooks silently skip their work. The launcher records a hint in `~/.claude/logs/brewmod-node.log` at most once per day for this plugin. These hooks run on `UserPromptSubmit` and `SessionStart` after compaction (`compact`).
+If none is usable, the launcher exits 0 with no output, the hook is skipped, and one line per plugin per UTC day goes to `<config dir>/logs/brewmod-node.log` (`<config dir>` is `CLAUDE_CONFIG_DIR`, default `~/.claude`). These hooks run on `UserPromptSubmit` and `SessionStart` after compaction (`compact`).
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
-| `Executable not found in $PATH: node` | Update with `/brewtools:plugin-update`, then run `/reload-plugins` to load the launcher. If Node.js is still unavailable, install it with `nvm install --lts && nvm alias default node`, then reload the plugins again. |
+| `Executable not found in $PATH: node` | `/brewtools:plugin-update` itself needs Node, so run `claude plugin marketplace update claude-brewcode && claude plugin update brewmod-reminders@claude-brewcode` in a terminal, then `/reload-plugins` to load the launcher. If Node.js is still unavailable, install nvm if needed, then run `nvm install --lts && nvm alias default node`, then reload the plugins again. |
 
 ## Timeline
 

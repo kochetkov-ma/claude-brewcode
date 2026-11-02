@@ -2,6 +2,39 @@
 
 ---
 
+## v6.12.8 (2026-11-02)
+
+> Docs: [Node runtime](https://doc-claude.brewcode.app/mods/overview/#node-runtime) | [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [installation](https://doc-claude.brewcode.app/installation/) | [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | [reminders](https://doc-claude.brewcode.app/mods/reminders/)
+
+**What changed for you**
+
+- brewcode and brewtools hooks now find Node.js the same way the mods do, so a runtime outside Claude Code's `PATH` no longer breaks them.
+- **Without a usable Node.js, these hooks are skipped silently:** the brewcode session banner and post-compaction re-anchor, and the brewtools HARD wall notice. You get no error, only one line per plugin per UTC day in `<config dir>/logs/brewmod-node.log` (`<config dir>` is `CLAUDE_CONFIG_DIR`, default `~/.claude`). `hardmode-guard` does not use the launcher and is unaffected.
+- A hung `node` no longer stalls a hook's lookup: each candidate gets 1 s, then it is killed and the next one is tried.
+
+### brewcode, brewtools, brewmod-placeholders, brewmod-plan-effort, brewmod-reminders
+
+#### Fixed
+
+- **`hooks/run-node.sh`:** byte-identical in all five plugins. brewcode and brewtools `hooks.json` now start every hook through `/bin/sh` and this launcher.
+- **Lookup order, first usable wins:** every absolute `PATH` entry; nvm (`$NVM_DIR`, then `~/.nvm`: default alias, then newest compatible install); Volta (`$VOLTA_HOME/bin/node`, then `~/.volta/bin/node`); fnm (roots `$FNM_DIR`, `~/Library/Application Support/fnm`, `${XDG_DATA_HOME:-~/.local/share}/fnm`, `~/.fnm`: `aliases/default`, then newest compatible install in `node-versions`); `/opt/homebrew/bin/node`; `/opt/homebrew/opt/node@*`; `/usr/local/bin/node`; `/usr/local/opt/node@*`; `~/.local/bin/node`.
+- **Probe:** 1 s per candidate, then killed and skipped; no overall limit.
+- **Versions:** minimum 14.13.1; `X.Y.Z` and `X.Y.Z-suffix` are accepted when the numeric part qualifies.
+- **No Node:** exit 0, no output, hook skipped, one log line per plugin per UTC day.
+
+### Release gates
+
+#### Added
+
+- **`validate-release.sh`:** runs the launcher suite and the new `check-hook-targets.mjs`, which fails when a marketplace plugin's `hooks.json` targets a file it does not ship.
+- **`check-shards.sh`:** every `node --test` file must also be in the manual Tests workflow.
+
+#### Docs
+
+- The log path now reads `<config dir>/logs/brewmod-node.log` everywhere; `brewmod-reminders` tells you to update through `claude plugin` commands when Node is missing, since `/brewtools:plugin-update` needs Node itself; nvm install hints say nvm must be installed first.
+
+---
+
 ## v6.12.7 (2026-11-02)
 
 > Docs: [mods overview](https://doc-claude.brewcode.app/mods/overview/#node-runtime) | [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | [reminders](https://doc-claude.brewcode.app/mods/reminders/)

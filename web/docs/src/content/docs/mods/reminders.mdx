@@ -264,7 +264,7 @@ Aliases: `show active|all|done`, `list`. The id is the file name without `.md`; 
 | Symptom | What to do |
 |---------|------------|
 | `Executable not found in $PATH: node` | Update the plugin and run `/reload-plugins` to load the bundled Node.js launcher. It can find Node outside `PATH`. If Node.js is not installed, run `nvm install --lts && nvm alias default node` in an NVM-enabled terminal, then reload the plugin. |
-| The command hook silently skips its offer | Check `~/.claude/logs/brewmod-node.log`. If no compatible Node.js is found, the launcher skips the hook and logs at most once per plugin per UTC day. Install Node.js 14.13.1 or newer, then run `/reload-plugins`. |
+| The command hook silently skips its offer | Check `<config dir>/logs/brewmod-node.log` (`<config dir>` is `CLAUDE_CONFIG_DIR`, default `~/.claude`). If no compatible Node.js is found, the launcher skips the hook and logs at most once per plugin per UTC day. Install Node.js 14.13.1 or newer, then run `/reload-plugins`. |
 
 <Spoiler title="Technical details" id="technical-details" meta="item files, claims, tools, hooks">
 
@@ -280,7 +280,7 @@ Aliases: `show active|all|done`, `list`. The id is the file name without `.md`; 
 
 **How it works.** A bundled command hook runs `hooks/remind.mjs` through `hooks/run-node.sh` on `UserPromptSubmit` and on `SessionStart` with the `compact` matcher, so the offer reaches Claude on Team organizations, where a module's own `classic.*` hooks are bypassed. The module draws the band, runs the tick, the picker and the `/remind` command, and registers the tools above. Every path fails open.
 
-**Node.js discovery.** The launcher selects the first compatible runtime (14.13.1 or newer): `node` on `PATH`; NVM under `NVM_DIR` or `~/.nvm` (the `default` alias, then the newest compatible installed version); `~/.volta/bin/node`; the fnm default; `/opt/homebrew/bin/node`; `/usr/local/bin/node`; `~/.local/bin/node`. If none is usable, it silently skips the command hook and records the missing runtime in `~/.claude/logs/brewmod-node.log` at most once per plugin per UTC day.
+**Node.js discovery.** The launcher `hooks/run-node.sh` takes the first usable Node.js 14.13.1 or newer, in this order: every absolute `PATH` entry; nvm (`$NVM_DIR`, then `~/.nvm`: default alias, then newest compatible install); Volta (`$VOLTA_HOME/bin/node`, then `~/.volta/bin/node`); fnm (roots `$FNM_DIR`, `~/Library/Application Support/fnm`, `${XDG_DATA_HOME:-~/.local/share}/fnm`, `~/.fnm`: `aliases/default`, then newest compatible install in `node-versions`); `/opt/homebrew/bin/node`; `/opt/homebrew/opt/node@*`; `/usr/local/bin/node`; `/usr/local/opt/node@*`; `~/.local/bin/node`. Each candidate gets a 1 s version probe, then it is killed and skipped; there is no overall limit. `X.Y.Z` and `X.Y.Z-suffix` versions count when the numeric part is 14.13.1 or newer. If none is usable, the launcher exits 0 with no output, the hook is skipped, and one line per plugin per UTC day goes to `<config dir>/logs/brewmod-node.log` (`<config dir>` is `CLAUDE_CONFIG_DIR`, default `~/.claude`).
 
 </Spoiler>
 

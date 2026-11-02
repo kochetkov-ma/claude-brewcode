@@ -46,7 +46,7 @@ Dev mode, no install: `claude --plugin-dir ./brewmod-placeholders`. Needs Node.j
 
 | Symptom | Fix |
 |---|---|
-| `Executable not found in $PATH: node` | Update `brewmod-placeholders` and run `/reload-plugins`: the current hook finds Node.js automatically. If no compatible runtime is installed, install one with your version manager; for NVM, run `nvm install --lts && nvm alias default node`, then reload the plugin. Runtime diagnostics are in `~/.claude/logs/brewmod-node.log` |
+| `Executable not found in $PATH: node` | Update `brewmod-placeholders` and run `/reload-plugins`: the current hook finds Node.js automatically. If no compatible runtime is installed, install one with your version manager; for NVM, run `nvm install --lts && nvm alias default node`, then reload the plugin. Runtime diagnostics are in `<config dir>/logs/brewmod-node.log` (`<config dir>` is `CLAUDE_CONFIG_DIR`, default `~/.claude`) |
 
 ## Quick start
 | Want | Do |
@@ -477,7 +477,7 @@ The highest layer wins, file by file:
 
 **Team organizations.** Claude Code's builtin security layer bypasses a mod's `classic.*` hooks there. A bundled command hook, `hooks/inject.mjs`, adds the blocks instead. Verified on a Team-org and a Max profile. Enterprise was not run.
 
-**Node.js lookup.** The command hook runs `hooks/run-node.sh` through `/bin/sh`; the launcher finds Node.js 14.13.1 or newer before running `hooks/inject.mjs`. It checks `PATH`, then NVM (`NVM_DIR` or `~/.nvm`: default alias, then newest compatible installed version), `~/.volta/bin/node`, fnm's default version, `/opt/homebrew/bin/node`, `/usr/local/bin/node` and `~/.local/bin/node`, in that order. If no usable runtime is found, the hook silently skips its work and records a diagnostic in `~/.claude/logs/brewmod-node.log`, at most once per plugin per day.
+**Node.js lookup.** The command hook runs `hooks/run-node.sh` through `/bin/sh`; the launcher finds Node.js 14.13.1 or newer before running `hooks/inject.mjs`. Order, first usable wins: every absolute `PATH` entry; nvm (`$NVM_DIR`, then `~/.nvm`: default alias, then newest compatible install); Volta (`$VOLTA_HOME/bin/node`, then `~/.volta/bin/node`); fnm (roots `$FNM_DIR`, `~/Library/Application Support/fnm`, `${XDG_DATA_HOME:-~/.local/share}/fnm`, `~/.fnm`: `aliases/default`, then newest compatible install in `node-versions`); `/opt/homebrew/bin/node`; `/opt/homebrew/opt/node@*`; `/usr/local/bin/node`; `/usr/local/opt/node@*`; `~/.local/bin/node`. Each candidate gets a 1 s version probe, then it is killed and skipped; there is no overall limit. `X.Y.Z` and `X.Y.Z-suffix` versions count when the numeric part is 14.13.1 or newer. If none is usable, the launcher exits 0 with no output, the hook is skipped, and one line per plugin per UTC day goes to `<config dir>/logs/brewmod-node.log` (`<config dir>` is `CLAUDE_CONFIG_DIR`, default `~/.claude`).
 
 - **Load.** Unreadable or invalid definition files are skipped, with a toast and a line in the status view.
 - **Match.** A name must stand alone: `++rr` is not `++r`. `++/` or `++\` anywhere in a message turns every placeholder off for that message.

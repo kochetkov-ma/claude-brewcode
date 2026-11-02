@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.12.7 |
+| Version | 6.12.8 |
 | Skills | 13 |
 | Agents | 3 |
 | Hooks | 1 |
@@ -122,7 +122,7 @@ Each agent stops and proposes a split when a task exceeds one bounded unit (one 
 ```
 brewtools/
 +-- .claude-plugin/plugin.json
-+-- hooks/        # hooks.json, session-start.mjs, hardmode-guard.mjs (template), lib/
++-- hooks/        # hooks.json, run-node.sh, session-start.mjs, hardmode-guard.mjs (template), lib/
 +-- skills/       # 13 skills, one directory each
 +-- agents/       # text-optimizer, ssh-admin, deploy-admin
 ```
@@ -133,7 +133,7 @@ Brewtools covers text, ops and subagent control; [Brewcode](../brewcode/README.m
 
 | Hook | Event | Purpose |
 |------|-------|---------|
-| `session-start.mjs` | SessionStart | Manager HARD-wall awareness: when the wall is armed, a notice with the mechanism and the exit (`/brewtools:manager-setup disable`); silent otherwise |
+| `session-start.mjs` | SessionStart | Manager HARD-wall awareness: when the wall is armed, a notice with the mechanism and the exit (`/brewtools:manager-setup disable`); silent otherwise. Starts through `hooks/run-node.sh`; without a usable Node.js 14.13.1+ the notice is skipped silently and logged once per UTC day to `<config dir>/logs/brewmod-node.log` (`<config dir>` is `CLAUDE_CONFIG_DIR`, default `~/.claude`). `hardmode-guard.mjs` does not use the launcher |
 
 Artifact metadata stamped by `-setup` skills: [Brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/#artifact-metadata).
 

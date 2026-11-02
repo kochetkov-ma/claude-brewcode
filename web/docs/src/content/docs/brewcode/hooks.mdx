@@ -17,7 +17,7 @@ Hooks are Node.js scripts attached to Claude Code lifecycle events. Brewcode reg
 | 1 | session-start | SessionStart | -- | systemMessage | 3s | User-visible session/version info and `permission_mode` tag |
 | 2 | compact-recall | SessionStart | compact | additionalContext | 2s | Re-anchor plan, intent and task graph after a compaction |
 
-The `systemMessage` channel is user-visible; `additionalContext` is model context. Optional project search hooks come from [semble-setup](/brewcode/skills/semble-setup/), not from the plugin registration.
+Both start through `/bin/sh` and `hooks/run-node.sh`, which finds Node.js ([Node runtime](/mods/overview/#node-runtime)). Without a usable Node.js 14.13.1+, the launcher skips them silently and logs one line per day. The `systemMessage` channel is user-visible; `additionalContext` is model context. Optional project search hooks come from [semble-setup](/brewcode/skills/semble-setup/), not from the plugin registration.
 
 <ModPromo variant="strip" />
 
@@ -54,7 +54,7 @@ First match wins:
 
 `plan-latest` exists because a plan that predates the transcript (after `--resume` or `/clear`) leaves no marker to scan. A plain file or foreign symlink never qualifies, so this rung only points at this project's own latest plan. `[TASKS]` is appended whenever the transcript contains a `TaskCreate`, ordered before the plan is acted on; `TaskList` is the authority, since the built-in reminder can lag.
 
-On `source === 'compact'` it always injects something: every failure degrades to `[INTENT]`, never silence, and it never names a foreign plan. The trade-off: with two plans in one session the last recorded plan path wins.
+On `source === 'compact'` it always injects something once Node.js runs it: every failure inside the hook degrades to `[INTENT]`, and it never names a foreign plan. Without Node.js the launcher skips it silently. The trade-off: with two plans in one session the last recorded plan path wins.
 
 </Spoiler>
 

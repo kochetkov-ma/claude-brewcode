@@ -157,7 +157,7 @@ Restart Claude Code after `claude update`. When Claude Code was already 2.1.301 
 
   **`timeout` command missing on macOS**: the semble-setup scripts use `timeout`/`gtimeout` when present and fall back to a pure-bash timer. `brew install coreutils` gives the native one.
 
-  **`Executable not found in $PATH: node` in a mod hook**: update the affected mod and run `/reload-plugins` to load its Node.js launcher. If no compatible runtime is installed, follow [Node runtime](/mods/overview/#node-runtime). When the launcher cannot find Node.js, it skips the hook quietly and records a hint in `~/.claude/logs/brewmod-node.log` at most once per plugin per UTC day.
+  **`Executable not found in $PATH: node` in a mod hook**: update the affected mod and run `/reload-plugins` to load its Node.js launcher. If no compatible runtime is installed, follow [Node runtime](/mods/overview/#node-runtime). When the launcher cannot find Node.js, it skips the hook quietly and records a hint in `<config dir>/logs/brewmod-node.log` (`<config dir>` is `CLAUDE_CONFIG_DIR`, default `~/.claude`) at most once per plugin per UTC day.
 
   **`CLAUDECODE` environment variable interferes with launch**: run `unset CLAUDECODE` before `claude` in scripts (v0.2.47+).
 </Spoiler>

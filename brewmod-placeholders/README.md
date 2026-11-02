@@ -31,7 +31,7 @@ Then run `/reload-plugins`. Works on Team organizations.
 
 Update: run `claude update` and restart Claude Code, then `claude plugin marketplace update claude-brewcode && claude plugin update brewmod-placeholders@claude-brewcode`, then `/reload-plugins`. With brewtools installed, `/brewtools:plugin-update` does the same for every plugin and mod. Dev mode, no install: `claude --plugin-dir ./brewmod-placeholders`. Needs Claude Code 2.1.301 or newer and Node.js 14.13.1 or newer for the bundled command hook. Mods use the hooks module API, which is early access.
 
-The hook looks for Node on `PATH`, then in nvm (`NVM_DIR` or `~/.nvm`, following the default alias or choosing the newest compatible installed version), Volta (`~/.volta/bin/node`), fnm's default installation, `/opt/homebrew/bin/node`, `/usr/local/bin/node` and `~/.local/bin/node`. Installing nvm alone does not install Node. If no supported runtime is found, the hook skips quietly and records at most one line per plugin per day in `~/.claude/logs/brewmod-node.log`.
+The launcher `hooks/run-node.sh` takes the first usable Node.js, in this order: every absolute `PATH` entry; nvm (`$NVM_DIR`, then `~/.nvm`: default alias, then newest compatible install); Volta (`$VOLTA_HOME/bin/node`, then `~/.volta/bin/node`); fnm (roots `$FNM_DIR`, `~/Library/Application Support/fnm`, `${XDG_DATA_HOME:-~/.local/share}/fnm`, `~/.fnm`: `aliases/default`, then newest compatible install in `node-versions`); `/opt/homebrew/bin/node`; `/opt/homebrew/opt/node@*`; `/usr/local/bin/node`; `/usr/local/opt/node@*`; `~/.local/bin/node`. Each candidate gets a 1 s version probe, then it is killed and skipped; there is no overall limit. `X.Y.Z` and `X.Y.Z-suffix` versions count when the numeric part is 14.13.1 or newer. Installing nvm alone does not install Node. If none is usable, the launcher exits 0 with no output, the hook is skipped, and one line per plugin per UTC day goes to `<config dir>/logs/brewmod-node.log` (`<config dir>` is `CLAUDE_CONFIG_DIR`, default `~/.claude`).
 
 </details>
 
@@ -384,7 +384,7 @@ Layers, highest wins file by file: project > its brewtools override > global > i
 
 | Symptom | What to do |
 |---|---|
-| `Executable not found in $PATH: node` | Update this mod and run `/reload-plugins` to use its Node launcher. If nvm has no installed Node version, run `nvm install --lts && nvm alias default node` in a terminal, then restart Claude Code. The launcher needs Node.js 14.13.1 or newer; until it finds one, the command hook is skipped without repeated prompt errors. Check `~/.claude/logs/brewmod-node.log` for the daily diagnostic. |
+| `Executable not found in $PATH: node` | Update this mod and run `/reload-plugins` to use its Node launcher. If nvm has no installed Node version, run `nvm install --lts && nvm alias default node` in a terminal, then restart Claude Code. The launcher needs Node.js 14.13.1 or newer; until it finds one, the command hook is skipped without repeated prompt errors. Check `<config dir>/logs/brewmod-node.log` (`<config dir>` is `CLAUDE_CONFIG_DIR`, default `~/.claude`) for the daily diagnostic. |
 
 <details>
 <summary>Technical details</summary>

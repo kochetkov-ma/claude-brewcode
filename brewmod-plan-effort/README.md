@@ -41,8 +41,8 @@ claude --plugin-dir ./brewmod-plan-effort   # dev mode, no install
 
 - Claude Code 2.1.301 or newer.
 - Mods use the hooks module API, which is early access.
-- Node.js 14.13.1 or newer runs the bundled command hook `hooks/mode.mjs`. The launcher finds it automatically in this order: `PATH`; nvm (`NVM_DIR`, or `~/.nvm`) using its default alias, then its newest installed compatible version; `~/.volta/bin/node`; fnm's default version; `/opt/homebrew/bin/node`; `/usr/local/bin/node`; `~/.local/bin/node`.
-- If Node is missing, too old, or unusable, the launcher silently skips the hook and records a hint in `~/.claude/logs/brewmod-node.log` at most once per day for this plugin.
+- Node.js 14.13.1 or newer runs the bundled command hook `hooks/mode.mjs`. The launcher `hooks/run-node.sh` takes the first usable one, in this order: every absolute `PATH` entry; nvm (`$NVM_DIR`, then `~/.nvm`: default alias, then newest compatible install); Volta (`$VOLTA_HOME/bin/node`, then `~/.volta/bin/node`); fnm (roots `$FNM_DIR`, `~/Library/Application Support/fnm`, `${XDG_DATA_HOME:-~/.local/share}/fnm`, `~/.fnm`: `aliases/default`, then newest compatible install in `node-versions`); `/opt/homebrew/bin/node`; `/opt/homebrew/opt/node@*`; `/usr/local/bin/node`; `/usr/local/opt/node@*`; `~/.local/bin/node`. Each candidate gets a 1 s version probe, then it is killed and skipped; there is no overall limit. `X.Y.Z` and `X.Y.Z-suffix` versions count when the numeric part is 14.13.1 or newer.
+- If none is usable, the launcher exits 0 with no output, the hook is skipped, and one line per plugin per UTC day goes to `<config dir>/logs/brewmod-node.log` (`<config dir>` is `CLAUDE_CONFIG_DIR`, default `~/.claude`).
 - Update anytime with `/brewtools:plugin-update`.
 
 </details>
@@ -52,7 +52,7 @@ claude --plugin-dir ./brewmod-plan-effort   # dev mode, no install
 | Symptom | Fix |
 |---------|-----|
 | `Executable not found in $PATH: node` | Update the plugin using the command above, then run `/reload-plugins` to use automatic Node discovery. If no compatible runtime is installed, run `nvm install --lts && nvm alias default node` with nvm installed. |
-| The mode hook is skipped | Read `~/.claude/logs/brewmod-node.log` for the daily runtime hint. Install or repair a compatible Node runtime. |
+| The mode hook is skipped | Read `<config dir>/logs/brewmod-node.log` (`<config dir>` is `CLAUDE_CONFIG_DIR`, default `~/.claude`) for the daily runtime hint. Install or repair a compatible Node runtime. |
 
 ## Use it
 
