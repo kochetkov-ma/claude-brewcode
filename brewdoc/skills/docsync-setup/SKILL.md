@@ -8,7 +8,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion]
 model: sonnet
 license: MIT
 ---
-<!-- brewcode-meta: version=6.12.6 content_version=6.10.0 generated_by=brewdoc:docsync-setup -->
+<!-- brewcode-meta: version=6.12.7 content_version=6.10.0 generated_by=brewdoc:docsync-setup -->
 
 # docsync-setup
 

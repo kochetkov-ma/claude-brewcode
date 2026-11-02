@@ -61,7 +61,7 @@ Owner token saved to <project-root>/.claude/brewpage-history.md
 
 SITE is checked first. Site entry follows the server rule: `--entry`, else the root `index.html`, else the shallowest `.html` (ties by name). To start on another page, pass `--entry`.
 
-**Upload limits.** brewpage.app allows 25 MB per request, 200 files, 5 MB per file and 20 MB in total. Ask the skill to check the limits, or run `curl -s -A "ClaudeCode/6.12.6 (+https://brewpage.app)" https://brewpage.app/api/limits`; the skill reads them itself before a big site.
+**Upload limits.** brewpage.app allows 25 MB per request, 200 files, 5 MB per file and 20 MB in total. Ask the skill to check the limits, or run `curl -s -A "ClaudeCode/6.12.7 (+https://brewpage.app)" https://brewpage.app/api/limits`; the skill reads them itself before a big site.
 
 <Spoiler id="technical-details" title="Hosting modes and good to know">
 
@@ -123,8 +123,8 @@ SITE is checked first. Site entry follows the server rule: `--entry`, else the r
 Use the stored **Owner API** (`ownerLink`), never a hostname split into namespace and ID. `OWNER_API` is that URL and `TOKEN` the stored owner token.
 
 ```bash
-curl -s -A "ClaudeCode/6.12.6 (+https://brewpage.app)" -X DELETE "$OWNER_API" -H "X-Owner-Token: $TOKEN"
-curl -s -A "ClaudeCode/6.12.6 (+https://brewpage.app)" -X PUT "$OWNER_API" -H "X-Owner-Token: $TOKEN" -F "archive=@/absolute/path/to/new-bundle.zip"
+curl -s -A "ClaudeCode/6.12.7 (+https://brewpage.app)" -X DELETE "$OWNER_API" -H "X-Owner-Token: $TOKEN"
+curl -s -A "ClaudeCode/6.12.7 (+https://brewpage.app)" -X PUT "$OWNER_API" -H "X-Owner-Token: $TOKEN" -F "archive=@/absolute/path/to/new-bundle.zip"
 ```
 
 PUT replaces a site's file set and keeps the host and the delivery mode; do not send `X-Delivery-Mode` on it. Old publications (made before 5 October 2026) are read-only: `409 OLD_PUBLICATION_READ_ONLY`; publish anew and report only the new public URL. Keep the owner token in protected local history, never in conversation or logs.
