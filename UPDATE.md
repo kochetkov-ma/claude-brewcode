@@ -28,7 +28,7 @@ claude plugin install brewtools@claude-brewcode
 claude plugin install brewui@claude-brewcode
 ```
 
-3. Run `/reload-plugins`. The mods need `node` on the `PATH`.
+3. Run `/reload-plugins`. The mods automatically find Node.js 14.13.1 or newer in `PATH` or supported version-manager and installation locations. If no compatible runtime is available, their command hooks silently skip; see [Node runtime discovery](https://doc-claude.brewcode.app/mods/overview/#node-runtime).
 4. Tell the user to type `++` in a prompt (`Tab` inserts a name), then go to "First steps in a project".
 
 ## Already installed: update

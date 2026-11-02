@@ -41,10 +41,18 @@ claude --plugin-dir ./brewmod-plan-effort   # dev mode, no install
 
 - Claude Code 2.1.301 or newer.
 - Mods use the hooks module API, which is early access.
-- `node` on the `PATH` (runs the bundled command hook `hooks/mode.mjs`).
+- Node.js 14.13.1 or newer runs the bundled command hook `hooks/mode.mjs`. The launcher finds it automatically in this order: `PATH`; nvm (`NVM_DIR`, or `~/.nvm`) using its default alias, then its newest installed compatible version; `~/.volta/bin/node`; fnm's default version; `/opt/homebrew/bin/node`; `/usr/local/bin/node`; `~/.local/bin/node`.
+- If Node is missing, too old, or unusable, the launcher silently skips the hook and records a hint in `~/.claude/logs/brewmod-node.log` at most once per day for this plugin.
 - Update anytime with `/brewtools:plugin-update`.
 
 </details>
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| `Executable not found in $PATH: node` | Update the plugin using the command above, then run `/reload-plugins` to use automatic Node discovery. If no compatible runtime is installed, run `nvm install --lts && nvm alias default node` with nvm installed. |
+| The mode hook is skipped | Read `~/.claude/logs/brewmod-node.log` for the daily runtime hint. Install or repair a compatible Node runtime. |
 
 ## Use it
 

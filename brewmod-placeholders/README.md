@@ -29,7 +29,9 @@ Then run `/reload-plugins`. Works on Team organizations.
 <details>
 <summary>Update, dev mode, requirements</summary>
 
-Update: run `claude update` and restart Claude Code, then `claude plugin marketplace update claude-brewcode && claude plugin update brewmod-placeholders@claude-brewcode`, then `/reload-plugins`. With brewtools installed, `/brewtools:plugin-update` does the same for every plugin and mod. Dev mode, no install: `claude --plugin-dir ./brewmod-placeholders`. Needs Claude Code 2.1.301 or newer and `node` on the `PATH` (the bundled command hook runs as plain Node). Mods use the hooks module API, which is early access.
+Update: run `claude update` and restart Claude Code, then `claude plugin marketplace update claude-brewcode && claude plugin update brewmod-placeholders@claude-brewcode`, then `/reload-plugins`. With brewtools installed, `/brewtools:plugin-update` does the same for every plugin and mod. Dev mode, no install: `claude --plugin-dir ./brewmod-placeholders`. Needs Claude Code 2.1.301 or newer and Node.js 14.13.1 or newer for the bundled command hook. Mods use the hooks module API, which is early access.
+
+The hook looks for Node on `PATH`, then in nvm (`NVM_DIR` or `~/.nvm`, following the default alias or choosing the newest compatible installed version), Volta (`~/.volta/bin/node`), fnm's default installation, `/opt/homebrew/bin/node`, `/usr/local/bin/node` and `~/.local/bin/node`. Installing nvm alone does not install Node. If no supported runtime is found, the hook skips quietly and records at most one line per plugin per day in `~/.claude/logs/brewmod-node.log`.
 
 </details>
 
@@ -377,6 +379,12 @@ Old files keep working, with one status line each (`/placeholders` status and a 
 Two files that resolve to the same placeholder name and part (through a front matter `name:`) do not both count: the first one is sent, and the status line of the other reads `<layer>/<file>.md: shadowed by <layer>/<file>.md; not sent`.
 
 Layers, highest wins file by file: project > its brewtools override > global > its brewtools override > plugin defaults. Keys and verification tables: [definition files](https://doc-claude.brewcode.app/mods/placeholders/#definition-files), [verified](https://doc-claude.brewcode.app/mods/placeholders/#verified).
+
+## Troubleshooting
+
+| Symptom | What to do |
+|---|---|
+| `Executable not found in $PATH: node` | Update this mod and run `/reload-plugins` to use its Node launcher. If nvm has no installed Node version, run `nvm install --lts && nvm alias default node` in a terminal, then restart Claude Code. The launcher needs Node.js 14.13.1 or newer; until it finds one, the command hook is skipped without repeated prompt errors. Check `~/.claude/logs/brewmod-node.log` for the daily diagnostic. |
 
 <details>
 <summary>Technical details</summary>

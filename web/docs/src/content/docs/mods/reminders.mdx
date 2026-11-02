@@ -27,7 +27,7 @@ Session cron jobs and `/loop` die with the session, and cloud `/schedule` has no
   The mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`, then restart Claude Code (exit, run `claude`).
 </Callout>
 
-Needs `node` on the `PATH`.
+Needs Node.js 14.13.1 or newer. The hook launcher finds it on `PATH` or in common NVM, Volta, fnm, Homebrew and local installations.
 
 <InstallPrompt plugin="brewmod-reminders" mode="install" />
 
@@ -50,7 +50,7 @@ Dev mode without installing: `claude --plugin-dir ./brewmod-reminders`
 | Kinds | `action`, `note`, `someday` |
 | Scopes | project (default), global |
 | Settings | `prefix`, `cooldownMinutes`, `notify` in `/config`; `git` in `.claude/reminders.json` |
-| Requires | Claude Code 2.1.301+, `node` on the `PATH` |
+| Requires | Claude Code 2.1.301+, Node.js 14.13.1+ (found automatically) |
 
 ## How it works
 
@@ -259,6 +259,13 @@ Aliases: `show active|all|done`, `list`. The id is the file name without `.md`; 
 - **Git is your call.** The mod never runs git; with `commit` or `commit-push` it tells Claude to commit, and push, only that item file. `.gitignore` is untouched.
 - **Nothing runs unasked.** A fired reminder is offered, never started on its own.
 
+## Troubleshooting
+
+| Symptom | What to do |
+|---------|------------|
+| `Executable not found in $PATH: node` | Update the plugin and run `/reload-plugins` to load the bundled Node.js launcher. It can find Node outside `PATH`. If Node.js is not installed, run `nvm install --lts && nvm alias default node` in an NVM-enabled terminal, then reload the plugin. |
+| The command hook silently skips its offer | Check `~/.claude/logs/brewmod-node.log`. If no compatible Node.js is found, the launcher skips the hook and logs at most once per plugin per UTC day. Install Node.js 14.13.1 or newer, then run `/reload-plugins`. |
+
 <Spoiler title="Technical details" id="technical-details" meta="item files, claims, tools, hooks">
 
 **Item file.** `<YYYYMMDD-HHMM>_<slug>.md` (the prefix is the due time in UTC) or `someday_<slug>.md`. Header lines at the top, up to the first blank line (optional `---` fences): `due: 2026-10-22T08:00:00Z` (UTC `Z`, or `none`), `status: pending|done|cancelled`, `kind: action|note` (missing means action), `done:` or `cancelled:` with a UTC time, optional `created:` and `result:`. The body is the text Claude runs or shows. A `README.md` in the folder is skipped. A time without `Z` is listed as unreadable with the hint to add `Z`. If the mod tools are unavailable, edit the header by hand: `status: done` plus `done: <UTC>`.
@@ -271,7 +278,9 @@ Aliases: `show active|all|done`, `list`. The id is the file name without `.md`; 
 
 **State.** Session and offered marks live under the plugin root (`.state/`, pruned after 7 days). An update installs a new version directory, so a fired reminder can be offered once more.
 
-**How it works.** A bundled command hook, `hooks/remind.mjs`, runs on `UserPromptSubmit` and on `SessionStart` with the `compact` matcher, so the offer reaches Claude on Team organizations, where a module's own `classic.*` hooks are bypassed. The module draws the band, runs the tick, the picker and the `/remind` command, and registers the tools above. Every path fails open.
+**How it works.** A bundled command hook runs `hooks/remind.mjs` through `hooks/run-node.sh` on `UserPromptSubmit` and on `SessionStart` with the `compact` matcher, so the offer reaches Claude on Team organizations, where a module's own `classic.*` hooks are bypassed. The module draws the band, runs the tick, the picker and the `/remind` command, and registers the tools above. Every path fails open.
+
+**Node.js discovery.** The launcher selects the first compatible runtime (14.13.1 or newer): `node` on `PATH`; NVM under `NVM_DIR` or `~/.nvm` (the `default` alias, then the newest compatible installed version); `~/.volta/bin/node`; the fnm default; `/opt/homebrew/bin/node`; `/usr/local/bin/node`; `~/.local/bin/node`. If none is usable, it silently skips the command hook and records the missing runtime in `~/.claude/logs/brewmod-node.log` at most once per plugin per UTC day.
 
 </Spoiler>
 

@@ -38,9 +38,15 @@ Then run `/reload-plugins`. Works on Team organizations.
 
 <InstallPrompt plugin="brewmod-placeholders" mode="update" />
 
-Dev mode, no install: `claude --plugin-dir ./brewmod-placeholders`. Needs `node` on the `PATH` (the bundled command hook runs as plain Node). Mods use the hooks module API, which is early access.
+Dev mode, no install: `claude --plugin-dir ./brewmod-placeholders`. Needs Node.js 14.13.1 or newer; the hook finds it automatically, including common version-manager installs ([lookup order](#technical-details)). Mods use the hooks module API, which is early access.
 
 </Spoiler>
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `Executable not found in $PATH: node` | Update `brewmod-placeholders` and run `/reload-plugins`: the current hook finds Node.js automatically. If no compatible runtime is installed, install one with your version manager; for NVM, run `nvm install --lts && nvm alias default node`, then reload the plugin. Runtime diagnostics are in `~/.claude/logs/brewmod-node.log` |
 
 ## Quick start
 | Want | Do |
@@ -470,6 +476,8 @@ The highest layer wins, file by file:
 <Spoiler id="technical-details" title="Technical details">
 
 **Team organizations.** Claude Code's builtin security layer bypasses a mod's `classic.*` hooks there. A bundled command hook, `hooks/inject.mjs`, adds the blocks instead. Verified on a Team-org and a Max profile. Enterprise was not run.
+
+**Node.js lookup.** The command hook runs `hooks/run-node.sh` through `/bin/sh`; the launcher finds Node.js 14.13.1 or newer before running `hooks/inject.mjs`. It checks `PATH`, then NVM (`NVM_DIR` or `~/.nvm`: default alias, then newest compatible installed version), `~/.volta/bin/node`, fnm's default version, `/opt/homebrew/bin/node`, `/usr/local/bin/node` and `~/.local/bin/node`, in that order. If no usable runtime is found, the hook silently skips its work and records a diagnostic in `~/.claude/logs/brewmod-node.log`, at most once per plugin per day.
 
 - **Load.** Unreadable or invalid definition files are skipped, with a toast and a line in the status view.
 - **Match.** A name must stand alone: `++rr` is not `++r`. `++/` or `++\` anywhere in a message turns every placeholder off for that message.

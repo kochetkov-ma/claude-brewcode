@@ -2,6 +2,24 @@
 
 ---
 
+## v6.12.7 (2026-11-02)
+
+> Docs: [mods overview](https://doc-claude.brewcode.app/mods/overview/#node-runtime) | [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | [reminders](https://doc-claude.brewcode.app/mods/reminders/)
+
+**What changed for you**
+
+- The three mods now find Node.js automatically, including installations managed by nvm, Volta and fnm. Their command hooks need Node.js 14.13.1 or newer.
+- If Node.js is missing, too old or unusable, the command hooks skip quietly. An installation hint is recorded in `~/.claude/logs/brewmod-node.log` (`$CLAUDE_CONFIG_DIR/logs/` when that is set) at most once per plugin per day.
+
+### brewmod-placeholders, brewmod-plan-effort, brewmod-reminders
+
+#### Fixed
+
+- **Command hooks:** a shell launcher checks Node.js on `PATH`, then nvm, Volta, fnm and common installation paths, so a runtime outside Claude Code's `PATH` can still run the hook.
+- **Regression coverage and docs:** launcher tests cover runtime discovery and quiet skipping; installation and troubleshooting docs explain the minimum runtime and daily diagnostic log.
+
+---
+
 ## v6.12.6 (2026-11-02)
 
 > Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)

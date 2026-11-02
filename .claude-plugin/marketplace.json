@@ -5,7 +5,7 @@
     "email": "apmatypa88@gmail.com"
   },
   "metadata": {
-    "description": "Claude Code plugin suite: brewcode for skill/agent/rule authoring and project setups, brewdoc for documentation tools, brewtools for text, ops and subagent-guard utilities, brewui placeholder for UI/visual/creative tools, brewmod-placeholders and brewmod-plan-effort mods (Claude Code 2.1.301+)",
+    "description": "Claude Code plugin suite: brewcode for skill/agent/rule authoring and project setups, brewdoc for documentation tools, brewtools for text, ops and subagent-guard utilities, brewui placeholder for UI/visual/creative tools, brewmod-placeholders, brewmod-plan-effort and brewmod-reminders mods (Claude Code 2.1.301+)",
     "version": "6.12.6"
   },
   "plugins": [

@@ -27,10 +27,10 @@ Goal: put hidden context into the model's prompt on EVERY install, Team/Enterpri
 
 ```json
 { "modules": ["./register.ts"],
-  "hooks": { "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/inject.mjs"] }] }],
-             "PostToolBatch": [{ "hooks": [{ "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/inject.mjs"] }] }] } }
+  "hooks": { "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "/bin/sh", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/run-node.sh", "${CLAUDE_PLUGIN_ROOT}/hooks/inject.mjs"] }] }],
+             "PostToolBatch": [{ "hooks": [{ "type": "command", "command": "/bin/sh", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/run-node.sh", "${CLAUDE_PLUGIN_ROOT}/hooks/inject.mjs"] }] }] } }
 ```
-Exec form (`args`, no shell) per the hooks docs when a path placeholder is used; the shipped `brewmod-*` `hooks.json` use exec form too (floor: v2.1.139 `args` field, changelog; mods need >= 2.1.301; tests + live smoke 2.1.309 green).
+Exec form (`args`, no shell) per the hooks docs when a path placeholder is used; the shipped `brewmod-*` `hooks.json` use exec form too (floor: v2.1.139 `args` field, changelog; mods need >= 2.1.301; tests + live smoke 2.1.309 green). Never a bare `"command": "node"`: a GUI or non-login launch has no version-manager `PATH` and every prompt errors `Executable not found in $PATH: "node"`; copy `hooks/run-node.sh` (finds Node, keeps stdin, quiet exit 0 when absent).
 
 ```js
 // hooks/inject.mjs: plain Node, no deps, stdin JSON -> stdout JSON, fail open

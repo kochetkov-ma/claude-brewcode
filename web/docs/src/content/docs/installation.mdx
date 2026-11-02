@@ -8,7 +8,7 @@ import { Card, CardGrid, Callout, Steps, Tabs, TabItem, InstallPrompt, Spoiler, 
 
 # Installation
 
-These four products run in Claude Code: 27 skills, 10 agents, and 3 registered plugin hooks. The prompt below also installs the two [brewcode mods](#mods), placeholders first, after it checks that Claude Code is 2.1.301 or newer.
+These four products run in Claude Code: 27 skills, 10 agents, and 3 registered plugin hooks. The prompt below also installs the three [brewcode mods](#mods), placeholders first, after it checks that Claude Code is 2.1.301 or newer.
 
 <InstallPrompt plugin="all" mode="install" />
 
@@ -21,7 +21,8 @@ These four products run in Claude Code: 27 skills, 10 agents, and 3 registered p
 | Component | Version | Purpose |
 |-----------|---------|---------|
 | Claude Code CLI | 2.1.309 authoring reference | Runtime contracts checked for this release; not a declared minimum for the four plugins. The [mods](#mods) need 2.1.301 or newer |
-| Node.js | 20+ | Hook runtime |
+| Node.js for plugins | 20+ | Plugin hook runtime |
+| Node.js for mods | 14.13.1+ | Found automatically by the command-hook launcher; see [Node runtime](/mods/overview/#node-runtime) for supported locations and installation help |
 | macOS | 13+ | Supported OS |
 
 <Callout type="warning" title="macOS">
@@ -155,6 +156,8 @@ Restart Claude Code after `claude update`. When Claude Code was already 2.1.301 
   **`/brewcode:*` commands are not recognized**: restart Claude Code. Plugins only load at session start.
 
   **`timeout` command missing on macOS**: the semble-setup scripts use `timeout`/`gtimeout` when present and fall back to a pure-bash timer. `brew install coreutils` gives the native one.
+
+  **`Executable not found in $PATH: node` in a mod hook**: update the affected mod and run `/reload-plugins` to load its Node.js launcher. If no compatible runtime is installed, follow [Node runtime](/mods/overview/#node-runtime). When the launcher cannot find Node.js, it skips the hook quietly and records a hint in `~/.claude/logs/brewmod-node.log` at most once per plugin per UTC day.
 
   **`CLAUDECODE` environment variable interferes with launch**: run `unset CLAUDECODE` before `claude` in scripts (v0.2.47+).
 </Spoiler>

@@ -79,7 +79,7 @@ claude plugin install brewtools@claude-brewcode
 claude plugin install brewui@claude-brewcode
 ```
 
-The mods also need `node` on the `PATH`. To let Claude run the commands for you, paste the prompt from [Installation](/installation/): it checks the Claude Code version, then installs the three mods and the four plugins. More on each mod: [Prompt placeholders](/mods/placeholders/), [Plan-mode effort](/mods/plan-effort/), [Reminders](/mods/reminders/).
+The mods' command hooks need Node.js 14.13.1 or newer and find it automatically, including NVM installations outside `PATH`. If no compatible runtime is found, the hooks quietly skip; see [Node.js runtime discovery](/mods/overview/#node-runtime). To let Claude run the commands for you, paste the prompt from [Installation](/installation/): it checks the Claude Code version, then installs the three mods and the four plugins. More on each mod: [Prompt placeholders](/mods/placeholders/), [Plan-mode effort](/mods/plan-effort/), [Reminders](/mods/reminders/).
 
 ## Step 2: Set up each project once
 

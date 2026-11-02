@@ -57,7 +57,7 @@ Run in order, show full output; stop if `claude --version` < 2.1.301; end with `
   <br><sub><a href="assets/brewmods/hub.gif">Full animation</a></sub>
 </p>
 
-❗ **Update Claude Code first:** mods need Claude Code 2.1.301 or newer (`claude --version`; `claude update`, then restart Claude Code) and `node` on the `PATH`.
+❗ **Update Claude Code first:** mods need Claude Code 2.1.301 or newer (`claude --version`; `claude update`, then restart Claude Code). Their command hooks need Node.js 14.13.1 or newer; the launcher discovers installed runtimes automatically. If none is usable, the hooks skip quietly and record a hint in `~/.claude/logs/brewmod-node.log` at most once per plugin per day. [Node runtime discovery](https://doc-claude.brewcode.app/mods/overview/#node-runtime).
 
 | Mod | Type this, get that | Install |
 |-----|---------------------|---------|
@@ -188,7 +188,7 @@ claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools -
 | Component | Version | Purpose |
 |-----------|---------|---------|
 | Claude Code CLI | 2.1.309 reference for the plugins; mods 2.1.301+ | Plugin runtime |
-| Node.js | 20+ | Hook runtime |
+| Node.js | 20+ | Plugin hook runtime; mods use the [runtime discovery](https://doc-claude.brewcode.app/mods/overview/#node-runtime) described above |
 | macOS | 13+ | Supported OS (Linux and Windows planned) |
 
 ## Quick Start

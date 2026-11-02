@@ -39,11 +39,41 @@ Mods are small Claude Code add-ons: one feature each, no skills, no agents, no s
   The mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`, then restart Claude Code (exit, run `claude`).
 </Callout>
 
-Needs `node` on the `PATH`.
+The command hooks need Node.js 14.13.1 or newer; they find installed runtimes automatically. See [Node runtime](#node-runtime) for supported locations and installation help.
 
 <InstallPrompt plugin="mods" mode="install" />
 
 Only one? Run `claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode`, then `claude plugin install brewmod-placeholders@claude-brewcode`, `claude plugin install brewmod-plan-effort@claude-brewcode` or `claude plugin install brewmod-reminders@claude-brewcode`, then `/reload-plugins`. To update later, run `/brewtools:plugin-update`.
+
+## Node runtime
+
+All three mods launch their bundled command hook through `/bin/sh` and `hooks/run-node.sh`. The launcher selects the first usable Node.js runtime at version 14.13.1 or newer, in this order:
+
+| Order | Location |
+|---|---|
+| 1 | `node` found on `PATH` |
+| 2 | NVM under `NVM_DIR`, or `~/.nvm` when unset: the default alias first, then the newest compatible installed version |
+| 3 | `~/.volta/bin/node` |
+| 4 | fnm's `aliases/default/bin/node`, checking `FNM_DIR`, `~/Library/Application Support/fnm`, `${XDG_DATA_HOME:-~/.local/share}/fnm` and `~/.fnm` |
+| 5 | `/opt/homebrew/bin/node` |
+| 6 | `/usr/local/bin/node` |
+| 7 | `~/.local/bin/node` |
+
+If none is usable, the command hook skips quietly without blocking your prompt. It records an installation hint in `~/.claude/logs/brewmod-node.log` (`$CLAUDE_CONFIG_DIR/logs/` when that is set) at most once per plugin per UTC day, when the log directory is writable.
+
+With NVM installed, install a supported Node.js release and make it the default:
+
+```bash
+nvm install --lts && nvm alias default node
+```
+
+Then run `/reload-plugins` in Claude Code.
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `Executable not found in $PATH: node` | Update the affected mod and run `/reload-plugins` to use its runtime launcher. If no compatible Node.js is installed, follow [Node runtime](#node-runtime). Check `~/.claude/logs/brewmod-node.log` for the daily installation hint |
 
 <Spoiler title="How mods differ from plugins" id="technical-details">
   A mod ships no skills and no agents. Its `hooks.json` lists TypeScript hooks modules that the engine loads, plus a small bundled command hook for the parts that need one. Mods are on by default from Claude Code 2.1.287 and are in early access, so the module API can change between releases.

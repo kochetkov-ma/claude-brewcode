@@ -50,7 +50,9 @@ here. They install from the same marketplace as the four plugins and run without
 ❗ **Update Claude Code first:** mods need Claude Code 2.1.301 or newer (`claude --version`; `claude update`,
 then restart Claude Code: exit, run `claude`).
 
-Install all three. They need `node` on the `PATH`; run `/reload-plugins` afterwards:
+Install all three, then run `/reload-plugins`. Their command hooks need Node.js 14.13.1 or newer,
+discovered automatically on `PATH` or in supported installation locations. If no compatible Node is
+found, the command hooks skip quietly; see [Node runtime](https://doc-claude.brewcode.app/mods/overview/#node-runtime).
 
 ```bash
 claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode && claude plugin install brewmod-placeholders@claude-brewcode && claude plugin install brewmod-plan-effort@claude-brewcode && claude plugin install brewmod-reminders@claude-brewcode

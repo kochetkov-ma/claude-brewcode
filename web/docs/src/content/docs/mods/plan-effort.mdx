@@ -25,7 +25,7 @@ By default `xhigh` while Claude plans. Your session effort everywhere else.
   The mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`, then restart Claude Code (exit, run `claude`).
 </Callout>
 
-Needs `node` on the `PATH`.
+Needs Node.js 14.13.1 or newer. The hook finds it automatically, including NVM installations when `node` is absent from Claude Code's `PATH`.
 
 <InstallPrompt plugin="brewmod-plan-effort" mode="install" />
 
@@ -106,7 +106,16 @@ mode now     plan
 - The mod only raises: a session already at or above `planEffort` stays as it is.
 - Rejecting a plan keeps the raise, because Claude is still in plan mode.
 
+## Troubleshooting
+
+| Symptom | What to do |
+|---------|------------|
+| `Executable not found in $PATH: node` | Update `brewmod-plan-effort` with the command under [Update, dev mode](#update), then run `/reload-plugins`. The current hook finds Node.js outside `PATH` too. If no compatible runtime is installed, run `nvm install --lts && nvm alias default node`, then reload the plugin |
+| Plan-mode effort is not raised and no hook error appears | Check `~/.claude/logs/brewmod-node.log` for a `brewmod-plan-effort` entry. If no usable Node.js 14.13.1+ runtime is found, the hook silently skips; its diagnostic is recorded at most once per day for this plugin. Install a compatible runtime, then run `/reload-plugins` |
+
 <Spoiler title="Technical details" id="technical-details" meta="how it works, verification">
+
+**Node.js discovery.** The command hook uses a shell launcher to find Node.js 14.13.1 or newer: first `PATH`, then NVM under `NVM_DIR` or `~/.nvm` (the default alias, then the newest compatible installed version), `~/.volta/bin/node`, fnm's default version, `/opt/homebrew/bin/node`, `/usr/local/bin/node`, then `~/.local/bin/node`. If none works, it exits without blocking Claude Code and writes a per-plugin daily diagnostic to `~/.claude/logs/brewmod-node.log`.
 
 **How it works.** The bundled command hook `hooks/mode.mjs` runs on `UserPromptSubmit` and `PostToolBatch` and writes the main loop permission mode to `.state/mode-<session_id>.json` in the plugin root (subagent payloads are ignored, files older than 7 days are pruned). The `turn.step` event fires before every model request; in plan mode the module raises `effort` to `planEffort`, and records the mode and the session effort in `$.state` for the row. The row is drawn in the `AbovePrompt` component in the `planMode` theme colour, the one Claude Code uses for plan mode; a hook on the `PromptHint` component clears it when the hint line names `plan mode on` as the mode just left. Ranks run low, medium, high, xhigh, max; equal, higher, numeric and absent efforts pass through. The rewrite covers one request, so leaving plan mode needs no cleanup. The `AbovePrompt` hook passes one row less (`maxRows - 1`) to the hooks beneath it, so a placeholders band sized to its slot fits under the row, also in fullscreen.
 
