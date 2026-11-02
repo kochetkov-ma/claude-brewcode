@@ -2,11 +2,12 @@
 # Copyright (c) 2025-2026 Maksim Kochetkov. SPDX-License-Identifier: MIT
 
 # Runs `$1 --version` for at most 1 s; the exit line ends the read even if a killed runtime's child holds the pipe.
+# The trap never waits: a TERM reaching sleep before its exec is lost, and that idle sleep must not delay the hook.
 probe_node() {
   {
     "$1" --version </dev/null &
     probe_pid=$!
-    { trap 'kill "$!"; wait "$!"; exit' TERM; /bin/sleep 1 & wait "$!"; kill -9 "$probe_pid"; } >/dev/null &
+    { trap 'kill "$!"; exit' TERM; /bin/sleep 1 & wait "$!"; kill -9 "$probe_pid"; } >/dev/null &
     probe_watchdog=$!
     wait "$probe_pid"
     printf '\nnode-probe-exit=%s\n' "$?"

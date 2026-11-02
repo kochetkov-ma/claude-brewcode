@@ -169,6 +169,15 @@ test('GIVEN isolated runtimes WHEN the launcher resolves Node THEN the winner ge
   })))
 })
 
+test('GIVEN a candidate exiting before the watchdog sleep starts WHEN probed THEN the hook is not delayed', async (t) => {
+  const f = fixture(t)
+  script(f.paths.path, '#!/no/such/interpreter\n')
+  f.runtime(f.paths.local, 'local')
+  const { result, elapsed } = await f.run()
+  const fast = elapsed < 900
+  assert.deepEqual({ result, fast }, { result: { rc: 0, signal: null, out: `runtime=local\n${f.args.map((a) => `<${a}>\n`).join('')}${INPUT}`, err: '' }, fast: true }, `took ${elapsed} ms`)
+})
+
 test('GIVEN a hook that writes stderr and fails WHEN the launcher runs it THEN rc and stderr pass through', async (t) => {
   const f = fixture(t)
   f.runtime(f.paths.path, 'path', 'v20.9.0', 0, "printf 'hook stderr\\n' >&2\nexit 3")
@@ -195,7 +204,8 @@ test('GIVEN a hung node on PATH WHEN the launcher probes it THEN the 1 s bound f
     t.test('GIVEN a wrapper whose child keeps the pipe WHEN probed THEN later sources still run', async (t) => { await bounded('')(t) }),
     t.test('GIVEN a healthy node WHEN the launcher execs it THEN no watchdog is left', async (t) => {
       const f = fixture(t)
-      f.runtime(f.paths.path, 'path', 'v20.9.0', 0, `/bin/ps -A -ww -o command | /usr/bin/grep -F '${f.dir}/fake-sleep' | /usr/bin/grep -v grep`)
+      // Probe lasts like a real node --version, so the watchdog's sleep has started when it is stopped.
+      script(f.paths.path, `#!/bin/sh\ncase "$1" in --version) /bin/sleep 0.1; printf 'v20.9.0\\n'; exit 0;; esac\nprintf 'runtime=path\\n'\nfor arg do printf '<%s>\\n' "$arg"; done\n/bin/cat\n/bin/ps -A -ww -o command | /usr/bin/grep -F '${f.dir}/fake-sleep' | /usr/bin/grep -v grep\n`)
       const { result } = await f.run()
       assert.deepEqual(result, { rc: 1, signal: null, out: `runtime=path\n${f.args.map((a) => `<${a}>\n`).join('')}${INPUT}`, err: '' }, 'the runtime sees no watchdog sleep (grep rc 1)')
     }),
