@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# check-shards.sh [workflow.yml] - every tests/run.sh suite and native test glob is in manual Tests.
+# check-shards.sh [workflow.yml] - every tests/run.sh suite, native test glob and `node --test` file is in manual Tests.
 # .codex/plugins/** runners are skipped: validate-compat.mjs proves them byte-equal to <plugin>/.codex/skills/**.
 set -uo pipefail
 wf="${1:-.github/workflows/tests.yml}"
@@ -20,6 +20,10 @@ done < <(find brewcode brewdoc brewtools .claude/scripts .claude/skills -path '*
 for glob in '.codex/tests/*.test.mjs' '.codex/tests/*.test.py'; do
   grep -qF "for test in $glob; do" "$wf" || missing "$glob"
 done
+
+while IFS= read -r node_test; do
+  grep -qF "node --test $node_test " "$wf" || missing "$node_test"
+done < <(find .github/scripts/tests brewmod-*/tests -maxdepth 1 -name '*.test.mjs' | LC_ALL=C sort)
 
 [ "$fail" -eq 0 ] && echo "all suites are sharded"
 exit "$fail"

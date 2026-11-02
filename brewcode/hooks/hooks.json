@@ -5,8 +5,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/session-start.mjs"],
+            "command": "/bin/sh",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/run-node.sh", "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.mjs"],
             "timeout": 3
           }
         ]
@@ -16,8 +16,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/compact-recall.mjs"],
+            "command": "/bin/sh",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/run-node.sh", "${CLAUDE_PLUGIN_ROOT}/hooks/compact-recall.mjs"],
             "timeout": 2
           }
         ]

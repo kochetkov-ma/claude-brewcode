@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cheap release contracts; integration, tokenizer, mod and build tests remain in manual Tests.
+# Cheap release contracts plus the fast launcher suite; integration, tokenizer, mod and build tests remain in manual Tests.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 shopt -s nullglob
@@ -53,6 +53,8 @@ for file in brew*/hooks/*.mjs brewmod-*/hooks/*.ts brew*/skills/*/assets/*.mjs b
   grep -qxF '// Copyright (c) 2025-2026 Maksim Kochetkov' "$file"
 done
 
+node .github/scripts/check-hook-targets.mjs
+node --test .github/scripts/tests/brewmod-launchers.test.mjs
 bash .github/scripts/check-shards.sh .github/workflows/tests.yml
 node .claude/scripts/check-install-blocks.mjs
 bash .claude/skills/docs/scripts/check-links.sh
