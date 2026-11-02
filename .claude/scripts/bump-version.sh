@@ -62,18 +62,25 @@ brewdoc/skills/memory-sync-setup/SKILL.md|marker|brewdoc:memory-sync-setup
 brewcode/skills/superreview-setup/SKILL.md|marker|brewcode:superreview-setup
 brewcode/skills/e2e/SKILL.md|marker|brewcode:e2e'
 
-# --- Shipped docs whose header states the plugin version (no stamp; one anchored rewrite each) ---
+# --- Shipped files carrying the plugin version: doc headers, publish User-Agent (no stamp; anchored rewrites) ---
 VERSIONED_DOCS='brewcode/README.md
 brewdoc/README.md
 brewtools/README.md
 brewui/README.md
 brewcode/docs/commands.md
 brewcode/docs/file-tree.md
-brewdoc/docs/commands.md'
+brewdoc/docs/commands.md
+brewdoc/skills/publish/scripts/brewpage-lib.sh
+skills/brewpage-publish/scripts/brewpage-lib.sh
+brewdoc/skills/publish/SKILL.md
+skills/brewpage-publish/SKILL.md
+brewdoc/skills/publish/README.md
+skills/brewpage-publish/README.md
+web/docs/src/content/docs/brewdoc/skills/publish.mdx'
 
 # The complete set of version CARRIERS. Deliberately anchored: these files also contain
 # historical prose ("dropped in v5.0.0", "broken before v5.0.0") that must never move.
-DOC_VER_GREP='\| Version \| [0-9]+\.[0-9]+\.[0-9]+ \||\*\*ver:\*\* [0-9]+\.[0-9]+\.[0-9]+|\*\*Version:\*\* [0-9]+\.[0-9]+\.[0-9]+|^> Version: [0-9]+\.[0-9]+\.[0-9]+|version [0-9]+\.[0-9]+\.[0-9]+, skills/|claude-plugin-brewcode@[0-9]+\.[0-9]+\.[0-9]+'
+DOC_VER_GREP='\| Version \| [0-9]+\.[0-9]+\.[0-9]+ \||\*\*ver:\*\* [0-9]+\.[0-9]+\.[0-9]+|\*\*Version:\*\* [0-9]+\.[0-9]+\.[0-9]+|^> Version: [0-9]+\.[0-9]+\.[0-9]+|version [0-9]+\.[0-9]+\.[0-9]+, skills/|claude-plugin-brewcode@[0-9]+\.[0-9]+\.[0-9]+|ClaudeCode/[0-9]+\.[0-9]+\.[0-9]+ \(\+https://brewpage\.app\)'
 
 doc_rewrite() {
     _f="$1"
@@ -84,7 +91,8 @@ doc_rewrite() {
         -e "s/\*\*Version:\*\* [0-9]+\.[0-9]+\.[0-9]+/**Version:** $NEW/" \
         -e "s|^> Version: [0-9]+\.[0-9]+\.[0-9]+|> Version: $NEW|" \
         -e "s|version [0-9]+\.[0-9]+\.[0-9]+, skills/|version $NEW, skills/|" \
-        -e "s/claude-plugin-brewcode@[0-9]+\.[0-9]+\.[0-9]+/claude-plugin-brewcode@$NEW/" "$_f"
+        -e "s/claude-plugin-brewcode@[0-9]+\.[0-9]+\.[0-9]+/claude-plugin-brewcode@$NEW/" \
+        -e "s|ClaudeCode/[0-9]+\.[0-9]+\.[0-9]+ \(\+https://brewpage\.app\)|ClaudeCode/$NEW (+https://brewpage.app)|g" "$_f"
     rm -f "${_f}.bak"
 }
 

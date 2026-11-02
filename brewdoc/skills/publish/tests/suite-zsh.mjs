@@ -57,6 +57,8 @@ function zsh(code) {
 }
 const curlOf = run => JSON.parse(readFileSync(run.log, 'utf8'));
 const runDirs = () => readdirSync(tmp).filter(name => name.startsWith('brewpage.'));
+// Shipped User-Agent: ClaudeCode/<brewdoc plugin version> (+https://brewpage.app).
+const UA = `ClaudeCode/${JSON.parse(readFileSync(join(skillDir, '../..', '.claude-plugin/plugin.json'), 'utf8')).version} (+https://brewpage.app)`;
 const normalize = values => values.map(value => value.replace(/brewpage\.[A-Za-z0-9]{6}/, 'brewpage.RUN'));
 function manifest(zipName, bytes) {
   return ['ARCHIVE MANIFEST — ' + zipName, '  index.html', '  sub/page.html', '  sub/style.css', 'FILES: 3',
@@ -83,7 +85,7 @@ try {
     'THEN the zsh text command prints only the URL line');
   const textCurl = curlOf(text);
   assert.deepEqual({ ...textCurl, args: normalize(textCurl.args), files: Object.keys(textCurl.files).length },
-    { args: ['-s', '-X', 'POST', 'https://brewpage.app/api/html?ns=public&ttl=15&format=markdown', '-H', 'Content-Type: application/json',
+    { args: ['-s', '-A', UA, '-X', 'POST', 'https://brewpage.app/api/html?ns=public&ttl=15&format=markdown', '-H', 'Content-Type: application/json',
       '-d', '@' + tmp + '/brewpage.RUN/payload.json'], files: 1, payload: JSON.stringify({ content: hostile }, null, 2) + '\n' },
     'THEN curl gets exact argv and the payload holds the text byte for byte');
   assert.deepEqual(['injected', 'ticked', 'out'].map(name => existsSync(join(root, name))), [false, false, false],
@@ -108,8 +110,8 @@ try {
   const dirZip = Object.keys(dirCurl.files)[0];
   assert.equal(dir.result.stdout, manifest('site.zip', dirCurl.files[dirZip]) + 'OK https://fixture.brewpage.app/ | Files: 3\n',
     'THEN zsh site-dir command prints the manifest with the requested entry and the URL line');
-  assert.deepEqual(normalize(dirCurl.args), ['-s', '-X', 'POST', 'https://brewpage.app/api/sites?ns=public&ttl=15&entry=sub%2Fpage.html',
-    '-H', 'User-Agent: ClaudeCode/1.0', '-F', 'archive=@"' + tmp + '/brewpage.RUN/site.zip"'], 'THEN curl gets the encoded entry and the run-dir archive');
+  assert.deepEqual(normalize(dirCurl.args), ['-s', '-A', UA, '-X', 'POST', 'https://brewpage.app/api/sites?ns=public&ttl=15&entry=sub%2Fpage.html',
+    '-F', 'archive=@"' + tmp + '/brewpage.RUN/site.zip"'], 'THEN curl gets the encoded entry and the run-dir archive');
   assert.deepEqual(runDirs(), [], 'THEN the site-dir run dir is removed at exit');
 
   // GIVEN the shipped path command for a ZIP and a nested entry WHEN run under zsh -f THEN inspect honours the entry.
@@ -120,8 +122,8 @@ try {
   const stagedZip = tmp + '/brewpage.RUN/archive/fixture.zip';
   const zipCurl = curlOf(zip);
   assert.deepEqual({ ...zipCurl, args: normalize(zipCurl.args), files: Object.fromEntries(Object.entries(zipCurl.files).map(([path, bytes]) => [normalize([path])[0], bytes])) }, {
-    args: ['-s', '-X', 'POST', 'https://brewpage.app/api/sites?ns=public&ttl=15&entry=sub%2Fpage.html',
-      '-H', 'User-Agent: ClaudeCode/1.0', '-F', 'archive=@"' + stagedZip + '"'],
+    args: ['-s', '-A', UA, '-X', 'POST', 'https://brewpage.app/api/sites?ns=public&ttl=15&entry=sub%2Fpage.html',
+      '-F', 'archive=@"' + stagedZip + '"'],
     files: { [stagedZip]: fixtureBytes }, payload: null,
   }, 'THEN curl uploads the user zip unchanged');
   assert.equal(existsSync(fixtureZip), true, 'THEN the user-supplied zip is preserved');

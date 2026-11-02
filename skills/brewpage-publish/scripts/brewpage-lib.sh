@@ -39,6 +39,8 @@ HISTORY_FILE="$BP_ROOT/.claude/brewpage-history.md"
 # Run dirs stay outside .claude/ (protected path); only brewpage-run.sh writes into them.
 BP_TMPDIR="${TMPDIR:-/tmp}"
 BP_TMPDIR="${BP_TMPDIR%/}"
+# User-Agent on every brewpage.app request: <client>/<shipped version> (+https://brewpage.app).
+BP_UA="ClaudeCode/6.12.5 (+https://brewpage.app)"
 
 # Creates the history file if absent, keeps it mode 600, and makes sure git
 # never picks it up — the skill used to only *ask* the user to keep it private.
@@ -48,8 +50,8 @@ bp_history_init() {
 # brewpage.app — Published Pages
 
 > Owner tokens allow delete and in-place PUT (html/json/kv/files/sites). Old publications are read-only: 409 OLD_PUBLICATION_READ_ONLY; publish anew and report only the new URL. Keep tokens in this private file; never display them in chat.
-> Delete: `curl -s -X DELETE "<Owner API>" -H "X-Owner-Token: TOKEN"`; rows without one: `https://brewpage.app/api/<type>/<ns>/<id>`, type = html|json|files|kv|sites.
-> Update a site (same URL; old publications answer 409, see above): `PUT /api/sites/<ns>/<id>` with `X-Owner-Token: TOKEN` + the new bundle.
+> Delete: `curl -s -A "ClaudeCode/6.12.5 (+https://brewpage.app)" -X DELETE "<Owner API>" -H "X-Owner-Token: TOKEN"`; rows without one: `https://brewpage.app/api/<type>/<ns>/<id>`, type = html|json|files|kv|sites.
+> Update a site (same URL; old publications answer 409, see above): `PUT /api/sites/<ns>/<id>` with the same `-A`, `X-Owner-Token: TOKEN` + the new bundle.
 
 | Date | URL | Owner Token | TTL | Type | Owner API | Identity |
 |------|-----|-------------|-----|------|-----------|----------|
@@ -171,9 +173,9 @@ bp_post() {
     set -- -H "X-Delivery-Mode: $BP_DELIVERY_MODE" "$@"
   fi
   if [ -n "$BP_HEADER_FILE" ]; then
-    curl -s -X POST "$url" -H "@$BP_HEADER_FILE" "$@"
+    curl -s -A "$BP_UA" -X POST "$url" -H "@$BP_HEADER_FILE" "$@"
   else
-    curl -s -X POST "$url" "$@"
+    curl -s -A "$BP_UA" -X POST "$url" "$@"
   fi
 }
 

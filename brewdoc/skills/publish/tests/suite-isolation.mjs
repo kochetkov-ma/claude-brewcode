@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const lib = join(here, '../scripts/brewpage-lib.sh');
+// Shipped User-Agent: ClaudeCode/<brewdoc plugin version> (+https://brewpage.app).
+const UA = `ClaudeCode/${JSON.parse(readFileSync(join(here, '../../..', '.claude-plugin/plugin.json'), 'utf8')).version} (+https://brewpage.app)`;
 const base = realpathSync(mkdtempSync(join(tmpdir(), 'publish-isolation-')));
 const root = join(base, 'project');
 const bin = join(base, 'bin');
@@ -56,7 +58,7 @@ try {
   const noPassword = prepare();
   const result = run(begin(noPassword, 'none') + '\nbp_post https://example.invalid/upload > /dev/null', 'none');
   assert.equal(result.status, 0, 'THEN explicit no-password request succeeds through fake curl');
-  assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-none'), 'utf8')), ['-s', '-X', 'POST', 'https://example.invalid/upload'],
+  assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-none'), 'utf8')), ['-s', '-A', UA, '-X', 'POST', 'https://example.invalid/upload'],
     'THEN stale source creates no password header');
   assert.equal(readFileSync(stale, 'utf8'), 'stale-password', 'THEN unrelated shared source is preserved');
   assert.equal(existsSync(noPassword), false, 'THEN successful run cleans only its inputs');
@@ -74,7 +76,7 @@ try {
   assert.deepEqual(JSON.parse(readFileSync(join(base, 'headers-file.modes'), 'utf8')), [0o600],
     'THEN supplied password header payload is private at consumer read time');
   assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-file'), 'utf8')),
-    ['-s', '-X', 'POST', 'https://example.invalid/upload', '-H', '@' + protectedRun + '/password-header.txt', '-H', 'X-Delivery-Mode: subdomain'],
+    ['-s', '-A', UA, '-X', 'POST', 'https://example.invalid/upload', '-H', '@' + protectedRun + '/password-header.txt', '-H', 'X-Delivery-Mode: subdomain'],
     'THEN password bytes stay file-only alongside the explicit delivery header');
   assert.equal(protectedResult.stdout + protectedResult.stderr, '', 'THEN helper logs no password or response');
   assert.equal(existsSync(protectedRun), false, 'THEN password transport files are cleaned on completion');
@@ -86,7 +88,7 @@ try {
     const outcome = run(begin(modeRun, 'none', mode) + '\nbp_post https://example.invalid/upload > /dev/null', mode);
     assert.equal(outcome.status, 0, 'THEN valid delivery choice succeeds');
     assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-' + mode), 'utf8')),
-      ['-s', '-X', 'POST', 'https://example.invalid/upload', '-H', 'X-Delivery-Mode: ' + mode],
+      ['-s', '-A', UA, '-X', 'POST', 'https://example.invalid/upload', '-H', 'X-Delivery-Mode: ' + mode],
       'THEN creation carries exact delivery header');
   }
   // GIVEN invalid delivery input WHEN beginning THEN fail before curl and clean only our run.
@@ -158,7 +160,7 @@ try {
   const callerResult = run(caller, 'caller');
   assert.equal(callerResult.status, 0, 'THEN actual shipped caller succeeds with fake curl');
   assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-caller'), 'utf8')).map(arg => arg.replace(/brewpage\.[A-Za-z0-9]{6}/, 'brewpage.RUN')),
-    ['-s', '-X', 'POST', 'https://brewpage.app/api/html?ns=my&ttl=15&format=markdown',
+    ['-s', '-A', UA, '-X', 'POST', 'https://brewpage.app/api/html?ns=my&ttl=15&format=markdown',
       '-H', 'Content-Type: application/json', '-d', '@' + tmp + '/brewpage.RUN/payload.json'],
     'THEN the my profile namespace reaches upload with the file-backed payload in a private run dir');
   assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-caller.payload'), 'utf8')), { content: hostile },
@@ -182,7 +184,7 @@ try {
     'THEN a bad flag fails before the staged run is touched, so the text survives a retry');
   const stagedPublish = run({ ...runPublish, code: runPublish.code.replaceAll('{ns}', 'my').replaceAll('{days}', '') }, 'staged');
   assert.equal(stagedPublish.stdout, 'OK https://example.invalid/result\n', 'THEN the staged run publishes');
-  assert.equal(JSON.parse(readFileSync(join(base, 'args-staged'), 'utf8'))[3], 'https://brewpage.app/api/html?ns=my&ttl=15&format=markdown',
+  assert.equal(JSON.parse(readFileSync(join(base, 'args-staged'), 'utf8'))[5], 'https://brewpage.app/api/html?ns=my&ttl=15&format=markdown',
     'THEN an empty ttl slot means the 15-day default');
   assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-staged.payload'), 'utf8')), { content: "part one\npart two's" },
     'THEN the payload is both chunks joined by one newline');
@@ -259,7 +261,7 @@ try {
   const siteOutcome = run(siteCode, 'encoded-entry');
   assert.equal(siteOutcome.status, 0, 'THEN nested site archive verifies and reaches upload: ' + siteOutcome.stdout + siteOutcome.stderr);
   const siteArgs = JSON.parse(readFileSync(join(base, 'args-encoded-entry'), 'utf8'));
-  assert.equal(siteArgs[3], 'https://brewpage.app/api/sites?ns=public&ttl=15&entry=' + encodeURIComponent(siteEntry),
+  assert.equal(siteArgs[5], 'https://brewpage.app/api/sites?ns=public&ttl=15&entry=' + encodeURIComponent(siteEntry),
     'THEN spaces, slash and ampersand are encoded without additional query parameters');
   assert.equal(readFileSync(join(siteSource, siteEntry), 'utf8'), '<h1>Fixture site</h1>', 'THEN authored site source stays unchanged');
   assert.deepEqual(runNames(), [], 'THEN directory caller cleans its archive and transport inputs');
@@ -349,7 +351,7 @@ try {
   assert.deepEqual(limits.map(([body], i) => {
     const r = run('bash "$SUBST_SKILL_DIR/scripts/brewpage-run.sh" limits', 'limits-' + i, { CURL_RESPONSE: JSON.stringify(body) });
     return [r.status, r.stdout, JSON.parse(readFileSync(join(base, 'args-limits-' + i), 'utf8'))];
-  }), limits.map(([, status, stdout]) => [status, stdout, ['-s', '-A', 'ClaudeCode/1.0', 'https://brewpage.app/api/limits']]),
+  }), limits.map(([, status, stdout]) => [status, stdout, ['-s', '-A', UA, 'https://brewpage.app/api/limits']]),
   'THEN limits print exact KEY: value lines from one GET, or fail on an error body');
   assert.equal(existsSync(join(root, '.claude/tmp')), false, 'THEN no run ever touched the protected project .claude/tmp');
   assert.deepEqual(readdirSync(tmp).sort(), ['brewpage-password.txt', 'first-run', 'second-run'],

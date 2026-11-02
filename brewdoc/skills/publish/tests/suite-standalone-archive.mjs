@@ -11,9 +11,10 @@ import test, { after } from 'node:test';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const COPIES = [
-  { name: 'skills', dir: join(ROOT, 'skills/brewpage-publish'), token: '${CLAUDE_SKILL_DIR}', userAgent: 'ClaudeCode/1.0' },
-  { name: 'openclaw', dir: join(ROOT, 'openclaw/brewpage-publish'), token: '{baseDir}', userAgent: 'OpenClaw/1.0' },
+  { name: 'skills', dir: join(ROOT, 'skills/brewpage-publish'), token: '${CLAUDE_SKILL_DIR}', client: 'ClaudeCode' },
+  { name: 'openclaw', dir: join(ROOT, 'openclaw/brewpage-publish'), token: '{baseDir}', client: 'OpenClaw' },
 ];
+const shippedUa = copy => /^BP_UA="(.*)"$/m.exec(readFileSync(join(copy.dir, 'scripts/brewpage-lib.sh'), 'utf8'))[1];
 const FIXTURE = {
   'index.html': '<h1>home</h1>',
   'assets/site.css': 'body{color:#111}',
@@ -70,7 +71,7 @@ function binWith(stubs) {
 }
 const UPLOAD_STUB = 'printf "%s\\n" "$@" > "$TEST_BASE/curl-args"\nfor arg in "$@"; do\n  case "$arg" in archive=@*) file="${arg#archive=@}"; file="${file#\\\"}"; file="${file%\\\"}"; cp "$file" "$TEST_BASE/uploaded.zip" || exit 1 ;; esac\ndone\n'
   + 'printf %s \'{"link":"https://example.test/","fileCount":3}\'';
-const REDIRECT_STUB = 'args=()\nfor a in "$@"; do args+=("${a/https:\\/\\/brewpage.app/$BP_ENDPOINT}"); done\nexec "$REAL_CURL" --disable --proxy "" "${args[@]}"';
+const REDIRECT_STUB = 'args=()\nfor a in "$@"; do args+=("${a/#https:\\/\\/brewpage.app/$BP_ENDPOINT}"); done\nexec "$REAL_CURL" --disable --proxy "" "${args[@]}"';
 
 function siteFence(copy, slots) {
   const source = readFileSync(join(copy.dir, 'SKILL.md'), 'utf8');
@@ -155,7 +156,7 @@ for (const copy of COPIES) {
           entries.map(entry => ({ ns: 'fixture', ttl: '7', entry })), 'query decoding preserves every entry character');
         assert.equal(requests[0].url, '/api/sites?ns=fixture&ttl=7&entry=pages%2FA%20%26%20B.html', 'slash, space and ampersand are percent-encoded');
         assert.deepEqual(requests.map(r => [r.userAgent, r.body.includes(Buffer.from('PK\x03\x04'))]),
-          [[copy.userAgent, true], [copy.userAgent, true]], 'per-copy user agent and a real ZIP local-file signature');
+          [[shippedUa(copy), true], [shippedUa(copy), true]], 'per-copy user agent and a real ZIP local-file signature');
         assert.deepEqual([existsSync(join(project(copy), 'entry-injected')), runNames()], [false, []], 'nothing executes, no run dir remains');
       } finally {
         await new Promise(closed => server.close(closed));
@@ -184,9 +185,9 @@ for (const copy of COPIES) {
     const listing = spawnSync('unzip', ['-Z1', archive], { encoding: 'utf8' }).stdout.trim().split('\n').filter(n => !n.endsWith('/')).sort();
     const bytes = EXPECTED_FILES.map(name => spawnSync('unzip', ['-p', archive, name], { encoding: 'utf8' }).stdout);
     const args = readFileSync(join(base, 'curl-args'), 'utf8').split('\n');
-    assert.deepEqual([r.status, lastLine(r.stdout), listing, bytes, args.includes('User-Agent: ' + copy.userAgent), args.includes('X-Delivery-Mode: subdomain'),
+    assert.deepEqual([r.status, lastLine(r.stdout), listing, bytes, args[args.indexOf('-A') + 1], args.includes('X-Delivery-Mode: subdomain'),
       spawnSync('unzip', ['-tq', archive]).status, runNames(), readFileSync(join(site, '.env'), 'utf8')],
-    [0, 'OK https://example.test/ | Files: 3', EXPECTED_FILES, EXPECTED_FILES.map(name => FIXTURE[name]), true, true, 0, [], 'excluded fixture'],
+    [0, 'OK https://example.test/ | Files: 3', EXPECTED_FILES, EXPECTED_FILES.map(name => FIXTURE[name]), shippedUa(copy), true, 0, [], 'excluded fixture'],
     'allowlisted files only, intact bytes, headers kept, run dir removed, source untouched');
   });
 

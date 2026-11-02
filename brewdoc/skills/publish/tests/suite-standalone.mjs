@@ -40,6 +40,11 @@ const RUN_LINE2 = '# brewpage-run.sh <probe|limits|stage|publish|cleanup> [flags
 const RUN_LINE3 = '# One allowed-tools rule covers every call; values arrive as single-quoted argv, never as shell source.\n';
 const LIB_LINE3 = '# Owns token-history location (BD03) and URL-safety of prompt-derived query params (BD02).\n';
 const libRootBlock = ref => ref.slice(ref.indexOf('# rc 0: $1 is HOME'), ref.indexOf('BP_TMPDIR="${TMPDIR:-/tmp}"'));
+// User-Agent per copy: ClaudeCode/<brewdoc plugin version>; OpenClaw/<ClawHub version>, bumped by hand on each ClawHub publish.
+const UA_TAIL = ' (+https://brewpage.app)';
+const claudeUa = 'ClaudeCode/' + JSON.parse(readFileSync(join(ROOT, 'brewdoc/.claude-plugin/plugin.json'), 'utf8')).version + UA_TAIL;
+const libUa = dir => /^BP_UA="(.*)"$/m.exec(readFileSync(join(dir, 'scripts/brewpage-lib.sh'), 'utf8'))?.[1];
+const UA = { brewdoc: claudeUa, skills: claudeUa, openclaw: libUa(join(ROOT, 'openclaw/brewpage-publish')) };
 const DRIFT = {
   skills: {
     'brewpage-run.sh': () => [[RUN_LINE2, RUN_LINE2.replace('brewdoc:publish', 'brewpage-publish')]],
@@ -51,13 +56,12 @@ const DRIFT = {
     'brewpage-run.sh': () => [
       [RUN_LINE2 + RUN_LINE3, '# brewpage-run.sh <probe|limits|stage|publish|cleanup> [flags] - the only command OpenClaw brewpage-publish runs.\n'
         + '# Values arrive as single-quoted argv, never as shell source.\n'],
-      ['-H "User-Agent: ClaudeCode/1.0"', '-H "User-Agent: OpenClaw/1.0"'],
-      ['-A "ClaudeCode/1.0"', '-A "OpenClaw/1.0"'],
     ],
     'brewpage-lib.sh': ref => [
       [LIB_LINE3, '# Owns token-history location (workspace cwd) and URL-safety of prompt-derived query params.\n'],
       [libRootBlock(ref), 'BP_ROOT="$PWD"\nHISTORY_FILE="$BP_ROOT/brewpage-history.md"\n'
         + '# Run dirs stay outside the workspace; only brewpage-run.sh writes into them.\n'],
+      ...[`BP_UA="${UA.brewdoc}"`, `-A "${UA.brewdoc}" -X DELETE`].map(from => [from, from.replace(UA.brewdoc, UA.openclaw)]),
     ],
     'publish.mjs': () => [],
     'history.py': () => [],
@@ -130,6 +134,25 @@ const TOOL_RULE = {
     'OpenClaw frontmatter carries no allowed-tools key')],
 };
 
+test('every brewpage.app request in all three copies sends the copy User-Agent', () => {
+  // GIVEN each copy's scripts and docs WHEN curl lines and UA literals are collected THEN each carries exactly the copy UA.
+  const docs = { brewdoc: ['SKILL.md', 'README.md', '../../../web/docs/src/content/docs/brewdoc/skills/publish.mdx'], skills: ['SKILL.md', 'README.md'], openclaw: ['SKILL.md', 'README.md'] };
+  const dirs = { brewdoc: join(REF, '..'), skills: COPIES[0].dir, openclaw: COPIES[1].dir };
+  const rows = Object.keys(dirs).map(name => {
+    const read = f => readFileSync(join(dirs[name], f), 'utf8');
+    const scripts = ['brewpage-run.sh', 'brewpage-lib.sh'].map(f => read('scripts/' + f));
+    const code = scripts.flatMap(s => s.split('\n')).filter(l => /^\s*[^#\s>]/.test(l) && /\bcurl -/.test(l));
+    const shown = [...docs[name], 'scripts/brewpage-lib.sh'].flatMap(f => read(f).split('\n')).filter(l => /\bcurl -/.test(l) && !/^\s*(curl -s -A "\$BP_UA"|.*\$\(curl -s -A "\$BP_UA")/.test(l));
+    const literals = [...docs[name], 'scripts/brewpage-lib.sh'].flatMap(f => [...read(f).matchAll(/(?:ClaudeCode|OpenClaw)\/[0-9][^"`)]*\)/g)].map(m => m[0]));
+    return [name, libUa(dirs[name]), code.length, code.filter(l => !l.includes('-A "$BP_UA"')), shown.length > 0, shown.filter(l => !l.includes(`-A "${UA[name]}"`)),
+      [...new Set(literals)]];
+  });
+  assert.match(UA.openclaw, /^OpenClaw\/\d+\.\d+\.\d+ \(\+https:\/\/brewpage\.app\)$/, 'OpenClaw UA is OpenClaw/<semver> (+https://brewpage.app)');
+  assert.deepEqual(rows, [['brewdoc', UA.brewdoc, 3, [], true, [], [UA.brewdoc]], ['skills', UA.skills, 3, [], true, [], [UA.skills]],
+    ['openclaw', UA.openclaw, 3, [], true, [], [UA.openclaw]]],
+    'per copy: lib BP_UA, 3 script curl calls all on $BP_UA, every shown curl command and UA literal on the copy UA');
+});
+
 for (const copy of COPIES) {
   mkdirSync(projectOf(copy));
   spawnSync('git', ['init', '-q', projectOf(copy)]);
@@ -183,7 +206,7 @@ for (const copy of COPIES) {
       'probe prints type, absolute path and size');
     const published = run(copy, fill(copy, "--path '{path}'", { type: 'file', ns: 'my', days: '7', entry: '', delivery_mode: '', password_file: '', path: abs }), 'file');
     assert.deepEqual([published.status, published.stdout, JSON.parse(readFileSync(outFile(copy, 'file'), 'utf8')), runNames()],
-      [0, 'OK https://example.invalid/result\n', ['-s', '-X', 'POST', 'https://brewpage.app/api/files?ns=my&ttl=7', '-F', 'file=@"' + abs + '"'], []],
+      [0, 'OK https://example.invalid/result\n', ['-s', '-A', UA[copy.name], '-X', 'POST', 'https://brewpage.app/api/files?ns=my&ttl=7', '-F', 'file=@"' + abs + '"'], []],
       'file upload posts the exact path and leaves no run dir');
   });
 
@@ -193,7 +216,7 @@ for (const copy of COPIES) {
     const r = run(copy, textPublish(copy, { content: hostile }), 'hostile', { CURL_RESPONSE: response('hostile-owner') });
     assert.deepEqual([r.status, r.stdout, r.stderr], [0, 'OK https://example.invalid/result\n', ''], 'URL only, no response or token in output');
     assert.deepEqual(JSON.parse(readFileSync(outFile(copy, 'hostile'), 'utf8')).map(arg => arg.replace(/brewpage\.[A-Za-z0-9]{6}/, 'brewpage.RUN')),
-      ['-s', '-X', 'POST', 'https://brewpage.app/api/html?ns=my&ttl=15&format=markdown', '-H', 'Content-Type: application/json',
+      ['-s', '-A', UA[copy.name], '-X', 'POST', 'https://brewpage.app/api/html?ns=my&ttl=15&format=markdown', '-H', 'Content-Type: application/json',
         '-d', '@' + tmp + '/brewpage.RUN/payload.json'], 'file-backed payload from a private run dir');
     assert.deepEqual(JSON.parse(readFileSync(outFile(copy, 'hostile') + '.payload', 'utf8')), { content: hostile }, 'text arrives byte-identical');
     assert.equal(existsSync(join(projectOf(copy), 'injected')), false, 'no substitution in the text ran');

@@ -70,7 +70,7 @@ cmd_limits() {
   [ "$#" -eq 0 ] || die "limits takes no arguments"
   command -v jq >/dev/null || die "jq required"
   local body
-  body=$(curl -s -A "ClaudeCode/1.0" https://brewpage.app/api/limits) || die "limits request failed"
+  body=$(curl -s -A "$BP_UA" https://brewpage.app/api/limits) || die "limits request failed"
   printf '%s' "$body" | jq -er '(.sites // empty) as $s | def mb: . / 1048576 * 10 | round / 10;
     "REQUEST_MAX_MB: \(.requestMaxBytes | mb)", "SITE_MAX_FILES: \($s.maxFiles)", "SITE_MAX_FILE_MB: \($s.maxFileBytes | mb)",
     "SITE_MAX_TOTAL_MB: \($s.maxTotalBytes | mb)", "SITE_MAX_ARCHIVE_EXPANSION_MB: \($s.maxArchiveExpansionBytes | mb)",
@@ -214,7 +214,7 @@ cmd_publish() {
         bp_archive_gate "$rc" "$manifest" "$archive" || exit $?
       fi
       response=$(bp_post "https://brewpage.app/api/sites?ns=$NS&ttl=$DAYS&entry=$(jq -nr --arg e "$ENTRY" '$e | @uri')" \
-        -H "User-Agent: ClaudeCode/1.0" -F "$(form_file archive "$archive")") || die "upload request failed"
+        -F "$(form_file archive "$archive")") || die "upload request failed"
       bp_finish "$response" "$DAYS" site
       ;;
   esac
