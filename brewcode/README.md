@@ -6,7 +6,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.12.5 |
+| Version | 6.12.6 |
 | Skills | 9 |
 | Agents | 7 |
 | Hooks | 2 |

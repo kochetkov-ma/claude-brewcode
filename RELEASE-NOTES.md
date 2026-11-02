@@ -2,6 +2,30 @@
 
 ---
 
+## v6.12.6 (2026-11-02)
+
+> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+**What changed for you**
+
+- [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) now names itself to brewpage.app on every request (`ClaudeCode/6.12.6 (+https://brewpage.app)`), and the delete and update commands it shows you carry the same User-Agent. Publishing works as before.
+- Safer local history: the owner-token file is created private and checked to be ignored by Git before anything uploads; a failed check stops the publish instead of carrying on.
+- Site uploads send exactly what you approved: a directory is copied to a private snapshot before packing, approval is tied to the reviewed archive bytes, unusual file paths are quoted safely, and a cancelled pack leaves nothing behind.
+
+### brewdoc
+
+#### Fixed
+
+- **publish:** one `BP_UA` in `scripts/brewpage-lib.sh` is sent by every curl (`bp_post` creates, `limits`, sites; the duplicate sites header is gone); the history-file header, `SKILL.md`, READMEs and the docs page show it on DELETE/PUT/limits commands. `bump-version.sh` keeps `ClaudeCode/<version>` in step with the release. Same change in the standalone `skills/brewpage-publish` (`ClaudeCode/6.12.6`) and `openclaw/brewpage-publish` (`OpenClaw/1.0.9`) copies.
+- **publish:** history is created mode 600, its Git ignore protection is verified as effective, failed Git safety checks and unanswered privacy choices fail closed, and merge capabilities the user does not own are never saved.
+- **publish:** directory input is snapshotted before packing, archive approval is bound to the reviewed bytes, multipart upload paths are quoted, and cancelled packs are cleaned up.
+
+#### Changed
+
+- **publish:** docs describe history safety, privacy choices, profile retention limits, the current owner hosting API, and that a body `format` on `/api/html` is honoured and wins over the query.
+
+---
+
 ## v6.12.5 (2026-10-25)
 
 > Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
