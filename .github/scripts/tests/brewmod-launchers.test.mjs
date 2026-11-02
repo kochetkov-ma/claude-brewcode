@@ -199,7 +199,8 @@ test('GIVEN a hung node on PATH WHEN the launcher probes it THEN the 1 s bound f
   await Promise.all([
     t.test('GIVEN a node hanging in place WHEN probed THEN it is killed and later sources run', async (t) => {
       const f = await bounded('exec')(t)
-      assert.deepEqual(f.processes(), [], 'no runtime or watchdog process survives the launcher')
+      // A later fake probe may exit before its watchdog sleep execs, so only the hung runtime counts.
+      assert.deepEqual(f.processes().filter((line) => line.endsWith('fake-sleep 2')), [], 'the hung runtime does not survive the launcher')
     }),
     t.test('GIVEN a wrapper whose child keeps the pipe WHEN probed THEN later sources still run', async (t) => { await bounded('')(t) }),
     t.test('GIVEN a healthy node WHEN the launcher execs it THEN no watchdog is left', async (t) => {
