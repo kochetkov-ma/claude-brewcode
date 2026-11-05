@@ -27,7 +27,7 @@ Flags: `--ttl N` (days), `--entry <filename>` (sites), `--delivery-mode path|sub
 
 In `public`, pages, sites and files are listed in the public gallery and the sitemap, so Google, Bing and AI search can find and index them and people can discover them. Use it for anything meant to be found or shared. Anyone can find and read a public publication, so never put secrets, tokens or personal data there. A private slug is unlisted and not indexed; anyone with the link can still open it unless a password is set.
 
-It returns `Published: <exact server URL>`; share that link exactly. Owner tokens stay in `.claude/brewpage-history.md` (mode `600`, git-ignored), never in chat; unsafe history writes stop publication. To delete a page locally, use `curl -A "ClaudeCode/6.12.9 (+https://brewpage.app)" -X DELETE "{ownerLink}" -H "X-Owner-Token: {ownerToken}"` with both values from that history.
+It returns `Published: <exact server URL>`; share that link exactly. Owner tokens stay in `.claude/brewpage-history.md` (mode `600`, git-ignored), never in chat; unsafe history writes stop publication. To delete a page locally, use `curl -A "ClaudeCode/6.12.10 (+https://brewpage.app)" -X DELETE "{ownerLink}" -H "X-Owner-Token: {ownerToken}"` with both values from that history.
 
 Site entry is the root `index.html`, else the shallowest page (`--entry` overrides); the root `.well-known/` ships; the skill knows the upload limits ([details](https://doc-claude.brewcode.app/brewdoc/skills/publish/)).
 

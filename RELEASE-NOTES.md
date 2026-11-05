@@ -2,6 +2,24 @@
 
 ---
 
+## v6.12.10 (2026-11-05)
+
+> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+**What changed for you**
+
+- An HTML file in another encoding is no longer refused. It uploads as a file with its bytes untouched. This replaces the refusal added in v6.12.9.
+- The standalone `brewpage-publish` skill and its OpenClaw copy now publish `.md` and `.markdown` files as rendered pages, as `brewdoc:publish` does. They used to be stored as raw files.
+
+### brewdoc, skills/brewpage-publish
+
+#### Fixed
+
+- **`brewpage-run.sh publish`:** a non-UTF-8 `.html`, `.htm`, `.md` or `.markdown` file goes by multipart `POST /api/files`. UTF-8 files stay on `POST /api/html`.
+- **Markdown paths:** `.md` and `.markdown` match in any letter case. A caller naming `file` with such a path lands on `POST /api/html?format=markdown`.
+
+---
+
 ## v6.12.9 (2026-11-05)
 
 > Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
