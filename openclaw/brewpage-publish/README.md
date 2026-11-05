@@ -54,7 +54,8 @@ The model detects the content type, asks for a namespace and password, calls the
 | Content | Type | Endpoint |
 |---------|------|----------|
 | Text / markdown | HTML | `POST /api/html?format=markdown` |
-| Whole HTML document as text, `.html`/`.htm` file | HTML | `POST /api/html?format=html` |
+| Whole HTML document as text, `.html`/`.htm` file | HTML | `POST /api/html?format=html` (non-UTF-8 file: `POST /api/files`, bytes untouched) |
+| `.md`/`.markdown` file | Markdown | `POST /api/html?format=markdown`, rendered page (non-UTF-8 file: `POST /api/files`, bytes untouched) |
 | Any other local file | File | `POST /api/files` |
 | Directory (built static) | Site | `POST /api/sites` (auto-zipped — primary path) |
 | `.zip` archive | Site | `POST /api/sites` (pre-built) |

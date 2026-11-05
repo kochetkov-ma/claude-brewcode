@@ -17,7 +17,7 @@ The skill is model-invocable: ask Claude to "publish this" or "share a link". On
 | Input | Example | Endpoint |
 |-------|---------|----------|
 | Text / Markdown | `/brewdoc:publish "# Hello"` | `/api/html` |
-| HTML file, or whole HTML document as text | `/brewdoc:publish page.html` | `/api/html` (`format=html`) |
+| HTML file, or whole HTML document as text | `/brewdoc:publish page.html` | `/api/html` (`format=html`; non-UTF-8 file: `/api/files`, bytes untouched) |
 | JSON (starts with `{` or `[`) | `/brewdoc:publish '{"key": "value"}'` | `/api/json` |
 | Any other file | `/brewdoc:publish report.pdf --ttl 1` | `/api/files` |
 | Directory site | `/brewdoc:publish docs/v1/ --entry hub.html` | `/api/sites` |

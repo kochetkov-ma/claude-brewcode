@@ -196,18 +196,25 @@ for (const copy of COPIES) {
     TOOL_RULE[copy.name][1](copy);
   });
 
-  test(`${copy.name}: probe types a markdown file and FILE publishes it as multipart`, () => {
-    // GIVEN a relative .md path WHEN probed and published as FILE THEN the absolute path reaches curl -F.
+  test(`${copy.name}: probe types a markdown file and it publishes as a rendered page`, () => {
+    // GIVEN a relative .md path WHEN probed and published as the table says THEN /api/html format=markdown gets the file text.
     mkdirSync(join(projectOf(copy), 'notes'));
     writeFileSync(join(projectOf(copy), 'notes/report.md'), '# Report\n');
     const probe = run(copy, fill(copy, ' probe ', { path: 'notes/report.md' }), 'probe');
     const abs = join(projectOf(copy), 'notes/report.md');
     assert.deepEqual([probe.status, probe.stdout.split('\n').slice(0, 3)], [0, ['TYPE: markdown', 'PATH: ' + abs, 'BYTES: 9']],
       'probe prints type, absolute path and size');
-    const published = run(copy, fill(copy, "--path '{path}'", { type: 'file', ns: 'my', days: '7', entry: '', delivery_mode: '', password_file: '', path: abs }), 'file');
-    assert.deepEqual([published.status, published.stdout, JSON.parse(readFileSync(outFile(copy, 'file'), 'utf8')), runNames()],
-      [0, 'OK https://example.invalid/result\n', ['-s', '-A', UA[copy.name], '-X', 'POST', 'https://brewpage.app/api/files?ns=my&ttl=7', '-F', 'file=@"' + abs + '"'], []],
-      'file upload posts the exact path and leaves no run dir');
+    const rows = [['notes/report.md', 'html'], ['notes/report.md', 'file'], ['notes/REPORT.MD', 'html'], ['notes/report.markdown', 'html']];
+    const outcomes = rows.map(([path, type], i) => {
+      writeFileSync(join(projectOf(copy), path), '# Report\n');
+      const typed = run(copy, fill(copy, ' probe ', { path }), 'md-probe-' + i).stdout.split('\n')[0];
+      const r = run(copy, fill(copy, "--path '{path}'", { type, ns: 'my', days: '7', entry: '', delivery_mode: '', password_file: '', path: join(projectOf(copy), path) }), 'md-' + i);
+      return [typed, r.status, r.stdout, JSON.parse(readFileSync(outFile(copy, 'md-' + i), 'utf8')).map(arg => arg.replace(/brewpage\.[A-Za-z0-9]{6}/, 'brewpage.RUN')),
+        JSON.parse(readFileSync(outFile(copy, 'md-' + i) + '.payload', 'utf8')), runNames()];
+    });
+    assert.deepEqual(outcomes, rows.map(() => ['TYPE: markdown', 0, 'OK https://example.invalid/result\n',
+      ['-s', '-A', UA[copy.name], '-X', 'POST', 'https://brewpage.app/api/html?ns=my&ttl=7&format=markdown', '-H', 'Content-Type: application/json', '-d', '@' + tmp + '/brewpage.RUN/payload.json'],
+      { content: '# Report\n' }, []]), 'every markdown spelling and caller type reaches /api/html, never /api/files');
   });
 
   test(`${copy.name}: hostile text reaches the payload verbatim and the token only the history`, () => {
@@ -396,13 +403,36 @@ for (const copy of [...COPIES, BREWDOC]) {
     [0, 'https://brewpage.app/api/files?ns=my&ttl=7', 0, 'https://brewpage.app/api/html?ns=my&ttl=7&format=markdown'], 'a .txt stays a file, a markdown path stays markdown');
 
     // GIVEN bad html-file input WHEN published THEN it fails with no run dir and no upload.
-    const latin1 = join(dir, 'latin1.html');
-    writeFileSync(latin1, Buffer.from([0x3c, 0x70, 0x3e, 0xe9]));
-    const refused = [[filePath, 'html-file', 'FAILED: html-file takes a .html or .htm --path\n'], [latin1, 'html-file', 'FAILED: HTML file is not UTF-8: convert it first; nothing was uploaded\n']];
+    const refused = [[filePath, 'html-file', 'FAILED: html-file takes a .html or .htm --path\n']];
     assert.deepEqual(refused.map(([path, type], i) => {
       const r = pathRun(type, path, 'html-refused-' + i);
       return [r.status, r.stdout, existsSync(outFile(copy, 'html-refused-' + i)), runNames()];
     }), refused.map(([, , message]) => [1, message, false, []]), 'bad input is refused before any upload');
+  });
+
+  test(`${copy.name}: non-UTF-8 html and markdown go multipart to /api/files with their bytes untouched`, () => {
+    // GIVEN non-UTF-8 page source under every spelling and caller type WHEN published THEN curl -F names the source file itself, no JSON body.
+    const dir = join(base, copy.name + '-html-legacy');
+    mkdirSync(dir);
+    mkdirSync(projectOf(copy), { recursive: true });
+    const bytes = Buffer.from('<!doctype html><p>caf\xe9</p>', 'latin1');
+    const rows = [['latin1.html', 'html-file', ''], ['LATIN1.HTM', 'html-file', ''], ['stale-file.html', 'file', ''], ['stale-html.htm', 'html', ''], ['secret.html', 'html-file', passwordSource], ['latin1.md', 'html', ''], ['stale-file.markdown', 'file', '']];
+    const outcomes = rows.map(([name, type, passwordFile], i) => {
+      const path = join(dir, name);
+      writeFileSync(path, bytes);
+      const probe = run(copy, fill(copy, ' probe ', { path }), 'legacy-probe-' + i);
+      const r = run(copy, fill(copy, "--path '{path}'", { type, ns: 'my', days: '7', entry: '', delivery_mode: '', password_file: passwordFile, path }), 'legacy-' + i);
+      return { probe: probe.stdout.split('\n')[0], status: r.status, stdout: r.stdout,
+        args: withRunId(JSON.parse(readFileSync(outFile(copy, 'legacy-' + i), 'utf8'))),
+        headers: readFileSync(outFile(copy, 'legacy-' + i) + '.headers', 'utf8'),
+        payload: readFileSync(outFile(copy, 'legacy-' + i) + '.payload', 'utf8'), source: readFileSync(path).equals(bytes), runs: runNames() };
+    });
+    assert.deepEqual(outcomes, rows.map(([name, , passwordFile]) => ({
+      probe: /\.(md|markdown)$/.test(name) ? 'TYPE: markdown' : 'TYPE: html-file', status: 0, stdout: 'OK https://example.invalid/result\n',
+      args: ['-s', '-A', UA[copy.name], '-X', 'POST', 'https://brewpage.app/api/files?ns=my&ttl=7',
+        ...(passwordFile ? ['-H', '@' + tmp + '/brewpage.RUN/password-header.txt'] : []), '-F', 'file=@"' + join(dir, name) + '"'],
+      headers: passwordFile ? 'X-Password: ' + password + '\n' : '', payload: '', source: true, runs: [] })),
+    'every row uploads the original file by multipart, password only in its header file');
   });
 }
 

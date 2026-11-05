@@ -55,8 +55,8 @@ Owner token saved to <project-root>/.claude/brewpage-history.md
 |-------|------|----------|
 | Text or markdown string | HTML | `POST /api/html?format=markdown` |
 | Text starting with `<!doctype html` or `<html` | HTML | `POST /api/html?format=html` |
-| Existing `.html`/`.htm` file | HTML | `POST /api/html?format=html`, a real page in any namespace, not a raw download |
-| Existing `.md` file | MARKDOWN | `POST /api/html`, rendered page, not a raw download |
+| Existing `.html`/`.htm` file | HTML | `POST /api/html?format=html`, a real page in any namespace, not a raw download (non-UTF-8 file: `POST /api/files`, bytes untouched) |
+| Existing `.md`/`.markdown` file | MARKDOWN | `POST /api/html`, rendered page, not a raw download (non-UTF-8 file: `POST /api/files`, bytes untouched) |
 | Starts with `{` or `[` | JSON | `POST /api/json` |
 | Any other existing file | FILE | `POST /api/files` (multipart) |
 | Directory or `.zip` | SITE | `POST /api/sites` |

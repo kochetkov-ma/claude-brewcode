@@ -57,7 +57,8 @@ cmd_probe() {
   elif [ -f "$p" ]; then
     abs="$(cd "$(dirname "$p")" && pwd -P)/$(basename "$p")"
     local type=file
-    case "$p" in *.zip) type=site-zip ;; *.md | *.markdown) type=markdown ;; esac
+    case "$p" in *.zip) type=site-zip ;; esac
+    if bp_is_markdown_path "$p"; then type=markdown; fi
     if bp_is_html_path "$p"; then type=html-file; fi
     printf 'TYPE: %s\nPATH: %s\nBYTES: %s\nMIME: %s\n' "$type" "$abs" "$(wc -c < "$abs" | tr -d ' ')" \
       "$(file --mime-type -b -- "$abs" 2>/dev/null || echo unknown)"
@@ -141,8 +142,9 @@ cmd_publish() {
     case "$BREWPAGE_REVIEW_SHA256" in *[!0123456789abcdef]*) die "review SHA256 must be 64 lowercase hex characters" ;; esac
     [ "$BREWPAGE_CONFIRMED" = 1 ] || die "review SHA256 requires --confirmed"
   fi
-  # A .html/.htm path is a page whichever of these a caller names; /api/files would show its source.
+  # A .html/.htm or markdown path is a page whichever of these a caller names.
   if [ -n "$path" ] && bp_is_html_path "$path"; then case "$type" in file | html) type=html-file ;; esac; fi
+  if [ -n "$path" ] && [ "$type" = file ] && bp_is_markdown_path "$path"; then type=html; fi
   case "$type" in
     html) : ;;
     html-file) bp_is_html_path "$path" || die "html-file takes a .html or .htm --path" ;;
@@ -155,7 +157,8 @@ cmd_publish() {
   if [ -n "$path" ]; then
     case "$type" in site-dir) [ -d "$path" ] || die "not a directory: $path" ;; *) [ -f "$path" ] || die "not a file: $path" ;; esac
   fi
-  if [ "$type" = html-file ]; then bp_is_utf8 "$path" || die "HTML file is not UTF-8: convert it first; nothing was uploaded"; fi
+  # Non-UTF-8 page source: multipart keeps its bytes (jq --rawfile would corrupt them); the server decodes HTML.
+  case "$type" in html | html-file) if [ -n "$path" ] && ! bp_is_utf8 "$path"; then type="file"; fi ;; esac
 
   # Slot errors fail before the run is touched, so a staged run survives any bad flag or password file.
   bp_validate "$ns" "$days" "$entry" || exit 1

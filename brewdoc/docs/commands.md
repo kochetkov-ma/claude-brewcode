@@ -179,8 +179,8 @@ reportlab: pip only, good quality, no CSS. weasyprint: pip + brew, excellent qua
 | Input | Type | API |
 |-------|------|-----|
 | Directory or `.zip` | SITE | `POST /api/sites` |
-| `.md`/`.markdown` file | MARKDOWN | `POST /api/html?format=markdown` |
-| `.html`/`.htm` file | HTML | `POST /api/html?format=html` |
+| `.md`/`.markdown` file | MARKDOWN | `POST /api/html?format=markdown` (non-UTF-8 file: `POST /api/files`, bytes untouched) |
+| `.html`/`.htm` file | HTML | `POST /api/html?format=html` (non-UTF-8 file: `POST /api/files`, bytes untouched) |
 | Any other existing file | FILE | `POST /api/files` |
 | Starts with `{` or `[` | JSON | `POST /api/json` |
 | Text starting with `<!doctype html` or `<html` | HTML | `POST /api/html?format=html` |

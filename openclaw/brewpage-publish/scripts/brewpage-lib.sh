@@ -62,6 +62,11 @@ bp_is_html_path() {
   case "${1:-}" in *.[Hh][Tt][Mm] | *.[Hh][Tt][Mm][Ll]) return 0 ;; *) return 1 ;; esac
 }
 
+# rc 0: path ends in .md/.markdown, any case; rendered through /api/html, never a raw download.
+bp_is_markdown_path() {
+  case "${1:-}" in *.[Mm][Dd] | *.[Mm][Aa][Rr][Kk][Dd][Oo][Ww][Nn]) return 0 ;; *) return 1 ;; esac
+}
+
 # rc 0: file holds a whole HTML document: doctype or <html> first, after an optional BOM and whitespace.
 bp_is_html_document() {
   python3 -c 'import re,sys; sys.exit(0 if re.match(rb"(?:\xef\xbb\xbf)?\s*<(?:!doctype\s+html|html)(?=[\s>])", open(sys.argv[1],"rb").read(), re.I) else 1)' "$1"

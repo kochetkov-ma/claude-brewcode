@@ -53,8 +53,9 @@ Use a POSIX runtime (macOS, Linux or WSL) with `bash`, `curl`, `jq` and Python 3
 | Content | Type | Endpoint |
 |---------|------|----------|
 | Text / markdown | HTML | `POST /api/html?format=markdown` |
-| Whole HTML document as text, `.html`/`.htm` file | HTML | `POST /api/html?format=html` |
+| Whole HTML document as text, `.html`/`.htm` file | HTML | `POST /api/html?format=html` (non-UTF-8 file: `POST /api/files`, bytes untouched) |
 | JSON object/array | JSON | `POST /api/json` |
+| `.md`/`.markdown` file | Markdown | `POST /api/html?format=markdown`, rendered page (non-UTF-8 file: `POST /api/files`, bytes untouched) |
 | Any other local file | File | `POST /api/files` |
 | Directory | Site | `POST /api/sites` (zipped on the fly) |
 | `.zip` archive | Site | `POST /api/sites` |
