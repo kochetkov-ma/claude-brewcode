@@ -54,9 +54,11 @@ Owner token saved to <project-root>/.claude/brewpage-history.md
 | Input | Type | Endpoint |
 |-------|------|----------|
 | Text or markdown string | HTML | `POST /api/html?format=markdown` |
+| Text starting with `<!doctype html` or `<html` | HTML | `POST /api/html?format=html` |
+| Existing `.html`/`.htm` file | HTML | `POST /api/html?format=html`, a real page in any namespace, not a raw download |
 | Existing `.md` file | MARKDOWN | `POST /api/html`, rendered page, not a raw download |
 | Starts with `{` or `[` | JSON | `POST /api/json` |
-| Existing local file | FILE | `POST /api/files` (multipart) |
+| Any other existing file | FILE | `POST /api/files` (multipart) |
 | Directory or `.zip` | SITE | `POST /api/sites` |
 
 SITE is checked first. Site entry follows the server rule: `--entry`, else the root `index.html`, else the shallowest `.html` (ties by name). To start on another page, pass `--entry`.
@@ -89,7 +91,7 @@ SITE is checked first. Site entry follows the server rule: `--entry`, else the r
 
 **Arguments.** `--ttl N` (default 15), `--entry <filename>`, optional `--delivery-mode path|subdomain` (other values are rejected before upload). A prompt with no path and no inline text asks once what to publish.
 
-**Detect.** For a path, `brewpage-run.sh probe '<path>'` prints `TYPE:`, the absolute `PATH:` and size stats. Types are classified SITE, MARKDOWN, FILE, JSON, HTML in that order.
+**Detect.** For a path, `brewpage-run.sh probe '<path>'` prints `TYPE:`, the absolute `PATH:` and size stats. Types are classified SITE, MARKDOWN, HTML file, FILE, JSON, HTML text in that order.
 
 **Namespace.** Options: `public`, a suggested slug (3-16 chars named after the content, such as `api-docs`; never random), or custom. An explicit Skip selects the suggested private slug. An unanswered or ambiguous choice stops the upload.
 

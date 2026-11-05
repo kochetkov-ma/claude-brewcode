@@ -325,4 +325,85 @@ for (const copy of COPIES) {
   });
 }
 
+const BREWDOC = { name: 'brewdoc', dir: join(ROOT, 'brewdoc/skills/publish'), token: '${CLAUDE_SKILL_DIR}', history: '.claude/brewpage-history.md' };
+const HTML_PAGE = '<!doctype html>\n<html><body><p>Fixture</p></body></html>\n';
+const htmlUpload = (copy, ns, ttl, format, argsMatch) => ['-s', '-A', UA[copy.name], '-X', 'POST', `https://brewpage.app/api/html?ns=${ns}&ttl=${ttl}&format=${format}`,
+  ...argsMatch, '-H', 'Content-Type: application/json', '-d', '@' + tmp + '/brewpage.RUN/payload.json'];
+const withRunId = args => args.map(arg => arg.replace(/brewpage\.[A-Za-z0-9]{6}/, 'brewpage.RUN'));
+
+for (const copy of [...COPIES, BREWDOC]) {
+  test(`${copy.name}: html files publish as pages, whole-document text as html, the rest as today`, () => {
+    // GIVEN each html file spelling, namespace, password choice and caller type WHEN probed and published THEN format=html with the file bytes.
+    const dir = join(base, copy.name + '-html-routes');
+    mkdirSync(dir);
+    mkdirSync(projectOf(copy), { recursive: true });
+    const fileRows = [
+      ['page.html', 'html-file', 'public', ''],
+      ['PAGE.HTM', 'html-file', 'my', ''],
+      ['secret.html', 'html-file', 'my', passwordSource],
+      ['stale-file-type.html', 'file', 'public', ''],
+      ['stale-html-type.htm', 'html', 'my', ''],
+    ];
+    const fileOutcomes = fileRows.map(([name, type, ns, passwordFile], i) => {
+      const path = join(dir, name);
+      writeFileSync(path, HTML_PAGE);
+      const probe = run(copy, fill(copy, ' probe ', { path }), 'html-probe-' + i);
+      const r = run(copy, fill(copy, "--path '{path}'", { type, ns, days: '7', entry: '', delivery_mode: '', password_file: passwordFile, path }), 'html-file-' + i);
+      return { probe: probe.stdout.split('\n').slice(0, 2), status: r.status, stdout: r.stdout,
+        args: withRunId(JSON.parse(readFileSync(outFile(copy, 'html-file-' + i), 'utf8'))).filter(arg => !arg.startsWith('@' + tmp + '/brewpage.RUN/password-header')),
+        headers: readFileSync(outFile(copy, 'html-file-' + i) + '.headers', 'utf8'),
+        payload: JSON.parse(readFileSync(outFile(copy, 'html-file-' + i) + '.payload', 'utf8')) };
+    });
+    assert.deepEqual(fileOutcomes, fileRows.map(([name, , ns, passwordFile]) => ({
+      probe: ['TYPE: html-file', 'PATH: ' + join(dir, name)], status: 0, stdout: 'OK https://example.invalid/result\n',
+      args: htmlUpload(copy, ns, 7, 'html', passwordFile ? ['-H'] : []),
+      headers: passwordFile ? 'X-Password: ' + password + '\n' : '', payload: { content: HTML_PAGE } })),
+    'every html file reaches /api/html as format=html, password only in its header file');
+
+    // GIVEN inline text WHEN published THEN only a whole document goes format=html.
+    const textRows = [
+      ['<!doctype html><p>x</p>', 'html'],
+      ['\n \t<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"><p>x</p>', 'html'],
+      ['<html lang="en"><body>x</body></html>', 'html'],
+      ['﻿<HTML>\n<body>x</body></HTML>', 'html'],
+      ['<div>fragment</div>', 'markdown'],
+      ['<htmlfoo>not a page</htmlfoo>', 'markdown'],
+      ['# Title\n<!doctype html>', 'markdown'],
+      ['plain text', 'markdown'],
+    ];
+    const textOutcomes = textRows.map(([content], i) => {
+      const r = run(copy, textPublish(copy, { content }), 'html-text-' + i);
+      return [r.status, JSON.parse(readFileSync(outFile(copy, 'html-text-' + i), 'utf8'))[5], JSON.parse(readFileSync(outFile(copy, 'html-text-' + i) + '.payload', 'utf8'))];
+    });
+    assert.deepEqual(textOutcomes, textRows.map(([content, format]) => [0, `https://brewpage.app/api/html?ns=my&ttl=15&format=${format}`, { content }]),
+      'format follows the document test and the text stays verbatim');
+
+    // GIVEN a whole document staged in chunks WHEN published by run id THEN the rejoined text goes format=html.
+    const staged = stage(copy, '', '<!doctype html>', 'html-stage-1').stdout.split('\n')[0].replace('RUN: ', '');
+    stage(copy, staged, '<p>x</p>', 'html-stage-2');
+    const stagedRun = run(copy, runPublish(copy, staged, ''), 'html-staged');
+    assert.deepEqual([stagedRun.status, JSON.parse(readFileSync(outFile(copy, 'html-staged'), 'utf8'))[5], JSON.parse(readFileSync(outFile(copy, 'html-staged') + '.payload', 'utf8'))],
+      [0, 'https://brewpage.app/api/html?ns=my&ttl=15&format=html', { content: '<!doctype html>\n<p>x</p>' }], 'staged documents are detected too');
+
+    // GIVEN other files WHEN published THEN their routes are unchanged, whatever the bytes say.
+    const filePath = join(dir, 'page.txt');
+    const mdPath = join(dir, 'page.md');
+    writeFileSync(filePath, HTML_PAGE);
+    writeFileSync(mdPath, HTML_PAGE);
+    const pathRun = (type, path, suffix) => run(copy, fill(copy, "--path '{path}'", { type, ns: 'my', days: '7', entry: '', delivery_mode: '', password_file: '', path }), suffix);
+    assert.deepEqual([pathRun('file', filePath, 'html-txt').status, JSON.parse(readFileSync(outFile(copy, 'html-txt'), 'utf8'))[5],
+      pathRun('html', mdPath, 'html-md').status, JSON.parse(readFileSync(outFile(copy, 'html-md'), 'utf8'))[5]],
+    [0, 'https://brewpage.app/api/files?ns=my&ttl=7', 0, 'https://brewpage.app/api/html?ns=my&ttl=7&format=markdown'], 'a .txt stays a file, a markdown path stays markdown');
+
+    // GIVEN bad html-file input WHEN published THEN it fails with no run dir and no upload.
+    const latin1 = join(dir, 'latin1.html');
+    writeFileSync(latin1, Buffer.from([0x3c, 0x70, 0x3e, 0xe9]));
+    const refused = [[filePath, 'html-file', 'FAILED: html-file takes a .html or .htm --path\n'], [latin1, 'html-file', 'FAILED: HTML file is not UTF-8: convert it first; nothing was uploaded\n']];
+    assert.deepEqual(refused.map(([path, type], i) => {
+      const r = pathRun(type, path, 'html-refused-' + i);
+      return [r.status, r.stdout, existsSync(outFile(copy, 'html-refused-' + i)), runNames()];
+    }), refused.map(([, , message]) => [1, message, false, []]), 'bad input is refused before any upload');
+  });
+}
+
 after(() => rmSync(base, { recursive: true, force: true }));

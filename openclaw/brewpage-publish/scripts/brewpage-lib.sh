@@ -57,6 +57,21 @@ bp_validate() {
   return 0
 }
 
+# rc 0: path ends in .html/.htm, any case; such a file is always published as a page.
+bp_is_html_path() {
+  case "${1:-}" in *.[Hh][Tt][Mm] | *.[Hh][Tt][Mm][Ll]) return 0 ;; *) return 1 ;; esac
+}
+
+# rc 0: file holds a whole HTML document: doctype or <html> first, after an optional BOM and whitespace.
+bp_is_html_document() {
+  python3 -c 'import re,sys; sys.exit(0 if re.match(rb"(?:\xef\xbb\xbf)?\s*<(?:!doctype\s+html|html)(?=[\s>])", open(sys.argv[1],"rb").read(), re.I) else 1)' "$1"
+}
+
+# rc 0: file decodes as UTF-8; jq --rawfile would silently replace any other bytes.
+bp_is_utf8() {
+  python3 -c 'import sys; open(sys.argv[1],"rb").read().decode("utf-8")' "$1" 2>/dev/null
+}
+
 # Allocate before writing inputs; only the generated ASCII basename is substituted into blocks.
 bp_prepare() {
   mkdir -p "$BP_TMPDIR" || return 1

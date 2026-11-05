@@ -54,7 +54,8 @@ The model detects the content type, asks for a namespace and password, calls the
 | Content | Type | Endpoint |
 |---------|------|----------|
 | Text / markdown | HTML | `POST /api/html?format=markdown` |
-| Local file | File | `POST /api/files` |
+| Whole HTML document as text, `.html`/`.htm` file | HTML | `POST /api/html?format=html` |
+| Any other local file | File | `POST /api/files` |
 | Directory (built static) | Site | `POST /api/sites` (auto-zipped — primary path) |
 | `.zip` archive | Site | `POST /api/sites` (pre-built) |
 

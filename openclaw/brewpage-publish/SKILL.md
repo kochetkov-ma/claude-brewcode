@@ -47,14 +47,15 @@ bash {baseDir}/scripts/brewpage-run.sh probe '{path}'
 |-------|------|-------------------------|-----|
 | `TYPE: site-dir` | SITE | `site-dir` + `--path` | `POST /api/sites` (ZIP built from the dir — primary path) |
 | `TYPE: site-zip` (`.zip` file) | SITE | `site-zip` + `--path` | `POST /api/sites` (pre-built archive upload) |
+| `TYPE: html-file` (`.html`/`.htm` file) | HTML | `html-file` + `--path` | `POST /api/html` (format=html, content read from the file — a real page in any namespace, NOT a raw download) |
 | `TYPE: file` or `TYPE: markdown` (any other file) | FILE | `file` + `--path` | `POST /api/files` (multipart) |
-| Anything else (`TYPE: none`, inline text) | HTML | `html` + `--text` | `POST /api/html` (format=markdown) |
+| Anything else (`TYPE: none`, inline text) | HTML | `html` + `--text` | `POST /api/html` (`format=html` when the text is a whole HTML document, `<!doctype html` or `<html` first; the script decides; else `format=markdown`) |
 
-Mode rule: directory/ZIP → SITE. Single file → FILE. Everything else → HTML (markdown). `POST /api/sites` accepts a multipart `archive=@file.zip` or repeated `files` and matching `paths` fields; the script zips a directory to preserve relative paths.
+Mode rule: directory/ZIP → SITE. `.html`/`.htm` file → HTML page. Any other single file → FILE. Everything else → HTML (whole HTML document text as HTML, the rest as markdown). `POST /api/sites` accepts a multipart `archive=@file.zip` or repeated `files` and matching `paths` fields; the script zips a directory to preserve relative paths.
 
 ### Step 3: Show Pre-Publish Stats
 
-From the probe lines — SITE (dir): `HTML`, `SIZE_KB`, `ENTRY`. SITE (ZIP): `BYTES`, entry override. FILE: `BYTES` + `MIME`. TEXT: char count.
+From the probe lines — SITE (dir): `HTML`, `SIZE_KB`, `ENTRY`. SITE (ZIP): `BYTES`, entry override. FILE, HTML file: `BYTES` + `MIME`. TEXT: char count.
 
 For HTML/FILE:
 ```
@@ -159,7 +160,7 @@ Every slot is re-validated by the script before anything is written or uploaded:
 A value failing its pattern: re-ask; never clean it up or substitute it anyway. A slot error fails before
 any run is touched, so staged text survives the retry. `{type}` comes from the Step 2 table.
 
-**SITE, FILE** — `{path}` is the probe's `PATH:` — run with the shell tool:
+**SITE, HTML file, FILE** — `{path}` is the probe's `PATH:` — run with the shell tool:
 ```bash
 bash {baseDir}/scripts/brewpage-run.sh publish {type} --ns '{ns}' --ttl '{days}' --entry '{entry}' --delivery-mode '{delivery_mode}' --password-file '{password_file}' --path '{path}'
 ```
@@ -238,7 +239,7 @@ a value that still cannot be stored is a 400, not a 409.
 - History writes reject symlinks, hardlinks, tracked history and directories writable by others; failure stops publication. Archive inspection caps 25 MiB compressed, 40 MiB expanded, 200 files, 400 entries, 5 MiB/member and 1 MiB metadata; ZIP64/split archives are refused.
 
 - Scripts: `scripts/brewpage-run.sh` (the only entry), `scripts/brewpage-lib.sh` (sourced helpers), `scripts/publish.mjs` (offline SITE bundle build/verify), `scripts/history.py` (secure atomic history). Requires a POSIX runtime (macOS/Linux or WSL), `bash`, `curl`, `jq`, POSIX `python3` with `fcntl`, and `git` inside repositories; sites also `node`, `zip`, `unzip`. Native Windows Python is unsupported and fails before upload.
-- **`format`**: `/api/html` takes `?format=` or a JSON body `format`; a non-blank body value wins over the query, neither -> default `html` (markdown stored as raw text). The scripts send `?format=markdown` with a `{content}`-only body.
+- **`format`**: `/api/html` takes `?format=` or a JSON body `format`; a non-blank body value wins over the query, neither -> default `html` (markdown stored as raw text). The scripts send a `{content}`-only body with `?format=html` for a `.html`/`.htm` file or whole-document text, else `?format=markdown`.
 - History: `./brewpage-history.md` in the workspace (the shell's working directory), mode `600`, added to `./.gitignore` inside a git repo. Its header holds the **delete** command for the owner token.
 - Run dirs: private `brewpage.XXXXXX` under `$TMPDIR` (else `/tmp`); only `scripts/brewpage-run.sh` creates, fills and removes them.
 - TTL default is `15` days. Namespace must match `^[a-z0-9-]{1,32}$` and be explicitly chosen; unanswered choices stop before upload.

@@ -31,7 +31,7 @@ usage() {
 brewpage-run.sh probe <path>
 brewpage-run.sh limits
 brewpage-run.sh stage --run <run_id|''> --text <chunk>
-brewpage-run.sh publish <html|json|file|site-dir|site-zip> --ns <ns> [--ttl N] [--entry F]
+brewpage-run.sh publish <html|html-file|json|file|site-dir|site-zip> --ns <ns> [--ttl N] [--entry F]
   [--delivery-mode path|subdomain] --password-file <ABS|''> [--confirmed --review-sha256 SHA256] (--text T | --run ID | --path P)
 brewpage-run.sh cleanup --run <run_id>
 --ns and --password-file are required; --password-file '' explicitly selects no password.
@@ -58,6 +58,7 @@ cmd_probe() {
     abs="$(cd "$(dirname "$p")" && pwd -P)/$(basename "$p")"
     local type=file
     case "$p" in *.zip) type=site-zip ;; *.md | *.markdown) type=markdown ;; esac
+    if bp_is_html_path "$p"; then type=html-file; fi
     printf 'TYPE: %s\nPATH: %s\nBYTES: %s\nMIME: %s\n' "$type" "$abs" "$(wc -c < "$abs" | tr -d ' ')" \
       "$(file --mime-type -b -- "$abs" 2>/dev/null || echo unknown)"
   else
@@ -140,8 +141,11 @@ cmd_publish() {
     case "$BREWPAGE_REVIEW_SHA256" in *[!0123456789abcdef]*) die "review SHA256 must be 64 lowercase hex characters" ;; esac
     [ "$BREWPAGE_CONFIRMED" = 1 ] || die "review SHA256 requires --confirmed"
   fi
+  # A .html/.htm path is a page whichever of these a caller names; /api/files would show its source.
+  if [ -n "$path" ] && bp_is_html_path "$path"; then case "$type" in file | html) type=html-file ;; esac; fi
   case "$type" in
     html) : ;;
+    html-file) bp_is_html_path "$path" || die "html-file takes a .html or .htm --path" ;;
     json) [ -z "$path" ] || die "json takes --text or --run" ;;
     file | site-dir | site-zip) [ -n "$path" ] || die "$type takes --path" ;;
     *) die "unknown publish type: ${type:-<none>}" ;;
@@ -151,6 +155,7 @@ cmd_publish() {
   if [ -n "$path" ]; then
     case "$type" in site-dir) [ -d "$path" ] || die "not a directory: $path" ;; *) [ -f "$path" ] || die "not a file: $path" ;; esac
   fi
+  if [ "$type" = html-file ]; then bp_is_utf8 "$path" || die "HTML file is not UTF-8: convert it first; nothing was uploaded"; fi
 
   # Slot errors fail before the run is touched, so a staged run survives any bad flag or password file.
   bp_validate "$ns" "$days" "$entry" || exit 1
@@ -183,9 +188,11 @@ cmd_publish() {
 
   local response rc=0 manifest archive
   case "$type" in
-    html)
+    html | html-file)
+      local format=markdown
+      if [ "$type" = html-file ] || { [ -z "$path" ] && bp_is_html_document "$content"; }; then format=html; fi
       jq -n --rawfile c "$content" '{content: $c}' > "$BP_RUN_DIR/payload.json"
-      response=$(bp_post "https://brewpage.app/api/html?ns=$NS&ttl=$DAYS&format=markdown" \
+      response=$(bp_post "https://brewpage.app/api/html?ns=$NS&ttl=$DAYS&format=$format" \
         -H "Content-Type: application/json" -d @"$BP_RUN_DIR/payload.json") || die "upload request failed"
       bp_finish "$response" "$DAYS" html
       ;;

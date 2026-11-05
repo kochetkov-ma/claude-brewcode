@@ -79,14 +79,15 @@ bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh probe '{path}'
 | `TYPE: site-dir` | SITE | `site-dir` + `--path` | `POST /api/sites` (ZIP built from the dir) | publish site, publish folder/directory | опубликуй сайт, опубликуй папку | yes |
 | `TYPE: site-zip` (`.zip` file) | SITE | `site-zip` + `--path` | `POST /api/sites` (archive upload) | publish zip, publish archive | опубликуй архив, опубликуй zip | yes |
 | `TYPE: markdown` (`.md`/`.markdown` file) | MARKDOWN | `html` + `--path` | `POST /api/html` (format=markdown, content read from the file — renders styled, NOT a raw download) | publish markdown, share this .md | опубликуй markdown, поделись .md | yes |
+| `TYPE: html-file` (`.html`/`.htm` file) | HTML | `html-file` + `--path` | `POST /api/html` (format=html, content read from the file — a real page in any namespace, NOT a raw download) | publish html, publish this page | опубликуй html, опубликуй страницу | yes |
 | `TYPE: file` (any other file) | FILE | `file` + `--path` | `POST /api/files` (multipart) | publish file, share this file | опубликуй файл, поделись файлом | yes |
 | No path (`TYPE: none`), `content_arg` starts with `{` or `[` | JSON | `json` + `--text` | `POST /api/json` | publish json, share this json | опубликуй json | yes |
-| Anything else | HTML | `html` + `--text` | `POST /api/html` (format=markdown) | publish text, share link, publish this | опубликуй текст, поделись ссылкой | yes |
+| Anything else | HTML | `html` + `--text` | `POST /api/html` (`format=html` when the text is a whole HTML document, `<!doctype html` or `<html` first; the script decides; else `format=markdown`) | publish text, share link, publish this | опубликуй текст, поделись ссылкой | yes |
 
 ### Step 3: Show Pre-Publish Stats
 
-From the probe lines — SITE (dir): `HTML`, `SIZE_KB`, `ENTRY`. SITE (ZIP): `BYTES`, entry override. FILE and
-MARKDOWN: `BYTES` + `MIME`. Text/JSON: char count.
+From the probe lines — SITE (dir): `HTML`, `SIZE_KB`, `ENTRY`. SITE (ZIP): `BYTES`, entry override. FILE,
+MARKDOWN and HTML file: `BYTES` + `MIME`. Text/JSON: char count.
 
 For HTML/MARKDOWN/JSON/FILE:
 ```
@@ -181,7 +182,7 @@ Every slot is re-validated by the script before anything is written or uploaded:
 A value failing its pattern: re-ask; never clean it up or substitute it anyway. A slot error fails before
 any run is touched, so staged text survives the retry. `{type}` comes from the Step 2 table.
 
-**SITE, MARKDOWN, FILE** — `{path}` is the probe's `PATH:` — **EXECUTE** using Bash tool:
+**SITE, MARKDOWN, HTML file, FILE** — `{path}` is the probe's `PATH:` — **EXECUTE** using Bash tool:
 ```bash
 bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh publish {type} --ns '{ns}' --ttl '{days}' --entry '{entry}' --delivery-mode '{delivery_mode}' --password-file '{password_file}' --path '{path}'
 ```
@@ -259,7 +260,7 @@ a value that still cannot be stored is a 400, not a 409.
 - Requires a POSIX runtime (macOS/Linux or WSL), `bash`, `curl`, `jq`, POSIX `python3` with `fcntl` (secure atomic history), and `git` inside repositories; sites also `node`, `zip`, `unzip`. Native Windows Python is unsupported and fails before upload.
 - History writes reject symlinks, hardlinks, tracked history and directories writable by others; failure stops publication. Archive inspection caps 25 MiB compressed, 40 MiB expanded, 200 files, 400 entries, 5 MiB/member and 1 MiB metadata; ZIP64/split archives are refused.
 
-- **`format`**: `/api/html` takes `?format=` or a JSON body `format`; a non-blank body value wins over the query, neither -> default `html` (markdown stored as raw text). The scripts send `?format=markdown` with a `{content}`-only body.
+- **`format`**: `/api/html` takes `?format=` or a JSON body `format`; a non-blank body value wins over the query, neither -> default `html` (markdown stored as raw text). The scripts send a `{content}`-only body with `?format=html` for a `.html`/`.htm` file or whole-document text, else `?format=markdown`.
 - History: `<project-root>/.claude/brewpage-history.md` (root: `CLAUDE_PROJECT_DIR` → git toplevel → upward `.git`/`.claude` walk (a `.claude` in HOME or in the profile parent, the dir whose `.claude` IS the active config dir, is skipped; a `.git` there still counts) → `PWD`, via `scripts/brewpage-lib.sh`), mode `600`, added to the project `.gitignore`. Its header holds the **delete** command for the owner token.
 - Run dirs: private `brewpage.XXXXXX` under `$TMPDIR` (else `/tmp`), outside the protected `.claude/`; only `scripts/brewpage-run.sh` creates, fills and removes them, so the skill needs no `Write`/`Edit` grant.
 - Permissions: model-invocable, so `allowed-tools` holds one scoped Bash rule that matches every step above, in `default`, `dontAsk` and headless runs alike (verified on CC 2.1.296). A script path containing spaces breaks the unquoted command shape.
