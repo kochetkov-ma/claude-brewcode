@@ -6,10 +6,10 @@ maxTurns: 80
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash
 doc_type: llm
-version: "6.12.8"
+version: "6.12.9"
 content_version: "6.12.2"
 generated_by: "brewcode"
-last_updated: "2026-11-02"
+last_updated: "2026-11-05"
 ---
 
 [DICT: AT=allowed-tools, BPR=braced CLAUDE_PLUGIN_ROOT token, CC=Claude Code, CSD=${CLAUDE_SKILL_DIR}, DMI=disable-model-invocation, DT=disallowed-tools, FM=frontmatter, PLG=plugin, SA=subagent, SK=skill, UI-F=user-invocable]

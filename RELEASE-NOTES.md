@@ -2,6 +2,26 @@
 
 ---
 
+## v6.12.9 (2026-11-05)
+
+> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+**What changed for you**
+
+- Publishing a `.html` or `.htm` file now gives you a real web page in any namespace, with or without a password. It used to be stored as a file.
+- Publishing text that is a whole HTML document (it starts with `<!doctype html` or `<html`) now renders as that page. Any other text is still treated as Markdown.
+
+### brewdoc, skills/brewpage-publish
+
+#### Fixed
+
+- **`brewpage-run.sh probe`:** new type `html-file` for `.html`/`.htm`, any letter case. A `.md` file and every other file keep their route.
+- **`brewpage-run.sh publish`:** `html-file` posts to `/api/html?format=html`. A caller naming `file` or `html` with a `.html`/`.htm` path lands on the same route, so the page never reaches `/api/files`.
+- **Inline and staged text:** a whole HTML document goes `format=html`, everything else `format=markdown`.
+- **Non-UTF-8 HTML files:** refused before upload, because the JSON body would silently replace their bytes.
+
+---
+
 ## v6.12.8 (2026-11-02)
 
 > Docs: [Node runtime](https://doc-claude.brewcode.app/mods/overview/#node-runtime) | [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [installation](https://doc-claude.brewcode.app/installation/) | [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | [reminders](https://doc-claude.brewcode.app/mods/reminders/)
