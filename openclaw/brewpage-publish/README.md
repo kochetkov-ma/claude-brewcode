@@ -89,7 +89,7 @@ The directory bundle is **allowlisted**: it drops system files (`.DS_Store`, `__
 
 Entry file (server rule): `--entry` override > root `index.html` > shallowest `.html` (ties: name order). To start on another page, pass `--entry`.
 
-Site limits: 200 files, 5 MB per file, 20 MB total, 25 MB per request. To see the current values, ask the skill to check the limits or run `curl -s -A "OpenClaw/1.0.9 (+https://brewpage.app)" https://brewpage.app/api/limits`; the skill runs its own `limits` command before a big site. A successful upload prints `OK <url>`, then `MANAGE: <management link>` and any server `NOTICE:` lines. A rejected upload prints `FAILED: publish rejected (HTTP <status>: <message>)` with the server's reason and no notices.
+Site limits: 200 files, 5 MB per file, 20 MB total, 25 MB per request. To see the current values, ask the skill to check the limits or run `curl -s -A "OpenClaw/1.0.10 (+https://brewpage.app)" https://brewpage.app/api/limits`; the skill runs its own `limits` command before a big site. A successful upload prints `OK <url>`, then `MANAGE: <management link>` and any server `NOTICE:` lines. A rejected upload prints `FAILED: publish rejected (HTTP <status>: <message>)` with the server's reason and no notices.
 
 Local ZIP inspection has separate budgets: 25 MiB compressed, 40 MiB expanded, 200 files, 400 entries, 5 MiB per member and 1 MiB of metadata. ZIP64 and split archives are refused; each `unzip` check has a 10-second timeout. See [the skill workflow](SKILL.md) for inspection details; server limits still apply.
 
@@ -110,10 +110,10 @@ Optional: sign in free (Google or any email) at [account.brewpage.app](https://a
 Owner API and management links remain on `brewpage.app`, even when content uses a subdomain. Use the stored `ownerLink` and metadata; old history without metadata keeps its existing API identifiers. To delete a publication, read its owner API URL and token from history:
 
 ```bash
-curl -A "OpenClaw/1.0.9 (+https://brewpage.app)" -X DELETE "$OWNER_API" -H "X-Owner-Token: $OWNER_TOKEN"
+curl -A "OpenClaw/1.0.10 (+https://brewpage.app)" -X DELETE "$OWNER_API" -H "X-Owner-Token: $OWNER_TOKEN"
 ```
 
-To replace a site, `PUT` the new archive to its stored owner API with `X-Owner-Token` and `-A "OpenClaw/1.0.9 (+https://brewpage.app)"`. The bundle replaces the full file set while retaining the content host. Omit `X-Delivery-Mode` on ordinary updates. Old publications (made before 5 October 2026) are read-only: `409 OLD_PUBLICATION_READ_ONLY`; publish anew and give the user the new link and management link. The new owner token is saved to the protected local history file.
+To replace a site, `PUT` the new archive to its stored owner API with `X-Owner-Token` and `-A "OpenClaw/1.0.10 (+https://brewpage.app)"`. The bundle replaces the full file set while retaining the content host. Omit `X-Delivery-Mode` on ordinary updates. Old publications (made before 5 October 2026) are read-only: `409 OLD_PUBLICATION_READ_ONLY`; publish anew and give the user the new link and management link. The new owner token is saved to the protected local history file.
 
 Owner-only `GET` and `PATCH /api/{type}/{ns}/{id}/hosting` support `html`, `files`, `json`, `kv` and `sites`. Read the current hosting metadata first, then send `deliveryMode` and that `hostingVersion` as `expectedVersion` with `X-Owner-Token`. Use the returned link and version afterward. Legacy publications without new routing metadata remain unchanged. Sites and non-public HTML-format pages stay on their subdomain; a mismatched mode is reported rather than rejected. A stale version is applied with a notice, so inspect the response. Switching an eligible publication retains its reserved host.
 

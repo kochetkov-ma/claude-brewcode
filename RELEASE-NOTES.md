@@ -2,6 +2,26 @@
 
 ---
 
+## v6.12.11 (2026-11-10)
+
+> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+**What changed for you**
+
+- After publishing, Claude gives you the page link and the management link. The management link is private: anyone who has it can edit or delete the page.
+- The owner token still goes to the local history file. Claude shows it when you ask. Neither the token nor the management link is posted publicly (public page, repo, shared channel).
+- If the history file cannot be written after the page is already live, you get the link, the management link and the token right away, so the page is never left without them.
+
+### brewdoc, skills/brewpage-publish
+
+#### Fixed
+
+- **`brewpage-run.sh publish`:** after `OK <url>` the script prints `MANAGE: <management link>` when the server returned one. A failed history write prints `FAILED: published but owner token could not be saved securely`, then `URL:`, `MANAGE:` and `OWNER TOKEN:` lines.
+- **Skill instructions:** the rule that kept the owner token out of the conversation is replaced by the rule above, in `SKILL.md`, the READMEs and the docs page. Same change in the standalone `skills/brewpage-publish` and `openclaw/brewpage-publish` (`OpenClaw/1.0.10`) copies.
+- **Docs page:** the MCP install line pins `brewpage-mcp@1.18.1`.
+
+---
+
 ## v6.12.10 (2026-11-05)
 
 > Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)

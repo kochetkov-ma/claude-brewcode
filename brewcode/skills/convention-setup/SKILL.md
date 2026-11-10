@@ -9,7 +9,7 @@ model: opus
 license: MIT
 ---
 
-<!-- brewcode-meta: version=6.12.10 content_version=6.6.0 generated_by=brewcode:convention-setup -->
+<!-- brewcode-meta: version=6.12.11 content_version=6.6.0 generated_by=brewcode:convention-setup -->
 
 <instructions>
 

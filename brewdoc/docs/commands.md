@@ -4,7 +4,7 @@ description: Detailed description of all brewdoc plugin commands
 
 # Brewdoc Plugin Commands
 
-> **Version:** 6.12.10 | **Author:** Maksim Kochetkov | **License:** MIT
+> **Version:** 6.12.11 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Quick Reference
 
