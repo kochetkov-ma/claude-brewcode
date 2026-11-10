@@ -166,7 +166,7 @@ reportlab: pip only, good quality, no CSS. weasyprint: pip + brew, excellent qua
 
 ## 5. `/brewdoc:publish`
 
-**Purpose:** Publishes text, Markdown, a file, a directory or a ZIP to brewpage.app and returns the shareable URL. Asks for a namespace and optional local password-file path; saves the owner token and returned owner metadata to project-root `.claude/brewpage-history.md`.
+**Purpose:** Publishes text, Markdown, a file, a directory or a ZIP to brewpage.app and returns the shareable URL and a private management link. Asks for a namespace and optional local password-file path; saves the owner token and returned owner metadata to project-root `.claude/brewpage-history.md`.
 
 | Parameter | Value |
 |-----------|-------|

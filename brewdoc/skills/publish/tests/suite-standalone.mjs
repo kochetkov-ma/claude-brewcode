@@ -298,9 +298,11 @@ for (const copy of COPIES) {
   });
 
   test(`${copy.name}: OLD/NEW winners keep the exact server identity`, () => {
-    // GIVEN OLD/NEW server winners WHEN the text fence publishes per delivery mode THEN link, header and history are exact.
+    // GIVEN OLD/NEW server winners WHEN the text fence publishes per delivery mode THEN link, management link, header and history are exact.
+    const manage = 'https://brewpage.app/manage/html/public/Fixture123#k=fixture-key';
+    const tails = ['MANAGE: ' + manage + '\n', '', ''];
     const responses = [
-      { link: 'https://fixture123.brewpage.app/', ownerToken: 'private-new-owner', ownerLink: 'https://brewpage.app/api/html/public/Fixture123',
+      { link: 'https://fixture123.brewpage.app/', ownerToken: 'private-new-owner', manageUrl: manage, ownerLink: 'https://brewpage.app/api/html/public/Fixture123',
         id: 'Fixture123', namespace: 'public', routingCohort: 'new-v1', deliveryMode: 'subdomain', modeLocked: false, hostingVersion: 1,
         createdAt: '2026-10-01T12:00:00Z', expiresAt: '2026-10-16T12:00:00Z' },
       { link: 'https://brewpage.app/public/Legacy1234', ownerToken: 'private-old-owner' },
@@ -320,9 +322,9 @@ for (const copy of COPIES) {
       outcomes.push([r.status, r.stdout, r.stderr, JSON.parse(readFileSync(outFile(copy, suffix), 'utf8')).filter(arg => arg.startsWith('X-Delivery-Mode:')),
         JSON.parse(readFileSync(outFile(copy, suffix) + '.payload', 'utf8')),
         history.includes('[' + winner.link + '](' + winner.link + ')'), history.includes('`' + winner.ownerToken + '`'), history.includes('`' + identity + '`')]);
-      expected.push([0, 'OK ' + winner.link + '\n', '', header, { content: 'Fixture markdown' }, true, true, true]);
+      expected.push([0, 'OK ' + winner.link + '\n' + tails[index], '', header, { content: 'Fixture markdown' }, true, true, true]);
     }
-    assert.deepEqual(outcomes, expected, 'exact winner URL, header only when asked, metadata never in the payload, identity in history');
+    assert.deepEqual(outcomes, expected, 'exact winner URL, management link when returned, header only when asked, metadata never in the payload, identity in history');
     const invalid = run(copy, textPublish(copy, { delivery_mode: 'invalid', content: 'x' }), 'winner-invalid');
     const rejected = run(copy, textPublish(copy, { content: 'x' }), 'winner-rejected', { CURL_RESPONSE: JSON.stringify({ ownerToken: 'error-private-owner' }) });
     assert.deepEqual([invalid.status, invalid.stdout, existsSync(outFile(copy, 'winner-invalid')), rejected.status, rejected.stdout, rejected.stderr,

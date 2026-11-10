@@ -266,18 +266,18 @@ test('expanded ZIP limits are checked before integrity decompression', () => {
   assert.deepEqual([result.status, result.stdout.trim(), existsSync(marker)], [1, 'FAILED: archive exceeds local inspection limits\nRESULT: fail', false], 'archive expansion cannot reach the integrity checker');
 });
 
-test('history failure never reports a successful publish or prints the token', () => {
-  // GIVEN a successful response and a failed secure write WHEN finishing THEN no OK or token escapes.
-  const result = spawnSync('bash', ['-c', '. "$LIB"; bp_history_append() { return 1; }; bp_finish \'{"link":"https://example.invalid/fixture","ownerToken":"fixture-secret"}\' 15 html'], { encoding: 'utf8', env: { ...process.env, LIB: join(scripts, 'brewpage-lib.sh') } });
-  assert.deepEqual([result.status, result.stdout.trim()], [1, 'FAILED: published but owner token could not be saved securely'], 'token-save errors propagate without token disclosure');
+test('history failure never reports OK and hands the link, management link and token to the user', () => {
+  // GIVEN a successful response and a failed secure write WHEN finishing THEN no OK; the unsaved values are printed once.
+  const result = spawnSync('bash', ['-c', '. "$LIB"; bp_history_append() { return 1; }; bp_finish \'{"link":"https://example.invalid/fixture","ownerToken":"fixture-secret","manageUrl":"https://example.invalid/manage#k=fixture-key"}\' 15 html'], { encoding: 'utf8', env: { ...process.env, LIB: join(scripts, 'brewpage-lib.sh') } });
+  assert.deepEqual([result.status, result.stdout], [1, 'FAILED: published but owner token could not be saved securely\nURL: https://example.invalid/fixture\nMANAGE: https://example.invalid/manage#k=fixture-key\nOWNER TOKEN: fixture-secret\n'], 'a live page is never left without its link, management link and token');
 });
 
 test('privacy and recovery instructions fail closed in every distribution', () => {
-  // GIVEN all distributed instructions WHEN read THEN silence stops and recovery keeps tokens private.
+  // GIVEN all distributed instructions WHEN read THEN silence stops, the user gets both links, nothing goes public.
   const repo = join(root, '../../../..');
   for (const relative of ['brewdoc/skills/publish', 'skills/brewpage-publish', 'openclaw/brewpage-publish']) {
     const text = readFileSync(join(repo, relative, 'SKILL.md'), 'utf8');
-    assert.deepEqual([text.includes('Never infer publication consent from silence.'), text.includes('owner token stays in private history, never chat.'), text.includes('report the new URL and owner token'), /no answer →|defaults; nothing blocks/.test(text)], [true, true, false, false], `${relative}: privacy choice and recovery rules agree`);
+    assert.deepEqual([text.includes('Never infer publication consent from silence.'), text.includes('Give the user the page link and the management link'), text.includes('Never post the management link or the token publicly (public page, repo, shared channel).'), /never chat|NEVER print the ownerToken|NEVER appear/i.test(text), /no answer →|defaults; nothing blocks/.test(text)], [true, true, true, false, false], `${relative}: privacy choice and management-link rules agree`);
   }
 });
 

@@ -271,8 +271,10 @@ try {
   const variants = [
     { name: 'brewdoc', path: join(here, '../SKILL.md'), history: '.claude/brewpage-history.md' },
   ];
+  const manage = 'https://brewpage.app/manage/html/public/Fixture123#k=fixture-key';
+  const tails = ['MANAGE: ' + manage + '\n', '', ''];
   const responses = [
-    { link: 'https://fixture123.brewpage.app/', ownerToken: 'private-new-owner', ownerLink: 'https://brewpage.app/api/html/public/Fixture123',
+    { link: 'https://fixture123.brewpage.app/', ownerToken: 'private-new-owner', manageUrl: manage, ownerLink: 'https://brewpage.app/api/html/public/Fixture123',
       id: 'Fixture123', namespace: 'public', routingCohort: 'new-v1', deliveryMode: 'subdomain', modeLocked: false, hostingVersion: 1,
       createdAt: '2026-10-01T12:00:00Z', expiresAt: '2026-10-16T12:00:00Z' },
     { link: 'https://brewpage.app/public/Legacy1234', ownerToken: 'private-old-owner' },
@@ -296,7 +298,7 @@ try {
       const suffix = variant.name + '-' + label + '-' + index;
       const outcome = run(textCode(mode), suffix, { CURL_RESPONSE: JSON.stringify(response) });
       assert.equal(outcome.status, 0, 'THEN shipped HTML caller succeeds: ' + suffix + ' ' + outcome.stderr);
-      assert.equal(outcome.stdout, 'OK ' + response.link + '\n', 'THEN returned winner URL retains exact root slash or OLD form');
+      assert.equal(outcome.stdout, 'OK ' + response.link + '\n' + tails[index], 'THEN returned winner URL retains exact root slash or OLD form, with its management link');
       assert.equal(outcome.stderr, '', 'THEN caller emits no response secrets');
       const args = JSON.parse(readFileSync(join(base, 'args-' + suffix), 'utf8'));
       assert.deepEqual(args.filter(value => value.startsWith('X-Delivery-Mode:')),

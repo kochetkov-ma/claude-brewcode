@@ -1,6 +1,6 @@
 # Publish (BrewPage)
 
-Publishes text, markdown, JSON, a file, a folder or a ZIP site to [brewpage.app](https://brewpage.app) and returns a shareable URL. No sign-up; content expires after its TTL (default 15 days). Private means unlisted, not locked: anyone with the link can open it unless a password is set. Owner tokens go to a local history file, never into the chat.
+Publishes text, markdown, JSON, a file, a folder or a ZIP site to [brewpage.app](https://brewpage.app) and returns a shareable URL. No sign-up; content expires after its TTL (default 15 days). Private means unlisted, not locked: anyone with the link can open it unless a password is set. You get the page link and a private management link; the owner token goes to a local history file.
 
 BrewPage needs no account; anonymous publications last up to 30 days, or up to 90 days with a profile. Updates keep the original expiry. To compare it with GitHub Pages, Netlify Drop, Tiiny Host and others, see [brewpage.app/compare](https://brewpage.app/compare).
 
@@ -27,7 +27,7 @@ Flags: `--ttl N` (days), `--entry <filename>` (sites), `--delivery-mode path|sub
 
 In `public`, pages, sites and files are listed in the public gallery and the sitemap, so Google, Bing and AI search can find and index them and people can discover them. Use it for anything meant to be found or shared. Anyone can find and read a public publication, so never put secrets, tokens or personal data there. A private slug is unlisted and not indexed; anyone with the link can still open it unless a password is set.
 
-It returns `Published: <exact server URL>`; share that link exactly. Owner tokens stay in `.claude/brewpage-history.md` (mode `600`, git-ignored), never in chat; unsafe history writes stop publication. To delete a page locally, use `curl -A "ClaudeCode/6.12.10 (+https://brewpage.app)" -X DELETE "{ownerLink}" -H "X-Owner-Token: {ownerToken}"` with both values from that history.
+It returns `Published: <exact server URL>`; share that link exactly. It also returns the management link: it is private, anyone who has it can edit or delete the page. Owner tokens stay in `.claude/brewpage-history.md` (mode `600`, git-ignored); Claude shows one when you ask and never posts it or the management link publicly. Unsafe history writes stop publication. To delete a page locally, use `curl -A "ClaudeCode/6.12.10 (+https://brewpage.app)" -X DELETE "{ownerLink}" -H "X-Owner-Token: {ownerToken}"` with both values from that history.
 
 Site entry is the root `index.html`, else the shallowest page (`--entry` overrides); the root `.well-known/` ships; the skill knows the upload limits ([details](https://doc-claude.brewcode.app/brewdoc/skills/publish/)).
 

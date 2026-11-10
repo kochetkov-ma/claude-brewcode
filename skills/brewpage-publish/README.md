@@ -29,7 +29,7 @@ BrewPage needs no account and keeps pages for 1 to 30 days. To compare it with G
    Deploy this directory as a site
    ```
 
-Claude detects the content type and requires explicit namespace and password choices before calling the brewpage.app API. Explicit **Skip** selects the suggested private namespace or no password; an unanswered or ambiguous choice stops the upload, including headless runs without prior explicit choices. After publishing, Claude returns a shareable URL. The owner token is saved to `.claude/brewpage-history.md` at the project root for later deletion.
+Claude detects the content type and requires explicit namespace and password choices before calling the brewpage.app API. Explicit **Skip** selects the suggested private namespace or no password; an unanswered or ambiguous choice stops the upload, including headless runs without prior explicit choices. After publishing, Claude returns a shareable URL and a private management link (anyone who has it can edit or delete the page). The owner token is saved to `.claude/brewpage-history.md` at the project root for later updates and deletion.
 
 The skill is model-invocable: Claude can run it on its own when you ask to publish or share a link. Every step is one `brewpage-run.sh` command covered by a single scoped Bash rule, so Bash never prompts. Claude Code asks once for the `Skill` call in default permission mode.
 
@@ -45,7 +45,7 @@ Use a POSIX runtime (macOS, Linux or WSL) with `bash`, `curl`, `jq` and Python 3
 2. **Asks namespace** — `public` or a short, human-readable private slug (default). In `public`, pages, sites and files are listed in the public gallery and the sitemap, so Google, Bing and AI search can find and index them and people can discover them. Use it for anything meant to be found or shared. Anyone can find and read a public publication, so never put secrets, tokens or personal data there. A private slug (default) is unlisted and not indexed; anyone with the link can still open it.
 3. **Asks password** — optional protection (hides the page from the gallery): an existing local file, given by absolute path, holds the password (min 4 characters); nothing is typed or generated
 4. **Calls API** — sends content to brewpage.app
-5. **Returns URL** — shareable link
+5. **Returns URL** — shareable link, plus the private management link
 6. **Saves token** — the script writes the owner token to `.claude/brewpage-history.md` at the project root (mode 600, git-ignored)
 
 ## API Coverage
@@ -75,7 +75,7 @@ For a flagged archive, review the manifest and its `REVIEW_SHA256` digest, then 
 
 Entry file (server rule): `--entry` override > root `index.html` > shallowest `.html` (ties: name order). To start on another page, pass `--entry`.
 
-Site limits: 200 files, 5 MB per file, 20 MB total, 25 MB per request. To see the current values, ask the skill to check the limits or run `curl -s -A "ClaudeCode/6.12.10 (+https://brewpage.app)" https://brewpage.app/api/limits`; the skill runs its own `limits` command before a big site. A successful upload prints `OK <url>`, followed by any server `NOTICE:` lines. A rejected upload prints `FAILED: publish rejected (HTTP <status>: <message>)` with the server's reason and no notices.
+Site limits: 200 files, 5 MB per file, 20 MB total, 25 MB per request. To see the current values, ask the skill to check the limits or run `curl -s -A "ClaudeCode/6.12.10 (+https://brewpage.app)" https://brewpage.app/api/limits`; the skill runs its own `limits` command before a big site. A successful upload prints `OK <url>`, then `MANAGE: <management link>` and any server `NOTICE:` lines. A rejected upload prints `FAILED: publish rejected (HTTP <status>: <message>)` with the server's reason and no notices.
 
 Local ZIP inspection has separate size and metadata budgets, rejects ZIP64 and split archives, and limits each `unzip` check to 10 seconds; see [the skill's archive inspection notes](SKILL.md#notes).
 
@@ -105,7 +105,7 @@ Default requested time-to-live is **15 days** (normally 1..30, subject to owner 
 
 ## Owner Token & Privacy
 
-The owner token is **never printed in conversation** — `brewpage-run.sh` parses the response and writes it directly to `.claude/brewpage-history.md` at the project root (`CLAUDE_PROJECT_DIR`, else the git toplevel). The script creates the file with mode 600 and adds it to the project `.gitignore`. It also records the exact public URL, apex `ownerLink`, and identity fields such as `id`, `namespace`, `type`, `routingCohort`, `deliveryMode` and `hostingVersion` for later owner operations.
+After publishing, Claude gives you the page link and the management link. The management link is private: anyone who has it can edit or delete the page. `brewpage-run.sh` parses the response and writes the owner token directly to `.claude/brewpage-history.md` at the project root (`CLAUDE_PROJECT_DIR`, else the git toplevel); Claude shows the token when you ask, and the script prints it only if that save fails. Neither the management link nor the token is ever posted publicly (public page, repo, shared channel). The script creates the file with mode 600 and adds it to the project `.gitignore`. It also records the exact public URL, apex `ownerLink`, and identity fields such as `id`, `namespace`, `type`, `routingCohort`, `deliveryMode` and `hostingVersion` for later owner operations.
 
 Optional: sign in free (Google or any email) at [account.brewpage.app](https://account.brewpage.app) to manage publications and tokens, with retention up to 90 days. Publications still expire; a token without an expiry does not extend content retention. Local owner-token history stays in your project. Sign-in is not needed to publish.
 
