@@ -117,6 +117,10 @@ To replace a site, `PUT` the new archive to its stored owner API with `X-Owner-T
 
 Owner-only `GET` and `PATCH /api/{type}/{ns}/{id}/hosting` support `html`, `files`, `json`, `kv` and `sites`. Read the current hosting metadata first, then send `deliveryMode` and that `hostingVersion` as `expectedVersion` with `X-Owner-Token`. Use the returned link and version afterward. Legacy publications without new routing metadata remain unchanged. Sites and non-public HTML-format pages stay on their subdomain; a mismatched mode is reported rather than rejected. A stale version is applied with a notice, so inspect the response. Switching an eligible publication retains its reserved host.
 
+## Page Data
+
+A published HTML page or site can save what its visitors enter (game progress, form answers, guestbook messages, votes) with no backend of your own. The page loads `https://brewpage.app/js/state.js` and calls `bp.state()`. Saving works on the page's own address (`--delivery-mode subdomain`; sites and non-public HTML pages already have one) and on a connected custom domain. Publish the page with this skill, then open the management link and turn page data on in its Data tab; the same tab shows what visitors saved and downloads it as CSV. A page stores up to 1 MB, or 10 MB when it is in your free profile. See the [Page data reference](https://brewpage.app/api#page-data).
+
 ## Password-Protected Links
 
 New protected links stay clean: never append `?p=`. Share the exact returned URL; browsers enter the password at the trusted top-level `unlock.brewpage.app` gateway. Programmatic reads use the apex API with `X-Password`. Old password behavior remains unchanged.
@@ -129,6 +133,7 @@ Use a POSIX runtime: macOS, Linux or WSL. All uploads require `bash`, `curl`, `j
 
 - [Skill workflow and shell blocks](SKILL.md)
 - [BrewPage hosting API](https://brewpage.app/api#hosting)
+- [BrewPage Page data](https://brewpage.app/api#page-data)
 
 ## License
 

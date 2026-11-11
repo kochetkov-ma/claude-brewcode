@@ -144,6 +144,8 @@ Owner-only `GET` and `PATCH /api/{type}/{ns}/{id}/hosting` support `html`, `file
 | Success with mode-mismatch notice | A forced-mode publication keeps its subdomain, or a legacy publication keeps its existing link |
 | `503` | Hosting changes unavailable; creation can fail with `HOST_ALLOCATION_FAILED` |
 
+**Page data.** A published HTML page or site can save what its visitors enter (game progress, form answers, guestbook messages, votes) with no backend of your own: the page loads `https://brewpage.app/js/state.js` and calls `bp.state()`. Saving works on the page's own address (`--delivery-mode subdomain`; sites and non-public HTML pages already have one) and on a connected custom domain. Publish the page with the skill, then open the management link and turn page data on in its Data tab, or send owner-only `PATCH /api/{ns}/{id}/state` with body `{}` and `X-Owner-Token`. The Data tab shows what visitors saved and downloads it as CSV. A page stores up to 1 MB, or 10 MB when it is in your free profile. See the [Page data reference](https://brewpage.app/api#page-data).
+
 Passwords and revocation cannot recall downloaded or cached copies.
 
 </Spoiler>
@@ -167,7 +169,7 @@ Tests: `bash brewdoc/skills/publish/tests/run.sh` (no network, no real upload; t
     Convert markdown to PDF, then publish the file.
   </Card>
   <Card title="brewpage-mcp" icon="package" href="https://www.npmjs.com/package/brewpage-mcp">
-    Official MCP server for the BrewPage API: `claude mcp add brewpage -- npx -y brewpage-mcp@1.18.1`
+    Official MCP server for the BrewPage API: `claude mcp add brewpage -- npx -y brewpage-mcp@1.19.0`
   </Card>
   <Card title="OpenAPI spec" icon="globe" href="https://kochetkov-ma.github.io/brewpage-openapi/">
     Full API contract (Scalar UI); REST base URL `https://brewpage.app/api`.

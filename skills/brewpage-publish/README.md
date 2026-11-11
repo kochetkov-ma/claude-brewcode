@@ -121,6 +121,10 @@ curl -A "ClaudeCode/6.12.11 (+https://brewpage.app)" -X DELETE "https://brewpage
 
 New publications without a required subdomain support owner-only `PATCH /api/{type}/{ns}/{id}/hosting` with `deliveryMode` and the current `expectedVersion`. Read the version first; use the returned link and version afterward. Switching modes retains the same reserved host. Legacy publications, sites and non-public HTML pages (format `html`) keep their required or historical delivery; incompatible PATCH requests return unchanged with a notice. Ordinary content updates omit `X-Delivery-Mode`. See the [hosting API reference](https://brewpage.app/api#hosting).
 
+## Page Data
+
+A published HTML page or site can save what its visitors enter (game progress, form answers, guestbook messages, votes) with no backend of your own. The page loads `https://brewpage.app/js/state.js` and calls `bp.state()`. Saving works on the page's own address (`--delivery-mode subdomain`; sites and non-public HTML pages already have one) and on a connected custom domain. Publish the page with this skill, then open the management link and turn page data on in its Data tab; the same tab shows what visitors saved and downloads it as CSV. A page stores up to 1 MB, or 10 MB when it is in your free profile. See the [Page data reference](https://brewpage.app/api#page-data).
+
 ## Part of Brewcode
 
 This skill is part of [brewcode](https://github.com/kochetkov-ma/claude-brewcode) — a Claude Code plugin suite for skill and agent authoring, semantic code search, project-tailored review, and documentation tools.
