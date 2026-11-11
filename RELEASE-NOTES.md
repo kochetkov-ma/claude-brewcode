@@ -2,6 +2,23 @@
 
 ---
 
+## v6.12.12 (2026-11-11)
+
+> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+**What changed for you**
+
+- Published pages can now save what their visitors enter (game progress, form answers, guestbook messages, votes) with no backend of your own. The publish skill explains how: give the page its own address, then turn page data on in the management link's Data tab, where you also read and download what visitors saved.
+
+### brewdoc, skills/brewpage-publish
+
+#### Docs
+
+- **Page data:** a note in `SKILL.md`, the READMEs and the docs page: `state.js` and `bp.state()`, turning page data on (Data tab or owner `PATCH /api/{ns}/{id}/state`), where saving works, storage per page. Same note in the standalone `skills/brewpage-publish` and `openclaw/brewpage-publish` copies.
+- **Docs page:** the MCP install line pins `brewpage-mcp@1.19.0`.
+
+---
+
 ## v6.12.11 (2026-11-10)
 
 > Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)

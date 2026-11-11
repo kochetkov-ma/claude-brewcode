@@ -1,9 +1,9 @@
 ---
 doc_type: llm
-version: "6.12.11"
+version: "6.12.12"
 content_version: "6.11.0"
 generated_by: "brewcode"
-last_updated: "2026-11-10"
+last_updated: "2026-11-11"
 ---
 
 # Artifact metadata and versioning
