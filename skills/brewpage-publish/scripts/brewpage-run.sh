@@ -32,10 +32,11 @@ brewpage-run.sh probe <path>
 brewpage-run.sh limits
 brewpage-run.sh stage --run <run_id|''> --text <chunk>
 brewpage-run.sh publish <html|html-file|json|file|site-dir|site-zip> --ns <ns> [--ttl N] [--entry F]
-  [--delivery-mode path|subdomain] --password-file <ABS|''> [--confirmed --review-sha256 SHA256] (--text T | --run ID | --path P)
+  [--delivery-mode path|subdomain] --password-file <ABS|''> [--state JSON] [--confirmed --review-sha256 SHA256] (--text T | --run ID | --path P)
 brewpage-run.sh cleanup --run <run_id>
 --ns and --password-file are required; --password-file '' explicitly selects no password.
-Empty --ttl uses 15; empty --entry/--delivery-mode are omitted. Prints OK/CONFIRM:/FAILED:; CONFIRM exits 2.
+--state: Page data config, a JSON object ({} = defaults); HTML pages and sites only.
+Empty --ttl uses 15; empty --entry/--delivery-mode/--state are omitted. Prints OK/CONFIRM:/FAILED:; CONFIRM exits 2.
 USAGE
 }
 
@@ -115,7 +116,7 @@ cmd_cleanup() {
 }
 
 cmd_publish() {
-  local type="${1:-}" ns="" days=15 entry="" mode="" pwfile="" text="" run="" path="" have_text=0 sources=0 have_password=0
+  local type="${1:-}" ns="" days=15 entry="" mode="" pwfile="" state="" text="" run="" path="" have_text=0 sources=0 have_password=0
   if [ "$#" -gt 0 ]; then shift; fi
   BREWPAGE_CONFIRMED=0
   BREWPAGE_REVIEW_SHA256=""
@@ -126,6 +127,7 @@ cmd_publish() {
       --entry) need "$#" "$1"; entry="$2"; shift 2 ;;
       --delivery-mode) need "$#" "$1"; mode="$2"; shift 2 ;;
       --password-file) need "$#" "$1"; pwfile="$2"; have_password=1; shift 2 ;;
+      --state) need "$#" "$1"; state="$2"; shift 2 ;;
       --text) need "$#" "$1"; text="$2"; have_text=1; sources=$((sources + 1)); shift 2 ;;
       --run) need "$#" "$1"; run="$2"; sources=$((sources + 1)); shift 2 ;;
       --path) need "$#" "$1"; path="$2"; sources=$((sources + 1)); shift 2 ;;
@@ -164,6 +166,12 @@ cmd_publish() {
   bp_validate "$ns" "$days" "$entry" || exit 1
   case "$mode" in '' | path | subdomain) : ;; *) die "delivery mode must be path or subdomain" ;; esac
   if [ -n "$pwfile" ]; then bp_password_check "$pwfile" || exit 1; fi
+  # Page data config travels as one compact JSON object; JSON and plain files take none.
+  if [ -n "$state" ]; then
+    case "$type" in html | html-file | site-dir | site-zip) : ;; *) die "--state applies to UTF-8 HTML pages and sites only" ;; esac
+    state=$(printf '%s' "$state" | jq -cse 'if length == 1 and (.[0] | type) == "object" then .[0] else false end' 2>/dev/null) ||
+      die "--state must be one JSON object, e.g. {}"
+  fi
 
   local id pwmode=none
   if [ -n "$run" ]; then
@@ -194,7 +202,8 @@ cmd_publish() {
     html | html-file)
       local format=markdown
       if [ "$type" = html-file ] || { [ -z "$path" ] && bp_is_html_document "$content"; }; then format=html; fi
-      jq -n --rawfile c "$content" '{content: $c}' > "$BP_RUN_DIR/payload.json"
+      jq -n --rawfile c "$content" --arg s "$state" '{content: $c} + (if $s == "" then {} else {state: ($s | fromjson)} end)' \
+        > "$BP_RUN_DIR/payload.json"
       response=$(bp_post "https://brewpage.app/api/html?ns=$NS&ttl=$DAYS&format=$format" \
         -H "Content-Type: application/json" -d @"$BP_RUN_DIR/payload.json") || die "upload request failed"
       bp_finish "$response" "$DAYS" html
@@ -224,7 +233,7 @@ cmd_publish() {
         bp_archive_gate "$rc" "$manifest" "$archive" || exit $?
       fi
       response=$(bp_post "https://brewpage.app/api/sites?ns=$NS&ttl=$DAYS&entry=$(jq -nr --arg e "$ENTRY" '$e | @uri')" \
-        -F "$(form_file archive "$archive")") || die "upload request failed"
+        -F "$(form_file archive "$archive")" ${state:+--form-string "state=$state"}) || die "upload request failed"
       bp_finish "$response" "$DAYS" site
       ;;
   esac

@@ -1,9 +1,9 @@
 ---
 name: brewpage-publish
-description: "Publish content to brewpage.app — text, markdown, JSON, file, or multi-file site. Asks namespace and password, returns public URL. Triggers: publish, share link, upload to brewpage, host page, brewpage, publish site, upload site, upload directory, deploy site, сделай публичную ссылку, опубликуй."
+description: "Publish content to brewpage.app — text, markdown, JSON, file, or multi-file site; pages can save visitor answers. Asks namespace and password, returns public URL. Triggers: publish, share link, upload to brewpage, host page, brewpage, publish site, upload site, upload directory, deploy site, form, poll, RSVP, save visitor answers, сделай публичную ссылку, опубликуй."
 user-invocable: true
 disable-model-invocation: false
-argument-hint: "<text|file_path|directory_path|zip_path> [--ttl N] [--entry filename] [--delivery-mode path|subdomain]"
+argument-hint: "<text|file_path|directory_path|zip_path> [--ttl N] [--entry filename] [--delivery-mode path|subdomain] [--state JSON]"
 allowed-tools: [Read, 'Bash(bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh *)', AskUserQuestion, Glob]
 model: haiku
 license: MIT
@@ -36,6 +36,7 @@ Extract from `$ARGUMENTS`:
 - `--ttl N` → TTL in days (default: `15`)
 - `--entry <filename>` → entry file for SITE uploads (default: auto-detect)
 - `--delivery-mode path|subdomain` → optional creation header; omitted means server defaults. Reject other values before upload.
+- `--state JSON` → Page data config (Step 6, Page data).
 - Remaining text → `content_arg`: a path, or the exact text to publish. Fired by Claude mid-task, the
   arguments are the path or the verbatim text, never a summary of it. Nothing to publish → ask once what to publish.
 
@@ -191,6 +192,17 @@ Staged but not published (cancelled) — **EXECUTE** using Bash tool:
 bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh cleanup --run '{run_id}'
 ```
 
+**Page data** (form, poll, RSVP, guestbook, scores: a page that saves what visitors enter). The HTML loads
+`<script src="https://brewpage.app/js/state.js"></script>` by this absolute URL (classic script, no async or
+module, before the page code) and calls `bp.state()`; build it from https://brewpage.app/llms-page-data.txt or a working template
+(`GET https://brewpage.app/api/templates`, each with its `state` and `sourceUrl`). Publish in one step: append
+` --state '{state}'` to the HTML file, HTML text, staged or SITE publish command above, filled like any slot.
+`{state}` is one JSON object: `{}` turns page data on with defaults (each visitor sees only their own entries);
+a named list changes its rule, e.g. `{"collections":{"guestbook":{"mode":"shared"}}}`. A page that loads
+`state.js` but is published without `--state` saves nothing. The page gets its own address (saving never
+works on a `brewpage.app/...` address; Markdown never runs scripts); `NOTICE: state-…` lines name what was
+not applied. The author reads every entry in the Data tab of the management link.
+
 ### Step 7: Output Result
 
 **Success** (the script printed `OK {url}`, then `MANAGE: {manage_url}`):
@@ -213,6 +225,7 @@ Share the server URL exactly as printed, including any trailing slash.
 ```
 
 Give the user the page link and the management link, and say once that the management link is private: anyone who has it can edit or delete the page. No `MANAGE:` line → omit that line. The owner token stays in the history file for later updates; show it (Read the history file) when the user asks. Never post the management link or the token publicly (public page, repo, shared channel).
+Published with `--state`: add that what visitors save appears in the Data tab of the management link.
 
 Mention the sign-in line only as optional; never ask the user to sign in.
 If a NOTICE says no owner capability was saved, this publication has no management link or token to give: omit both lines and report the URL plus that notice; existing history stays unchanged.
@@ -257,7 +270,7 @@ a value that still cannot be stored is a 400, not a 409.
 - Use returned `ownerLink` and stored identity metadata for owner API operations; never parse NEW root hosts for namespace/ID. OLD history without metadata retains its existing API identifiers.
 - To **update a published site**, `PUT` the replacement bundle to its apex owner API with `X-Owner-Token` and `-A "ClaudeCode/6.12.12 (+https://brewpage.app)"` (every brewpage.app request sends this User-Agent); it replaces the file set and keeps the host. Omit `X-Delivery-Mode` on ordinary PUT/update. Old publications (made before 5 October 2026) are read-only: 409 OLD_PUBLICATION_READ_ONLY; publish anew and give the user the new link and management link; the new owner token is saved to history.
 - Owner-only `GET`/`PATCH /api/{type}/{ns}/{id}/hosting` supports `html|files|json|kv|sites` with `X-Owner-Token`. Read current `hostingVersion`, then PATCH `deliveryMode: path|subdomain` with that `expectedVersion`. NEW publications without a required subdomain may switch, including non-public non-HTML content; OLD returns 200 unchanged with a notice. Sites and non-public HTML (format `html`) retain their forced subdomain policy; mismatches return a notice. A missing version applies against the stored version; a stale version also applies, with a notice, rather than 409. Use the returned link/version afterward.
-- **Page data**: a published HTML page or site can save what its visitors enter (game progress, form answers, guestbook messages, votes) with no backend: the page loads `https://brewpage.app/js/state.js` (absolute URL, plain script tag) and calls `bp.state()`, and the publication declares `state`. This skill publishes without `state`: give the page its own address (`--delivery-mode subdomain`; sites and non-public HTML pages already have one), then turn page data on in the management link's Data tab ("Turn on page data") or with owner-only `PATCH /api/{ns}/{id}/state`, body `{}`, and `X-Owner-Token`. Saving works on the page's own address and on a connected custom domain, not on a `brewpage.app/...` address; Markdown pages never run scripts. The author reads every entry in that Data tab, also as CSV. Storage per page: 1 MB, 10 MB for a page in a profile. Guide: https://brewpage.app/llms-full.txt#page-data
+- **Page data on an already published page**: the management link's Data tab ("Turn on page data") or owner-only `PATCH /api/{ns}/{id}/state` with body `{}` and `X-Owner-Token`; a page on a `brewpage.app/...` address first moves to its own address (owner-only `PATCH .../hosting` above, `subdomain`). Saving also works on a connected custom domain. The Data tab downloads entries as CSV. Storage per page: 1 MiB, 10 MiB for a page in a profile. Guide: https://brewpage.app/llms-full.txt#page-data
 - NEW password-protected links stay clean: never generate or append `?p=`. API requests use `X-Password`; OLD password behavior remains unchanged.
 - **SITE bundles are allowlisted**: the directory build drops dot-entries (`.env`, `.git/`, `.DS_Store`; the root `.well-known/` stays, extension-less files included), `node_modules/`, `__MACOSX/`, symlinks and unknown types (`*.map`, `*.log`, `Thumbs.db`), flags kept names that look sensitive (`secret`, `token`, `password`, `credential`) for confirmation, and verifies the archive (bounded central-directory budgets, `unzip -t` with a 10-second timeout, name set) before upload. A supplied ZIP is never rewritten; anything unexpected, hidden or sensitive inside it needs confirmation (system files the server drops are left alone).
 - Preserve `.link` exactly: NEW subdomain roots retain `/`; OLD links retain their existing form. Never reconstruct a host from IDs.

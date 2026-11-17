@@ -19,17 +19,17 @@ const COPIES = [
 const FRONTMATTER = {
   skills: [
     'name: brewpage-publish',
-    'description: "Publish content to brewpage.app — text, markdown, JSON, file, or multi-file site. Asks namespace and password, returns public URL. Triggers: publish, share link, upload to brewpage, host page, brewpage, publish site, upload site, upload directory, deploy site, сделай публичную ссылку, опубликуй."',
+    'description: "Publish content to brewpage.app — text, markdown, JSON, file, or multi-file site; pages can save visitor answers. Asks namespace and password, returns public URL. Triggers: publish, share link, upload to brewpage, host page, brewpage, publish site, upload site, upload directory, deploy site, form, poll, RSVP, save visitor answers, сделай публичную ссылку, опубликуй."',
     'user-invocable: true',
     'disable-model-invocation: false',
-    'argument-hint: "<text|file_path|directory_path|zip_path> [--ttl N] [--entry filename] [--delivery-mode path|subdomain]"',
+    'argument-hint: "<text|file_path|directory_path|zip_path> [--ttl N] [--entry filename] [--delivery-mode path|subdomain] [--state JSON]"',
     "allowed-tools: [Read, 'Bash(bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh *)', AskUserQuestion, Glob]",
     'model: haiku',
     'license: MIT',
   ],
   openclaw: [
     'name: brewpage-publish',
-    'description: "Publish HTML, markdown, text, any file, or a multi-file site to brewpage.app — free hosting with no sign-up. Paste text, share a file, upload a site, or host a temporary page and get an instant public URL to share a link. Asks namespace and password, returns the public URL. Triggers: publish, publish HTML, share link, share a link, share a file, upload to brewpage, host page, host a temporary page, host a website, free hosting, paste text, instant public URL, no sign-up, brewpage, publish site, upload site, upload directory, deploy site, сделай публичную ссылку, опубликуй."',
+    'description: "Publish HTML, markdown, text, any file, or a multi-file site to brewpage.app — free hosting with no sign-up. Paste text, share a file, upload a site, or host a temporary page and get an instant public URL to share a link; pages can save visitor answers. Asks namespace and password, returns the public URL. Triggers: publish, publish HTML, share link, share a link, share a file, upload to brewpage, host page, host a temporary page, host a website, free hosting, paste text, instant public URL, no sign-up, brewpage, publish site, upload site, upload directory, deploy site, form, poll, RSVP, save visitor answers, сделай публичную ссылку, опубликуй."',
     'homepage: https://brewpage.app',
     'user-invocable: true',
     'license: MIT',
@@ -435,6 +435,41 @@ for (const copy of [...COPIES, BREWDOC]) {
         ...(passwordFile ? ['-H', '@' + tmp + '/brewpage.RUN/password-header.txt'] : []), '-F', 'file=@"' + join(dir, name) + '"'],
       headers: passwordFile ? 'X-Password: ' + password + '\n' : '', payload: '', source: true, runs: [] })),
     'every row uploads the original file by multipart, password only in its header file');
+  });
+
+  test(`${copy.name}: --state rides in the page body or the site form, anything else is refused before upload`, () => {
+    // GIVEN a shipped publish fence with ` --state '{state}'` appended WHEN it runs THEN the compact config reaches the request.
+    const dir = join(base, copy.name + '-state');
+    mkdirSync(join(dir, 'site'), { recursive: true });
+    writeFileSync(join(dir, 'form.html'), HTML_PAGE);
+    writeFileSync(join(dir, 'site/index.html'), HTML_PAGE);
+    writeFileSync(join(dir, 'notes.txt'), 'x');
+    const doc = '<!doctype html><p>x</p>';
+    const rsvp = { collections: { rsvps: { choices: { coming: ['yes', "it's"] } } } };
+    const withState = ({ code, env }, state) => ({ code: code + " --state '" + state.replaceAll("'", "'\\''") + "'", env });
+    const byPath = (type, path) => fill(copy, "--path '{path}'", { type, ns: 'my', days: '7', entry: '', delivery_mode: '', password_file: '', path: join(dir, path) });
+    const pages = [
+      ['text', textPublish(copy, { content: doc }), '{}', { content: doc, state: {} }],
+      ['spaced', textPublish(copy, { content: doc }), ' {"collections": {"g": {"mode": "shared"}}} ', { content: doc, state: { collections: { g: { mode: 'shared' } } } }],
+      ['file', byPath('html-file', 'form.html'), JSON.stringify(rsvp), { content: HTML_PAGE, state: rsvp }],
+    ];
+    const payloadOf = suffix => JSON.parse(readFileSync(outFile(copy, 'state-' + suffix) + '.payload', 'utf8'));
+    assert.deepEqual(pages.map(([suffix, fence, state]) => [run(copy, withState(fence, state), 'state-' + suffix).status, payloadOf(suffix), runNames()]),
+      pages.map(([, , , payload]) => [0, payload, []]), 'every page body carries {content, state}, state compacted to one object');
+
+    const site = run(copy, withState(byPath('site-dir', 'site'), '{ }'), 'state-site');
+    const siteArgs = JSON.parse(readFileSync(outFile(copy, 'state-site'), 'utf8'));
+    assert.deepEqual([site.status, siteArgs.slice(-2), runNames()], [0, ['--form-string', 'state={}'], []], 'a site sends state as one literal form field');
+
+    const refused = [
+      ['array', textPublish(copy, { content: doc }), '[]', 'FAILED: --state must be one JSON object, e.g. {}\n'],
+      ['two', textPublish(copy, { content: doc }), '{} {}', 'FAILED: --state must be one JSON object, e.g. {}\n'],
+      ['plain', byPath('file', 'notes.txt'), '{}', 'FAILED: --state applies to UTF-8 HTML pages and sites only\n'],
+    ];
+    assert.deepEqual(refused.map(([suffix, fence, state]) => {
+      const r = run(copy, withState(fence, state), 'state-' + suffix);
+      return [r.status, r.stdout, existsSync(outFile(copy, 'state-' + suffix)), runNames()];
+    }), refused.map(([, , , message]) => [1, message, false, []]), 'bad state or a non-page type fails before any upload or run dir');
   });
 }
 

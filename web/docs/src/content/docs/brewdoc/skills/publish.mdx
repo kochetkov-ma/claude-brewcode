@@ -19,8 +19,8 @@ Optional: sign in free (Google or any email) at [account.brewpage.app](https://a
 
 | Field | Value |
 |-------|-------|
-| Command | `/brewdoc:publish [prompt] <text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename] [--delivery-mode path\|subdomain]` |
-| Options | `--ttl N` days (default 15); `--entry` site entry file; `--delivery-mode` creation mode |
+| Command | `/brewdoc:publish [prompt] <text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename] [--delivery-mode path\|subdomain] [--state JSON]` |
+| Options | `--ttl N` days (default 15); `--entry` site entry file; `--delivery-mode` creation mode; `--state` Page data config |
 | Model | haiku |
 | Invocation | Type the command, or ask Claude ("publish this", "share a link"). Claude may start it itself; headless and `dontAsk` runs need `Skill(brewdoc:publish *)` allowed |
 | Permissions | No Bash or Write prompts: one scoped rule, `scripts/brewpage-run.sh`, covers every step |
@@ -92,7 +92,7 @@ SITE is checked first. Site entry follows the server rule: `--entry`, else the r
 
 <Spoiler id="flow" title="Flow in detail">
 
-**Arguments.** `--ttl N` (default 15), `--entry <filename>`, optional `--delivery-mode path|subdomain` (other values are rejected before upload). A prompt with no path and no inline text asks once what to publish.
+**Arguments.** `--ttl N` (default 15), `--entry <filename>`, optional `--delivery-mode path|subdomain` (other values are rejected before upload), optional `--state JSON` (Page data, below). A prompt with no path and no inline text asks once what to publish.
 
 **Detect.** For a path, `brewpage-run.sh probe '<path>'` prints `TYPE:`, the absolute `PATH:` and size stats. Types are classified SITE, MARKDOWN, HTML file, FILE, JSON, HTML text in that order.
 
@@ -144,7 +144,7 @@ Owner-only `GET` and `PATCH /api/{type}/{ns}/{id}/hosting` support `html`, `file
 | Success with mode-mismatch notice | A forced-mode publication keeps its subdomain, or a legacy publication keeps its existing link |
 | `503` | Hosting changes unavailable; creation can fail with `HOST_ALLOCATION_FAILED` |
 
-**Page data.** A published HTML page or site can save what its visitors enter (game progress, form answers, guestbook messages, votes) with no backend of your own: the page loads `https://brewpage.app/js/state.js` and calls `bp.state()`. Saving works on the page's own address (`--delivery-mode subdomain`; sites and non-public HTML pages already have one) and on a connected custom domain. Publish the page with the skill, then open the management link and turn page data on in its Data tab, or send owner-only `PATCH /api/{ns}/{id}/state` with body `{}` and `X-Owner-Token`. The Data tab shows what visitors saved and downloads it as CSV. A page stores up to 1 MB, or 10 MB when it is in your free profile. See the [Page data reference](https://brewpage.app/api#page-data).
+**Page data.** A published HTML page or site can save what its visitors enter (game progress, form answers, guestbook messages, votes) with no backend of your own: the page loads `https://brewpage.app/js/state.js` and calls `bp.state()`. Publish it in one step with `--state '{}'` (or a list config such as `--state '{"collections":{"guestbook":{"mode":"shared"}}}'`): the page gets its own address, where saving works, as on a connected custom domain. The management link's Data tab shows what visitors saved and downloads it as CSV; for a page published without `--state` it turns page data on, as does owner-only `PATCH /api/{ns}/{id}/state` with body `{}` and `X-Owner-Token`. A page stores up to 1 MiB, or 10 MiB when it is in your free profile. See the [Page data reference](https://brewpage.app/api#page-data).
 
 Passwords and revocation cannot recall downloaded or cached copies.
 

@@ -119,7 +119,7 @@ Owner-only `GET` and `PATCH /api/{type}/{ns}/{id}/hosting` support `html`, `file
 
 ## Page Data
 
-A published HTML page or site can save what its visitors enter (game progress, form answers, guestbook messages, votes) with no backend of your own. The page loads `https://brewpage.app/js/state.js` and calls `bp.state()`. Saving works on the page's own address (`--delivery-mode subdomain`; sites and non-public HTML pages already have one) and on a connected custom domain. Publish the page with this skill, then open the management link and turn page data on in its Data tab; the same tab shows what visitors saved and downloads it as CSV. A page stores up to 1 MB, or 10 MB when it is in your free profile. See the [Page data reference](https://brewpage.app/api#page-data).
+A published HTML page or site can save what its visitors enter (game progress, form answers, guestbook messages, votes) with no backend of your own. The page loads `https://brewpage.app/js/state.js` and calls `bp.state()`. Publish it in one step with `--state '{}'` (or a list config such as `--state '{"collections":{"guestbook":{"mode":"shared"}}}'`): the page gets its own address, where saving works, as on a connected custom domain. The management link's Data tab shows what visitors saved and downloads it as CSV; it also turns page data on for a page published without `--state`. A page stores up to 1 MiB, or 10 MiB when it is in your free profile. See the [Page data reference](https://brewpage.app/api#page-data).
 
 ## Password-Protected Links
 
