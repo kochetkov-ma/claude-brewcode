@@ -6,10 +6,10 @@ maxTurns: 80
 color: blue
 tools: Read, Write, Edit, Bash, Agent
 doc_type: llm
-version: "6.12.12"
+version: "6.12.13"
 content_version: "6.12.2"
 generated_by: "brewcode"
-last_updated: "2026-11-11"
+last_updated: "2026-11-17"
 ---
 
 # Setup Upgrader

@@ -2,13 +2,36 @@
 
 ---
 
+## v6.12.13 (2026-11-17)
+
+> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+**What changed for you**
+
+- Ask Claude for a form, poll, RSVP or guestbook page and it publishes it ready to save what visitors enter, in one step. Before, you had to turn this on afterwards in the management link.
+- You read every answer in the Data tab of the management link, as before.
+
+### brewdoc, skills/brewpage-publish, openclaw/brewpage-publish
+
+#### Features
+
+- **`--state JSON`:** the publish script sends the Page data config with the page (`{"content", "state"}` JSON body) or the site (multipart `state` field); `{}` turns it on with defaults. A value that is not one JSON object, or a JSON/plain-file upload, is refused before anything is uploaded.
+- **Skill text:** form, poll, RSVP and "save visitor answers" triggers; a Page data step names the `https://brewpage.app/js/state.js` tag, the templates list and the Data tab. The older two-step note now covers only pages published without page data.
+
+#### Docs
+
+- **Docs page:** `--state` in the command and options, Page data in one step; the MCP install line pins `brewpage-mcp@2.0.0`.
+
+---
+
 ## v6.12.12 (2026-11-11)
 
 > Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
 
 **What changed for you**
 
-- Published pages can now save what their visitors enter (game progress, form answers, guestbook messages, votes) with no backend of your own. The publish skill explains how: give the page its own address, then turn page data on in the management link's Data tab, where you also read and download what visitors saved.
+- Published pages can now save what their visitors enter (game progress, form answers, guestbook messages, votes) with no backend of your own.
+- The publish skill explains how: give the page its own address, then turn page data on in the management link's Data tab, where you also read and download what visitors saved.
 
 ### brewdoc, skills/brewpage-publish
 
