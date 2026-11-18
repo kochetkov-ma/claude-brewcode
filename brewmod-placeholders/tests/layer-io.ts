@@ -1,4 +1,4 @@
-import type { On } from 'claude-code'
+import type { EngineInterface, Frozen, On, RenderElement, RenderInput } from 'claude-code'
 import { PLACEHOLDER_FILES, type GoldenVector } from './parity/golden.generated'
 import { loadRegistry, newRegistryCache, type Io, type IoEntry, type Roots } from '../hooks/lib/defs'
 import type { CmdIo } from '../hooks/lib/command'
@@ -207,8 +207,16 @@ export const spyWrites = (on: On): unknown[] => {
 
 // What core's own drawing resolves to beneath every hook (2.1.301 types: `{ type: 'engine', ref }`).
 export const ENGINE_NODE = { type: 'engine', ref: 0 } as const
+type BandRender = ($: EngineInterface, e: Frozen<RenderInput<'AbovePrompt'>>, next: () => Promise<RenderElement>) => RenderElement | Promise<RenderElement>
+
+// Old builds share one band chain; newer builds scope each row to its plugin.
+export const onBandRender = (on: On, draw: BandRender): void => {
+  on('ui.render', { component: 'AbovePrompt' }, ($, e, next) => e.plugin === undefined ? draw($, e, () => next(e)) : next(e))
+  on('ui.render', { component: 'AbovePrompt', plugin: 'brewmod-placeholders' }, ($, e, next) => draw($, e, () => next(e)))
+}
+
 export const BAND = { plugin: 'brewmod-placeholders', component: 'AbovePrompt' } as const
-export const bandProps = (maxRows = 24, bodyColumns = 100) => ({ hasSurvey: false, isWorking: false, maxRows, bodyColumns, scroll: { bodyRows: maxRows - 1, offset: 0, total: 0 }, view: {} })
+export const bandProps = (maxRows = 24, bodyColumns = 100) => ({ hasSurvey: false, isCollapsed: false, isWorking: false, maxRows, bodyColumns, scroll: { bodyRows: maxRows - 1, offset: 0, total: 0 }, view: {} })
 // The box the stubbed engine answers $.prompt.read with.
 export const box = { text: '', cursor: 0 }
 
@@ -225,7 +233,7 @@ export async function bootBand($: any, on: On, w: Wiring, extra: (o: On) => void
   })
   // Core echoes the box it already changed (PromptChangeResult).
   on('prompt.change', (_$, e) => ({ text: e.text }))
-  on('ui.render', () => ENGINE_NODE as never)
+  onBandRender(on, () => ENGINE_NODE as never)
   box.text = ''
   box.cursor = 0
   await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })

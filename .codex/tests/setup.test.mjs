@@ -6,8 +6,21 @@ import test from 'node:test';
 import { checkLink, SKILLS, validateSetup } from '../scripts/validate-setup.mjs';
 
 const RULES = ['avoid', 'best-practice', 'docs-workflow', 'semble-first', 'astro-avoid', 'astro-best-practice', 'web-accessibility', 'docker-avoid', 'docker-best-practice'];
-const CONFIG = 'model = "gpt-6.1-sol"\nreview_model = "gpt-6.1-sol"\n[agents]\nenabled = true\ndefault_subagent_model = "gpt-6.1-sol"\n[features]\nplugins = false\nremote_plugin = false\n';
-const ROLE = 'name = "docs-writer"\ndescription = "Internal writer"\nmodel = "gpt-6.1-sol"\ndeveloper_instructions = "Owned documentation work"\n';
+const CONFIG = `model = "gpt-6.2-sol"
+model_reasoning_effort = "xhigh"
+review_model = "gpt-6.2-astra"
+[agents]
+enabled = true
+[features]
+plugins = false
+remote_plugin = false
+`;
+const ROLE = `name = "docs-writer"
+description = "Internal writer"
+model = "gpt-6.2-sol"
+model_reasoning_effort = "xhigh"
+developer_instructions = "Owned documentation work"
+`;
 
 function fixture(run) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'native-setup-test-')));
@@ -40,6 +53,17 @@ test('complete native setup passes without changing unrelated or config bytes', 
   assert.deepEqual(result.errors, [], 'complete setup must pass');
   assert.deepEqual([readFileSync(join(root, 'unrelated.txt')), readFileSync(join(root, '.codex/config.toml'))], before, 'validation must preserve unrelated and owned files');
 }));
+
+for (const [key, value] of [['default_subagent_model', 'gpt-6.2-astra'], ['default_subagent_reasoning_effort', 'medium']]) {
+  test(`native workspace rejects a supplied agents.${key}`, () => fixture((root, put) => {
+    // GIVEN: a valid workspace default for one setting inherited by unpinned subagents.
+    put('.codex/config.toml', CONFIG.replace('[features]', `${key} = "${value}"\n[features]`));
+    // WHEN: native verification runs.
+    const result = validateSetup(root, { checkIgnore: false });
+    // THEN: the supplied workspace default fails explicitly.
+    assert.deepEqual(result.errors, [`subagent default override: agents.${key}`], 'unpinned subagents must inherit the parent setting');
+  }));
+}
 
 test('missing source target reports the broken discovery link', () => fixture(root => {
   // GIVEN: a discovery alias with a removed target.

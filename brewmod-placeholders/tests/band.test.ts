@@ -1,6 +1,6 @@
 import { test, expect } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { BAND, ENGINE_NODE, ROOT, STATE_FILE, bandProps, bandTexts, bootBand, box, textsOf, defaultsTree, typed, withTools, type Tree } from './layer-io'
+import { BAND, ENGINE_NODE, ROOT, STATE_FILE, bandProps, bandTexts, bootBand, onBandRender, box, textsOf, defaultsTree, typed, withTools, type Tree } from './layer-io'
 import { autoBudget, bandBudget, bandRows, cells, clip, shareRows, treeRows } from '../hooks/lib/band'
 
 const SURFACES = ['terminal', 'desktop'] as const
@@ -13,6 +13,8 @@ const TREE: Tree = {
   [`${ROOT}/.claude/placeholders/zz.md`]: def('zz', 'Zed mode', 'always', 'ZZ BODY'),
 }
 const ENGINE = ENGINE_NODE
+const CORE_TREE = { type: 'Text', children: ['CORE DRAWING'] } as const
+const coreTree = (on: On) => onBandRender(on, () => CORE_TREE as never)
 
 // 2.1.300 stamps `part` on drawn roots, 2.1.296 does not: compare only what the mod controls.
 const bare = (node: any): any => {
@@ -109,20 +111,20 @@ for (const surface of SURFACES) {
   })
 
   test(`GIVEN a survey holds the band WHEN it mounts on ${surface} THEN the engine's own tree is drawn`, async ($, on) => {
-    await boot($, on, '++yy ++q')
+    await boot($, on, '++yy ++q', coreTree)
 
     const ui = await $.ui.mount({ ...BAND, surface, props: { ...bandProps(), hasSurvey: true } })
 
-    expect(bare(await ui.drawn()), 'passthrough').toEqual(ENGINE)
+    expect(bare(await ui.drawn()), 'exact core tree passes through').toEqual(CORE_TREE)
     await ui.unmount()
   })
 
   test(`GIVEN a draft without tokens WHEN the band mounts on ${surface} THEN the engine's own tree is drawn`, async ($, on) => {
-    await boot($, on, 'plain words, no placeholder')
+    await boot($, on, 'plain words, no placeholder', coreTree)
 
     const ui = await $.ui.mount({ ...BAND, surface, props: bandProps() })
 
-    expect(bare(await ui.drawn()), 'passthrough').toEqual(ENGINE)
+    expect(bare(await ui.drawn()), 'exact core tree passes through').toEqual(CORE_TREE)
     await ui.unmount()
   })
 }
@@ -132,9 +134,9 @@ for (const surface of SURFACES) {
 const INNER_ROW = { type: 'Text', props: { color: 'warning', wrap: 'truncate-end' }, children: ['PLAN ROW'] }
 const INNER = { type: 'Box', props: { flexDirection: 'column' }, children: [INNER_ROW, ENGINE] }
 const beneath = (o: On) =>
-  o('ui.render', { component: 'AbovePrompt' }, async ($$, e, next) => {
+  onBandRender(o, async ($$, e, next) => {
     const { Box, Text } = $$.ui.resolve(e)
-    return Box({ flexDirection: 'column', children: [Text({ color: 'warning', wrap: 'truncate-end', children: 'PLAN ROW' }), await next(e)] })
+    return Box({ flexDirection: 'column', children: [Text({ color: 'warning', wrap: 'truncate-end', children: 'PLAN ROW' }), await next()] })
   })
 
 for (const surface of SURFACES) {
@@ -165,7 +167,7 @@ test('GIVEN twelve unknown tokens at 25 rows and a row drawn beneath WHEN the ba
   const twelve = Array.from({ length: 12 }, (_, i) => `++u${i + 1}`).join(' ')
   const shown = (n: number) => ['placeholders 12', ...Array.from({ length: n }, (_, i) => [`++u${i + 1}`, '  unknown placeholder']).flat(), `... ${12 - n} more placeholders`, foot('++u1')]
   const isBeneath = { value: false }
-  await boot($, on, twelve, (o) => o('ui.render', { component: 'AbovePrompt' }, async ($$, e, next) => (isBeneath.value ? $$.ui.resolve(e).Box({ flexDirection: 'column', children: [$$.ui.resolve(e).Text({ children: 'PLAN ROW' }), await next(e)] }) : next(e))))
+  await boot($, on, twelve, (o) => onBandRender(o, async ($$, e, next) => (isBeneath.value ? $$.ui.resolve(e).Box({ flexDirection: 'column', children: [$$.ui.resolve(e).Text({ children: 'PLAN ROW' }), await next()] }) : next())))
   const alone = await bandTexts($, 25)
 
   isBeneath.value = true
@@ -304,18 +306,27 @@ test('GIVEN the mod tools register at session start WHEN it settles THEN the ban
 })
 
 test('GIVEN the state read fails WHEN the band mounts THEN it fails open to the engine tree', async ($, on) => {
-  const down = { value: false }
-  await boot($, on, '++yy', (o) => o('state.get', (_$, e, next) => (down.value ? ({ deny: 'state down' } as never) : next(e))))
-  const healthy = await $.ui.mount({ ...BAND, surface: 'terminal', props: bandProps() })
-  const keys = (await healthy.findAll({ type: 'Box' })).map((b) => b.key)
-  await healthy.unmount()
+  try {
+    const down = { value: false }
+    await boot($, on, '++yy', (o) => o('state.get', (_$, e, next) => (down.value ? ({ deny: 'state down' } as never) : next(e))))
+    const healthy = await $.ui.mount({ ...BAND, surface: 'terminal', props: bandProps() })
+    const keys = (await healthy.findAll({ type: 'Box' })).map((b) => b.key)
+    await healthy.unmount()
+    const held = await $.ui.mount({ ...BAND, surface: 'terminal', props: { ...bandProps(), hasSurvey: true } })
+    const core = bare(await held.drawn())
+    const coreBoxes = (await held.findAll({ type: 'Box' })).map((b) => b.key)
+    await held.unmount()
 
-  down.value = true
-  const ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: bandProps() })
+    down.value = true
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: bandProps() })
 
-  expect(keys, 'precondition: the band draws while the state is up').toEqual(['band', 'head', 'row:++yy', undefined, undefined])
-  expect(bare(await ui.drawn()), 'passthrough while the state is down').toEqual(ENGINE)
-  await ui.unmount()
+    expect(keys, 'precondition: the band draws while the state is up').toEqual(['band', 'head', 'row:++yy', undefined, undefined])
+    expect({ type: core.type, coreBoxes }, 'precondition: a survey draws only the native core').toEqual({ type: 'engine', coreBoxes: [] })
+    expect(bare(await ui.drawn()), 'the exact native core tree survives the failed read').toEqual(core)
+    await ui.unmount()
+  } catch (error) {
+    throw new Error(`CORE_FALLBACK_BODY_FAILED: ${String(error)}`)
+  }
 })
 
 test('GIVEN tokens and entries WHEN rows are built THEN they dedupe case-insensitively and take entry data for known tokens only', async () => {
@@ -477,14 +488,14 @@ test('GIVEN three 20-line bodies and an open menu at 24 rows WHEN the band mount
 })
 
 test('GIVEN tokens in the view atom and an emptied box WHEN the band mounts on the terminal THEN the engine tree is drawn and a desktop surface still draws the band', async ($, on) => {
-  await boot($, on, '++yy ++q')
+  await boot($, on, '++yy ++q', (o) => onBandRender(o, (_$, e) => (e.surface === 'terminal' ? CORE_TREE : ENGINE) as never))
   box.text = ''
 
   const terminal = await $.ui.mount({ ...BAND, surface: 'terminal', props: bandProps() })
   const desktop = await $.ui.mount({ ...BAND, surface: 'desktop', props: bandProps() })
 
   expect([bare(await terminal.drawn()), (await desktop.findAll({ type: 'Box' })).map((b) => b.key)], 'terminal tree, desktop box keys').toEqual([
-    ENGINE,
+    CORE_TREE,
     ['band', 'head', 'row:++yy', undefined, undefined, 'row:++q', undefined],
   ])
   await terminal.unmount()

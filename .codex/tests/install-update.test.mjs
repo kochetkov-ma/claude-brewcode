@@ -15,7 +15,7 @@ const PLUGINS = ['brewcode', 'brewdoc', 'brewtools'];
 const RETIRED_AGENTS = ['brewcode-bc-rules-organizer.toml', 'brewcode-architect.toml', 'brewcode-developer.toml',
   'brewcode-reviewer.toml', 'brewcode-tester.toml', 'brewdoc-bd-auto-sync-processor.toml'];
 const OLD_COPY_VERSION = '6.5.3+codex.local-20261013062944';
-const USER_MODEL_LINES = 'model = "gpt-6.1-sol"\nmodel_reasoning_effort = "medium"';
+const USER_MODEL_LINES = 'model = "gpt-6.2-astra"\nmodel_reasoning_effort = "high"';
 const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8'));
 const REPO_VERSION = readJson(path.join(ROOT, 'brewcode', '.claude-plugin', 'plugin.json')).version;
 const STAMPED_VERSION = new RegExp(`^${REPO_VERSION.replaceAll('.', '\\.')}\\+codex\\.local-\\d{14}$`);
@@ -123,7 +123,7 @@ function tree(dir) {
 }
 
 function config(tables) {
-  return ['model = "gpt-6.1-sol"', '', '[plugins."other@elsewhere"]', 'enabled = false', '',
+  return ['model = "gpt-6.2-sol"', 'model_reasoning_effort = "xhigh"', '', '[plugins."other@elsewhere"]', 'enabled = false', '',
     ...tables.flatMap(([id, enabled]) => [`[plugins."${id}"]`, `enabled = ${enabled}`, '']),
     '[hooks.state."brewtools@x:user_prompt_submit"]', 'trusted_hash = "abc"', ''].join('\n');
 }
@@ -153,7 +153,7 @@ function fixture({ marketplaces, plugins, flags, agents }) {
   if (flags) fs.writeFileSync(path.join(codexHome, 'config.toml'), config(flags));
   if (agents) {
     for (const agent of managedAgents()) fs.writeFileSync(path.join(agentRoot, agent.name), staleUserTuned(agent.shipped));
-    for (const name of RETIRED_AGENTS) fs.writeFileSync(path.join(agentRoot, name), `model = "gpt-6.1-sol"\nname = "${name}"\n`);
+    for (const name of RETIRED_AGENTS) fs.writeFileSync(path.join(agentRoot, name), `model = "gpt-6.2-sol"\nname = "${name}"\n`);
   }
   return { home, codexHome, bin, stateFile, agentRoot, userRoot };
 }

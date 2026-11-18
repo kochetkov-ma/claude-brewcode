@@ -67,11 +67,15 @@ def probe(root, home, timeout=20):
             agents = effective.get('agents') or {}
             if agents.get('enabled') is not True:
                 raise RuntimeError('effective native agents disabled')
+            for key in ('default_subagent_model', 'default_subagent_reasoning_effort'):
+                if agents.get(key) is not None:
+                    raise RuntimeError(f'effective subagent default override: agents.{key}')
             features = effective.get('features') or {}
             hook_data = hooks.get('data') or []
             summary = dict(user_agent=initialized.get('userAgent'),
-                           config=dict(model=effective.get('model'), review_model=effective.get('review_model'),
-                                       agents_enabled=agents.get('enabled'), default_subagent_model=agents.get('default_subagent_model'),
+                           config=dict(model=effective.get('model'), model_reasoning_effort=effective.get('model_reasoning_effort'),
+                                       review_model=effective.get('review_model'),
+                                       agents_enabled=agents.get('enabled'),
                                        plugins=features.get('plugins'), remote_plugin=features.get('remote_plugin')),
                            project_skills=sorted(project_skills, key=lambda item: item['name']),
                            hook_summary=dict(response_keys=sorted(hooks), group_count=len(hook_data),
@@ -81,8 +85,9 @@ def probe(root, home, timeout=20):
                                                           hook_states=[{key: hook.get(key) for key in ['enabled', 'trusted', 'status'] if key in hook}
                                                                        for hook in item.get('hooks') or []]) for item in hook_data]),
                            config_layer_count=len(config.get('layers') or []))
-            if [effective.get('model'), effective.get('review_model'), agents.get('default_subagent_model')] != ['gpt-6.1-sol'] * 3:
-                raise RuntimeError('effective model mismatch')
+            if (effective.get('model'), effective.get('model_reasoning_effort'), effective.get('review_model')) != (
+                    'gpt-6.2-sol', 'xhigh', 'gpt-6.2-astra'):
+                raise RuntimeError('effective model or reasoning effort mismatch')
             if features.get('plugins') is not False or features.get('remote_plugin') is not False:
                 raise RuntimeError('effective plugin flags must remain disabled')
             prompt = subprocess.run(['codex', '-C', str(root), 'debug', 'prompt-input', 'offline native setup probe'],

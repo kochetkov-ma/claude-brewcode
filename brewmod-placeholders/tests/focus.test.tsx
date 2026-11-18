@@ -1,6 +1,6 @@
 import { test, expect, mock } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { BAND, PLUG, ROOT, STATE_FILE, bandProps, bandTexts, bootBand, box, defaultsTree, mountBand, spansOf, textsOf, typed, type Tree } from './layer-io'
+import { BAND, PLUG, ROOT, STATE_FILE, bandProps, bandTexts, bootBand, onBandRender, box, defaultsTree, mountBand, spansOf, textsOf, typed, type Tree } from './layer-io'
 import { defaultDefs } from './fixtures'
 import { bandState, budgets, receivesLabel, treeRows, wrapRows, type BandRow } from '../hooks/lib/band'
 import { caretFocus, heldFocus, isMenuOpen, tokenAt, type CaretFocus } from '../hooks/lib/editor'
@@ -914,7 +914,7 @@ test('GIVEN fullscreen plan mode and ++m WHEN focus, compact and escaped bands m
 
 test('GIVEN fullscreen plan mode and an inner mod row beneath WHEN focus and compact ++m bands mount at slots 6 and 14 THEN the row plus the band fill the slot exactly', async ($, on) => {
   await bootBand($, on, { tree: PLAN_TREE }, (o) =>
-    o('ui.render', { component: 'AbovePrompt' }, async ($$, e, next) => $$.ui.resolve(e).Box({ flexDirection: 'column', children: [$$.ui.resolve(e).Text({ color: 'warning', wrap: 'truncate-end', children: 'PLAN ROW' }), await next(e)] })),
+    onBandRender(o, async ($$, e, next) => $$.ui.resolve(e).Box({ flexDirection: 'column', children: [$$.ui.resolve(e).Text({ color: 'warning', wrap: 'truncate-end', children: 'PLAN ROW' }), await next()] })),
   )
   const drawn: Record<string, number[]> = {}
   for (const [state, draft] of [['focus', '++m'], ['compact', '++m ']] as const) {

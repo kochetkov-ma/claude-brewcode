@@ -592,8 +592,8 @@ Return a concise verdict and file:line evidence; file bulky evidence and return 
 Only when the active project/user policy requires an explicit model, add supported settings:
 
 \`\`\`toml
-model = "gpt-6.1-sol"
-model_reasoning_effort = "high"
+model = "gpt-6.2-sol"
+model_reasoning_effort = "xhigh"
 \`\`\`
 
 Otherwise omit these keys to inherit. Preserve existing fixed-role settings and only use efforts supported by that model/client. Do not insert \`model = "inherit"\`.

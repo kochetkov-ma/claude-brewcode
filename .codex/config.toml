@@ -1,9 +1,9 @@
-model = "gpt-6.1-sol"
-review_model = "gpt-6.1-sol"
+model = "gpt-6.2-sol"
+model_reasoning_effort = "xhigh"
+review_model = "gpt-6.2-astra"
 
 [agents]
 enabled = true
-default_subagent_model = "gpt-6.1-sol"
 
 [features]
 plugins = false

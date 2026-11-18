@@ -76,14 +76,19 @@ export function validateSetup(root = ROOT, { checkIgnore = true } = {}) {
   };
   attempt(() => {
     const config = readToml(join(root, '.codex/config.toml'));
-    for (const key of ['model', 'review_model']) requireValue(config[key], 'gpt-6.1-sol', `model mismatch: ${key}`);
-    requireValue(config.agents?.default_subagent_model, 'gpt-6.1-sol', 'model mismatch: default_subagent_model');
+    requireValue(config.model, 'gpt-6.2-sol', 'model mismatch: model');
+    requireValue(config.model_reasoning_effort, 'xhigh', 'effort mismatch: model_reasoning_effort');
+    requireValue(config.review_model, 'gpt-6.2-astra', 'model mismatch: review_model');
     requireValue(config.agents?.enabled, true, 'native agents disabled');
+    for (const key of ['default_subagent_model', 'default_subagent_reasoning_effort']) {
+      requireValue(Object.hasOwn(config.agents, key), false, `subagent default override: agents.${key}`);
+    }
     for (const key of ['plugins', 'remote_plugin']) requireValue(config.features?.[key], false, `plugins must remain disabled: ${key}`);
     for (const key of ['approval_policy', 'sandbox_mode', 'permissions']) requireValue(Object.hasOwn(config, key), false, `permission override: ${key}`);
     const role = readToml(join(root, '.codex/agents/docs-writer.toml'));
     requireValue(role.name, 'docs-writer', 'native docs-writer name missing');
-    requireValue(role.model, 'gpt-6.1-sol', 'model mismatch: docs-writer');
+    requireValue(role.model, 'gpt-6.2-sol', 'model mismatch: docs-writer');
+    requireValue(role.model_reasoning_effort, 'xhigh', 'effort mismatch: docs-writer');
     if (typeof role.description !== 'string' || role.description.trim() === '') throw new Error('docs-writer description missing');
     if (typeof role.developer_instructions !== 'string' || role.developer_instructions.trim() === '') throw new Error('docs-writer instructions missing');
     for (const key of ['approval_policy', 'sandbox_mode', 'permissions']) requireValue(Object.hasOwn(role, key), false, `role permission override: ${key}`);

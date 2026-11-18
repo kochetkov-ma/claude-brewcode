@@ -32,7 +32,7 @@ export function nameKind(name) {
 const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const escClass = (s) => s.replace(/[\\\][^-]/g, '\\$&')
 
-function matcher(prefix, name, kind) {
+export function matcher(prefix, name, kind) {
   const token = escRe(prefix + name)
   if (kind === 'word') return new RegExp(`(?<![\\w${escClass(prefix)}])${token}(?![\\w])`, 'i')
   const cls = `[\\p{L}\\p{N}\\p{M}_${escClass([...new Set(prefix + name)].join(''))}]`

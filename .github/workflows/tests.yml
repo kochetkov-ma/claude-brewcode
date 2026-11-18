@@ -78,6 +78,9 @@ jobs:
           for test in .codex/tests/*.test.mjs; do
             node "$test" || { echo "::error file=${test}::failed"; fail=1; }
           done
+          for test in brewmod-placeholders/codex/*.test.mjs; do
+            node --test "$test" || { echo "::error file=${test}::failed"; fail=1; }
+          done
           for test in .codex/tests/*.test.py; do
             python -B "$test" || { echo "::error file=${test}::failed"; fail=1; }
           done

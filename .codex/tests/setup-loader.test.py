@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import os
 from pathlib import Path
 import sys
@@ -32,8 +33,8 @@ for line in sys.stdin:
         sys.exit(0)
     result = {}
     if method == 'config/read':
-        result = {'config': {'model': 'gpt-6.1-sol', 'review_model': 'gpt-6.1-sol',
-                  'agents': {'enabled': mode != 'disabled-agents', 'default_subagent_model': 'gpt-6.1-sol'},
+        result = {'config': {'model': 'gpt-6.2-sol', 'model_reasoning_effort': 'xhigh', 'review_model': 'gpt-6.2-astra',
+                  'agents': {'enabled': mode != 'disabled-agents', **json.loads(os.environ['SETUP_PROBE_AGENT_DEFAULTS'])},
                   'features': {'plugins': False, 'remote_plugin': False}}}
     if method == 'skills/list':
         names = ['docs', 'superreview', 'brewcode-review', 'memory-sync', 'claude-plugin-guide', 'eurodns']
@@ -55,7 +56,7 @@ class LoaderRegressionTests(unittest.TestCase):
         executable.chmod(0o755)
         self.pid = self.root / 'producer.pid'
         self.env = patch.dict(os.environ, PATH=str(self.root) + os.pathsep + os.environ['PATH'],
-                              SETUP_PROBE_PID=str(self.pid), SETUP_PROBE_MODE='enabled')
+                              SETUP_PROBE_PID=str(self.pid), SETUP_PROBE_MODE='enabled', SETUP_PROBE_AGENT_DEFAULTS='{}')
         self.env.start()
         self.addCleanup(self.env.stop)
 
@@ -64,14 +65,29 @@ class LoaderRegressionTests(unittest.TestCase):
         with self.assertRaises(ProcessLookupError, msg='probe must reap its app-server on all paths'):
             os.kill(int(self.pid.read_text()), 0)
 
-    def test_enabled_producer_loads_all_project_skills(self):
-        # GIVEN: producer-shaped enabled config and skills responses.
-        # WHEN: the real probe consumes them.
-        result = loader.probe(self.root, self.root, timeout=1)
-        # THEN: discovery succeeds and the producer is stopped.
-        self.assertEqual([item['enabled'] for item in result['project_skills']], [True] * 6, 'all project skills must be enabled')
-        self.assertEqual(result['prompt_summary']['project_instructions_present'], True, 'root instructions must load')
-        self.assert_producer_stopped()
+    def test_enabled_producer_loads_skills_with_omitted_or_null_subagent_defaults(self):
+        for defaults in ({}, dict(default_subagent_model=None, default_subagent_reasoning_effort=None)):
+            with self.subTest(defaults=defaults):
+                # GIVEN: enabled config and skills, with no effective subagent overrides.
+                os.environ['SETUP_PROBE_AGENT_DEFAULTS'] = json.dumps(defaults)
+                # WHEN: the real probe consumes them.
+                result = loader.probe(self.root, self.root, timeout=1)
+                # THEN: discovery succeeds and the producer is stopped.
+                self.assertEqual([item['enabled'] for item in result['project_skills']], [True] * 6, 'all project skills must be enabled')
+                self.assertEqual(result['prompt_summary']['project_instructions_present'], True, 'root instructions must load')
+                self.assert_producer_stopped()
+
+    def test_effective_subagent_defaults_are_rejected(self):
+        for key, value in (('default_subagent_model', 'gpt-6.2-astra'), ('default_subagent_reasoning_effort', 'medium')):
+            with self.subTest(key=key):
+                # GIVEN: enabled config and skills with a single effective subagent override.
+                os.environ['SETUP_PROBE_AGENT_DEFAULTS'] = json.dumps({key: value})
+                # WHEN: the real probe consumes effective config.
+                with self.assertRaises(RuntimeError, msg='effective subagent override must fail') as error:
+                    loader.probe(self.root, self.root, timeout=1)
+                # THEN: the probe names the override and stops the producer.
+                self.assertEqual(str(error.exception), f'effective subagent default override: agents.{key}', 'diagnostic must identify the setting')
+                self.assert_producer_stopped()
 
     def test_disabled_project_skills_are_rejected(self):
         # GIVEN: the full project skill set marked disabled by the producer.

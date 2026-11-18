@@ -17,8 +17,10 @@ while IFS= read -r runner; do
   done
 done < <(find brewcode brewdoc brewtools .claude/scripts .claude/skills -path '*/fixtures/*' -prune -o -path '*/tests/run.sh' -print | LC_ALL=C sort)
 
-for glob in '.codex/tests/*.test.mjs' '.codex/tests/*.test.py'; do
-  grep -qF "for test in $glob; do" "$wf" || missing "$glob"
+for glob in '.codex/tests/*.test.mjs' '.codex/tests/*.test.py' 'brewmod-placeholders/codex/*.test.mjs'; do
+  pattern=${glob//./\\.}
+  pattern=${pattern//\*/\\*}
+  grep -qE "^[[:blank:]]*for test in $pattern; do[[:blank:]]*$" "$wf" || missing "$glob"
 done
 
 while IFS= read -r node_test; do
