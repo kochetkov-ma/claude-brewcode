@@ -1,293 +1,65 @@
 ---
 name: publish
-description: "Publishes text, Markdown, JSON, a file, a folder or a ZIP site to brewpage.app and returns a shareable URL; pages can save visitor answers. Use when asked to publish or share content as a link, or to host a form, poll or RSVP page. Triggers: publish, share link, host page, brewpage, form, poll, RSVP, save visitor answers, опубликуй."
+description: "Prepare BrewPage drafts, publish supplied content or a new page, and update a specific BrewPage publication. Supports HTML, Markdown, JSON, files, built sites, and forms with saved visitor answers. Use for BrewPage, share this as a link, publish site, RSVP, poll, черновик BrewPage, опубликуй, обнови страницу."
 user-invocable: true
 disable-model-invocation: false
-argument-hint: "[prompt] <text|file_path|directory_path|zip_path> [--ttl N] [--entry filename] [--delivery-mode path|subdomain] [--state JSON]"
+argument-hint: "[prompt] <text|file_path|directory_path|zip_path> [--ttl N] [--entry filename] [--delivery-mode path|subdomain] [--state JSON] [--domain hostname]"
 allowed-tools: [Read, 'Bash(bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh *)', AskUserQuestion, Glob]
 model: haiku
 license: MIT
 ---
 
-# brewdoc:publish
-
-Publishes HTML/Markdown, JSON, files and multi-file sites to **brewpage.app** (free, no sign-up) and returns the URL.
-
 ## Prompt contract
 
-`$ARGUMENTS` is one free-form RU/EN prompt; the content (text, file/dir/zip path) and the flags `--ttl N`,
-`--entry <filename>`, `--delivery-mode path|subdomain`, `--state JSON` may sit anywhere in it.
+`$ARGUMENTS` is one free-form RU/EN prompt. Keep supplied material intact and resolve selected paths against the workspace.
 
-1. Mode: the content type of what is published — detected in Step 2, scored by the keyword table there.
-2. Scope: a sentence naming a file/dir resolves to that file/dir (e.g. "publish my report.md" ->
-   `content_arg = report.md`, resolved against cwd). Never guess, never silently fall back to an empty
-   HTML page. Fired by Claude mid-task (`Skill` tool), its `args` is the prompt: the path, or the
-   exact text to publish, never a summary of it.
-3. Ask: a sentence with no path and no inline text/JSON has nothing to publish -> ONE `AskUserQuestion`
-   asking what to publish. Namespace and password -> the two dedicated `AskUserQuestion` calls in Steps
-   4-5; nothing else asks. Headless or unanswered -> stop before upload unless this workflow already has explicit namespace and password choices.
+Resolve the requested effect before matching keywords. An explicit no-publish or local-only instruction overrides mode words and defaults. Negated, quoted, instructional and incidental publishing words authorize no write. Explanation-only requests, like drafts, make zero BrewPage calls or tool discovery requests.
 
-Print once, before the first tool action, including filesystem probes and questions (labels literal,
-values in the conversation language). Use `unresolved` for type/namespace/password until determined;
-report resolved stats in Step 3.
+| Mode | EN keywords | RU keywords | Mutates? |
+|---|---|---|---|
+| `draft` | prepare a draft, preview, local only | подготовь черновик, предпросмотр, только локально | local only |
+| `publish` | publish this, share as a link, upload this | опубликуй это, поделись ссылкой, загрузи этот файл | yes |
+| `compose-and-publish` | create and publish, build and host | создай и опубликуй, сделай и размести | yes |
+| `update` | update this publication, replace the page, edit in place | обнови публикацию, замени страницу, исправь на месте | yes |
 
-```
+1. Mode: separate flags from the request. An affirmatively requested explicit mode wins. Otherwise score distinct whole-word keywords only within the requested action. A tie with `draft` stays local. For two writing modes, use the first matched keyword. A direct invocation with supplied content defaults to `publish` only without a contrary instruction. An empty or ambiguous request needs scope before any write.
+2. Scope: extract the material, target, changes and requested options. “Publish this draft” supplies material for a create. “Draft this for BrewPage” requests preparation only. A request to revise an existing local file does not identify a live publication.
+3. Ask: use at most one `AskUserQuestion` (up to four questions) for scope choices that change the work. Ask only for missing material, a missing exact update target, or an unresolved consequential choice. Drafts need no ownership or visibility questions.
+
+Print once before the first action. Redact credentials, private management links and password values.
+
+```text
 PLAN — brewdoc:publish
-INPUT:  <arguments verbatim, or "(empty)">
-MODE:   <detected type — SITE|MARKDOWN|FILE|JSON|HTML> — <matched extension/shape | prose-resolved path>
-SCOPE:  namespace=<ns>; ttl=<days>; password=<set|none>; delivery-mode=<server-default|path|subdomain>
-DO:     <2-5 imperative bullets>
-RESULT: <published URL>
+INPUT:  <request, or (empty)>
+MODE:   <mode> — <explicit | matched keyword: X | default>
+SCOPE:  <artifact or target and requested options>
+DO:     <2–5 actions>
+RESULT: <local artifact or confirmed publication outcome>
 ```
 
-## Running commands
+## Perform the requested work
 
-Every shell step is ONE command of the exact shape in the fences below: the single `allowed-tools`
-rule pre-approves exactly that shape, so the skill never prompts, headless included.
+1. **Draft:** prepare the requested local files or inline artifact. For a form, pair HTML with its Page data declaration from the [offline recipe](references/page-data.md). Return the artifact and how to use it. Stop here. Make zero BrewPage calls, tool discovery requests, owner lookups or domain changes.
+2. **Publish or compose and publish:** keep supplied content unchanged unless the user asked for edits. For authored content, build what they requested. Use [publishing](references/publishing.md) when local input, access choices or REST require it. A plain, inline HTML publish through MCP needs no publishing reference. Read [Page data](references/page-data.md) for requested visitor storage and [custom domains](references/custom-domain.md) for a requested owned hostname.
+3. **Update:** identify the exact live item and selected owner from their private receipt or authorized inventory. Use the supplied source or recover it through a permitted read of that item. Change only the requested fields or content. A full site replacement needs the complete desired file set and verified existing entry unless an entry change was requested; pass that entry explicitly to MCP. Leave replacement pending if it cannot be resolved. A content-only update keeps the address and existing visitor entries. A missing or read-only target requires a separate user decision before any new publication.
 
-- Fill each `'{…}'` slot with the raw value and write every `'` inside it as `'\''`; nothing else is
-  escaped. Never wrap a value in double quotes. An empty slot stays `''` (= omitted).
-- Never quote the script path, prefix or chain the command (`cd`, `VAR=…`, `;`, `&&`, `|`, `$(…)`): any
-  other shape falls back to the normal permission prompt.
-- Keep every command under 8,000 characters (longer ones are always refused); longer text goes
-  through `stage` (Step 6).
-- The script prints one decisive line: `OK {url}` or `OK {url} | Files: N` (then `MANAGE: …`, the private management link, and any `NOTICE: …` lines:
-  what the server skipped or adjusted), `CONFIRM: …` (exit 2, nothing uploaded) or `FAILED: …` (server reason `HTTP <status>: <message>`).
-  It removes its private run directory on every exit.
+## Select one write route
 
-## Workflow
+Before dispatching MCP that can return an owner key or bearer management link, verify that the tool result reaches only the requesting owner or an authorized private handoff. Anonymous creates can include `ownerToken` and `manageUrl` in tool text; a protected file alone does not make that transcript private. Known owner-only host context can establish this boundary without another privacy question. Otherwise select authorized REST with protected receipt handling **before** writing, or leave an MCP-only request pending. New-owner storage or private recovery is still required.
 
-### Step 1: Parse Arguments
+- Prefer a BrewPage tool already exposed to this host session. If the host discovers tools on demand, use that interface once. Verify the BrewPage binding, actual tool schema, input and options, and the selected authority. Use compact `publish` or `update_publication` when supported. An advertised legacy operation is usable within its original schema. Supplied HTML requiring exact source needs preservation support; a legacy shape without it requires another authorized route selected before writing. For an ordinary inline HTML publish, call the suitable tool directly. A similarly named tool, a package install and an endpoint probe cannot establish a usable binding.
+- Before serializing local files into tool arguments or a request, use the packaged local checks in [publishing](references/publishing.md). A local path is never a remote source URL. For unrepresentable bytes, missing MCP capability or absent BrewPage binding, select authorized direct REST **before** any write when the host and the same owner proof permit it. Explicit MCP-only intent requires a capable binding. If there is no authorized route, return the local result and the specific remaining step.
+- Prefer a suitable already connected account when no other owner is chosen. For explicit account publishing, use `requireAccount: true` on the compatible MCP tool and follow the client’s first-party authorization flow. If unavailable or cancelled, leave the write pending. The MCP client alone handles OAuth. Use REST only if it supports the selected owner proof or the requested unsigned operation. Explicit fresh anonymity needs a route with neither bearer nor saved owner token. Setting `requireAccount` to false does not select that route.
+- Honor host restrictions, denials, missing scope and rejected credentials. After a sent write times out, reconcile through the selected owner's inventory or receipt. Never switch transports or owners to repeat a sent or refused write. Use bundled recipes as data. Without a specialized path, compose locally and explain the missing capability. Fetch only a needed first-party guide or template for an authorized hosted workflow.
 
-Extract from the prompt:
-- `--ttl N` → TTL in days (default: `15`)
-- `--entry <filename>` → entry file for SITE uploads (default: auto-detect)
-- `--delivery-mode path|subdomain` → optional creation header; omitted = server default; reject other values before upload
-- `--state JSON` → Page data config (Step 6, Page data)
-- Remaining text → `content_arg`, per Prompt contract rules 2-3
+For the bundled runner, substitute this installed path for `{runner}` in the publishing reference. Invoke only its scoped Bash command shape.
 
-### Step 2: Detect Content Type
-
-A `content_arg` that names a path -> probe it (read-only; prints `TYPE:`, the absolute `PATH:` to use
-below, and the Step 3 stats) — **EXECUTE** using Bash tool:
-
-```bash
-bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh probe '{path}'
+```text
+${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh
 ```
 
-| Input | Type | `publish` type + source | API | EN keywords | RU keywords | Mutates? |
-|-------|------|-------------------------|-----|--------------|--------------|----------|
-| `TYPE: site-dir` | SITE | `site-dir` + `--path` | `POST /api/sites` (ZIP built from the dir) | publish site, publish folder/directory | опубликуй сайт, опубликуй папку | yes |
-| `TYPE: site-zip` (`.zip` file) | SITE | `site-zip` + `--path` | `POST /api/sites` (archive upload) | publish zip, publish archive | опубликуй архив, опубликуй zip | yes |
-| `TYPE: markdown` (`.md`/`.markdown` file) | MARKDOWN | `html` + `--path` | `POST /api/html` (format=markdown, content read from the file — renders styled, NOT a raw download; the script sends a non-UTF-8 file by multipart `POST /api/files` instead, bytes untouched) | publish markdown, share this .md | опубликуй markdown, поделись .md | yes |
-| `TYPE: html-file` (`.html`/`.htm` file) | HTML | `html-file` + `--path` | `POST /api/html` (format=html, content read from the file — a real page in any namespace, NOT a raw download; the script sends a non-UTF-8 file by multipart `POST /api/files` instead, bytes untouched) | publish html, publish this page | опубликуй html, опубликуй страницу | yes |
-| `TYPE: file` (any other file) | FILE | `file` + `--path` | `POST /api/files` (multipart) | publish file, share this file | опубликуй файл, поделись файлом | yes |
-| No path (`TYPE: none`), `content_arg` starts with `{` or `[` | JSON | `json` + `--text` | `POST /api/json` | publish json, share this json | опубликуй json | yes |
-| Anything else | HTML | `html` + `--text` | `POST /api/html` (`format=html` when the text is a whole HTML document, `<!doctype html` or `<html` first; the script decides; else `format=markdown`) | publish text, share link, publish this | опубликуй текст, поделись ссылкой | yes |
+The runner uses `ClaudeCode/6.13.0 (+https://brewpage.app)` for direct REST requests.
 
-### Step 3: Show Pre-Publish Stats
+## Return the actual result
 
-From the probe lines — SITE (dir): `HTML`, `SIZE_KB`, `ENTRY`. SITE (ZIP): `BYTES`, entry override. FILE,
-MARKDOWN and HTML file: `BYTES` + `MIME`. Text/JSON: char count.
-
-For HTML/MARKDOWN/JSON/FILE:
-```
-Content:  <type description> · <size> · <api endpoint>
-TTL:      <N> days
-```
-
-For SITE (entry = server rule: `--entry` > root `index.html` > shallowest `.html`; another page → pass `--entry`; `ENTRY: none` → fail with an explicit error, never guess):
-```
-Content:  site · <N> files · <total_size> · POST /api/sites
-Entry:    <entry_file>
-TTL:      <N> days
-```
-These are source-tree estimates: report the ARCHIVE MANIFEST that Step 6 prints before upload; its
-`ENTRY:` line is the entry `scripts/publish.mjs` resolved in the built archive.
-
-**Site limits** (`GET https://brewpage.app/api/limits` returns the current ones): 25 MB per request; a site
-holds 200 files, 5 MB per file, 20 MB total uncompressed, a ZIP expands to at most 40 MB; a path is at most
-380 characters / 900 bytes, each file or folder name at most 200 bytes. A big site (`FILES` or `SIZE_KB`
-near a limit) → check the current values first, and send many files as one ZIP (a folder is always zipped).
-**EXECUTE** using Bash tool:
-```bash
-bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh limits
-```
-Pre-checks, folder or ZIP: system files (`.DS_Store`, `__MACOSX/`, `Thumbs.db`) never count and are
-dropped; hidden files and folders are dropped too, except the root `.well-known/`; at least one `.html`
-file must remain.
-
-### Step 4: Ask Namespace
-
-Use **AskUserQuestion**:
-
-```
-Namespace decides who can find the publication; it also appears in its address on brewpage.app.
-
-Options:
-1) public — public pages, sites and files are listed in the public gallery and the sitemap, so Google, Bing and AI search can find and index them and people can discover them. Use it for anything meant to be found or shared: docs, guides, demos, portfolios, reports, landing pages. Public pages are served right on the brewpage.app domain, which gives them the strongest reach in search; a page whose code needs its own origin (cookies, storage) gets its own subdomain automatically. Anyone can find and read a public publication: never put secrets, tokens or personal data there.
-2) {suggested slug} — private: unlisted and not indexed; anyone who has the link can still open it (a password restricts access).
-3) Enter custom namespace (private, like 2)
-4) Skip → use suggested slug (private)
-
-Reply with a number or your custom namespace (1-32 lowercase letters, digits or hyphens).
-```
-
-Suggested slug: 3-16 chars of `a-z0-9-` named after the content (`api-docs`, `report-q2`,
-`pricing`, `user-config`), else the project or directory name; never random strings or truncated filenames.
-
-Resolution: explicit `2` or `4` → suggested slug | `1` → `public` | custom slug → validate it.
-An empty, unavailable, ambiguous or unanswered choice → stop before upload. Never infer publication consent from silence.
-
-### Step 5: Ask Password
-
-Use **AskUserQuestion**:
-
-```
-Password protection (if set, page is hidden from gallery):
-
-Options:
-1) No password (explicit choice)
-2) Use an existing local password file (min 4 characters)
-3) Skip → no password
-
-Reply with a number and, for option 2, the absolute local file path. Do not paste password contents.
-```
-
-Resolution: explicit `1` or `3` → `{password_file}` = `''` (no password; every password file,
-stale ones included, is ignored). `2` + an existing local file path → `{password_file}` = that absolute
-path: the script moves the bytes via private header files (never shell literals or curl argv) and rejects
-control characters (header injection). Never Read, generate or print the password contents.
-An empty, unavailable, ambiguous or unanswered choice → stop before upload. A previous explicit choice for this content/workflow may be reused; never invent one.
-
-### Step 6: Publish and Save Token (secure)
-
-Delivery mode: NEW sites and non-public HTML pages (format `html`) get a Dedicated subdomain (an explicit `path` is not refused: the publication lands on
-its subdomain and the response reports the mismatch); everything else defaults to Promotion (`path`) and may
-select `subdomain`, password-protected included. Send it only as `X-Delivery-Mode`, never in authored JSON, text or multipart fields. A deduplicated
-OLD or NEW winner may differ: keep its identity, cohort, mode and exact `link`. Missing/null OLD routing
-metadata means Existing link; never infer mode from its address.
-
-> **Owner token and management link:** the script does curl, token parsing and history save in one run. It prints the URL and the management link (`MANAGE:`); the ownerToken goes to the private history file and is printed only when that save fails. A rejected upload prints only the server's status and message.
-
-Every slot is re-validated by the script before anything is written or uploaded:
-
-| Slot | Must match | Re-checked by |
-|------|------------|---------------|
-| `{ns}` | `^[a-z0-9-]{1,32}$` | `bp_validate` |
-| `{days}` | positive integer; `''` = 15 | `bp_validate` |
-| `{entry}` | plain relative file name, no `..`; `''` = auto-detect; sites only | `bp_validate` |
-| `{delivery_mode}` | `''`, `path` or `subdomain` | `bp_begin` |
-| `{password_file}` | `''` or an absolute path to an existing regular file | `bp_begin` |
-
-A value failing its pattern: re-ask; never clean it up or substitute it anyway. A slot error fails before
-any run is touched, so staged text survives the retry. `{type}` comes from the Step 2 table.
-
-**SITE, MARKDOWN, HTML file, FILE** — `{path}` is the probe's `PATH:` — **EXECUTE** using Bash tool:
-```bash
-bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh publish {type} --ns '{ns}' --ttl '{days}' --entry '{entry}' --delivery-mode '{delivery_mode}' --password-file '{password_file}' --path '{path}'
-```
-
-**HTML text, JSON** — `{content}` is the exact text or JSON, verbatim — **EXECUTE** using Bash tool:
-```bash
-bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh publish {type} --ns '{ns}' --ttl '{days}' --entry '' --delivery-mode '{delivery_mode}' --password-file '{password_file}' --text '{content}'
-```
-
-**Longer text or JSON** (the command would pass 8,000 characters): split it at line ends into chunks
-of at most 6,000 characters. The first `stage` call passes `--run ''` and prints `RUN: brewpage.XXXXXX`;
-every later chunk and the final publish pass that id. The script rejoins chunks with one newline.
-**EXECUTE** using Bash tool, once per chunk:
-```bash
-bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh stage --run '{run_id}' --text '{chunk}'
-```
-Then **EXECUTE** using Bash tool:
-```bash
-bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh publish {type} --ns '{ns}' --ttl '{days}' --entry '' --delivery-mode '{delivery_mode}' --password-file '{password_file}' --run '{run_id}'
-```
-Staged but not published (cancelled) — **EXECUTE** using Bash tool:
-```bash
-bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh cleanup --run '{run_id}'
-```
-
-**Page data** (form, poll, RSVP, guestbook, scores: a page that saves what visitors enter). The HTML loads
-`<script src="https://brewpage.app/js/state.js"></script>` by this absolute URL (classic script, no async or
-module, before the page code) and calls `bp.state()`; build it from https://brewpage.app/llms-page-data.txt or a working template
-(`GET https://brewpage.app/api/templates`, each with its `state` and `sourceUrl`). Publish in one step: append
-` --state '{state}'` to the HTML file, HTML text, staged or SITE publish command above, filled like any slot.
-`{state}` is one JSON object: `{}` turns page data on with defaults (each visitor sees only their own entries);
-a named list changes its rule, e.g. `{"collections":{"guestbook":{"mode":"shared"}}}`. A page that loads
-`state.js` but is published without `--state` saves nothing. The page gets its own address (saving never
-works on a `brewpage.app/...` address; Markdown never runs scripts); `NOTICE: state-…` lines name what was
-not applied. The author reads every entry in the Data tab of the management link.
-
-### Step 7: Output Result
-
-**Success** (the script printed `OK {url}`, then `MANAGE: {manage_url}`):
-```
-Published: {url from bash output}
-Management link (private): {manage_url from bash output}
-Owner token saved to <project-root>/.claude/brewpage-history.md (mode 600, git-ignored)
-Optional: sign in free (Google or any email) at https://account.brewpage.app to manage publications and token history, and extend publication retention up to 90 days. Publications still expire. Not needed to publish.
-```
-
-**Success for SITE** (the script printed `OK {url} | Files: {count}`, then `MANAGE: {manage_url}`):
-```
-Published site: {url from bash output}
-Entry: {entry_file} | Files: {count}
-Management link (private): {manage_url from bash output}
-Owner token saved to <project-root>/.claude/brewpage-history.md (mode 600, git-ignored)
-Optional: sign in free (Google or any email) at https://account.brewpage.app to manage publications and token history, and extend publication retention up to 90 days. Publications still expire. Not needed to publish.
-
-Share the server URL exactly as printed, including any trailing slash.
-```
-
-Give the user the page link and the management link, and say once that the management link is private: anyone who has it can edit or delete the page. No `MANAGE:` line → omit that line. The owner token stays in the history file for later updates; show it (Read the history file) when the user asks. Never post the management link or the token publicly (public page, repo, shared channel).
-Published with `--state`: add that what visitors save appears in the Data tab of the management link.
-
-Mention the sign-in line only as optional; never ask the user to sign in.
-If a NOTICE says no owner capability was saved, this publication has no management link or token to give: omit both lines and report the URL plus that notice; existing history stays unchanged.
-
-For a private (non-`public`) namespace, append one short line after the link (skip if the reply must stay brief): *Unlisted link — anyone who has it can open it, but it's not in the gallery or search. Want it discoverable? Publish to `public`.*
-
-**Needs confirmation** (the script printed `CONFIRM: ...`, exit 2; nothing uploaded): show the manifest
-lines, name the flagged entries, ask ONE `AskUserQuestion` (publish anyway / cancel). Publish anyway ->
-re-run the identical command with ` --confirmed --review-sha256 '{review_sha256}'` appended, using the exact
-`REVIEW_SHA256` printed beside the approved manifest. Changed archive bytes produce a fresh manifest and
-digest: ask again; never silently approve the replacement. No payload is retained between calls.
-Cancel or no answer -> stop: the script already
-removed its own run directory and never touches other runs, user source files or the shared tmp directory.
-
-**Error** (the script printed `FAILED: ...`):
-```
-Publish failed: {the FAILED line, verbatim}
-```
-
-**Published but not saved** (`FAILED: published but owner token could not be saved securely`, then `URL:`, `MANAGE:` and `OWNER TOKEN:` lines): the page is live and nothing was written to history. Give the user all three values and say that the management link and the token are private.
-
-| Status | Meaning | Do |
-|--------|---------|----|
-| 400 | Fixable limit or path problem (file count/size, path length, bad value) | Fix what the message names, retry |
-| 413 | Request over 25 MB, or too many parts | Shrink the bundle; many files → one ZIP |
-| 422 | No servable file left (every file has an unsupported or missing extension) | Add the `.html`/assets |
-| 408 | Upload interrupted | Retry the identical command once |
-
-Unstorable metadata (tags, names, control characters) is stored as the closest valid value with a notice;
-a value that still cannot be stored is a 400, not a 409.
-
-## Notes
-
-- Requires a POSIX runtime (macOS/Linux or WSL), `bash`, `curl`, `jq`, POSIX `python3` with `fcntl` (secure atomic history), and `git` inside repositories; sites also `node`, `zip`, `unzip`. Native Windows Python is unsupported and fails before upload.
-- History writes reject symlinks, hardlinks, tracked history and directories writable by others; failure stops publication. Archive inspection caps 25 MiB compressed, 40 MiB expanded, 200 files, 400 entries, 5 MiB/member and 1 MiB metadata; ZIP64/split archives are refused.
-
-- **`format`**: `/api/html` takes `?format=` or a JSON body `format`; a non-blank body value wins over the query, neither -> default `html` (markdown stored as raw text). The scripts send a `{content}`-only body with `?format=html` for a `.html`/`.htm` file or whole-document text, else `?format=markdown`.
-- History: `<project-root>/.claude/brewpage-history.md` (root: `CLAUDE_PROJECT_DIR` → git toplevel → upward `.git`/`.claude` walk (a `.claude` in HOME or in the profile parent, the dir whose `.claude` IS the active config dir, is skipped; a `.git` there still counts) → `PWD`, via `scripts/brewpage-lib.sh`), mode `600`, added to the project `.gitignore`. Its header holds the **delete** command for the owner token.
-- Run dirs: private `brewpage.XXXXXX` under `$TMPDIR` (else `/tmp`), outside the protected `.claude/`; only `scripts/brewpage-run.sh` creates, fills and removes them, so the skill needs no `Write`/`Edit` grant.
-- Permissions: model-invocable, so `allowed-tools` holds one scoped Bash rule that matches every step above, in `default`, `dontAsk` and headless runs alike (verified on CC 2.1.296). A script path containing spaces breaks the unquoted command shape.
-- History TTL = requested days; stored `createdAt`/`expiresAt` are authoritative: a deduplicated winner keeps its original expiry, and ordinary PUT/update does not renew it.
-- Owner API calls use the returned `ownerLink` and stored identity metadata, never a NEW root hostname parsed for namespace/ID; OLD rows without metadata keep their existing API identifiers.
-- **Update a site**: `PUT` the new bundle to its apex owner API with `X-Owner-Token` and `-A "ClaudeCode/6.12.13 (+https://brewpage.app)"` (every brewpage.app request sends this User-Agent); it replaces the file set and keeps the host. No `X-Delivery-Mode` on ordinary PUT/update. Old publications (made before 5 October 2026) are read-only: 409 OLD_PUBLICATION_READ_ONLY; publish anew and give the user the new link and management link; the new owner token is saved to history.
-- Owner-only `GET`/`PATCH /api/{type}/{ns}/{id}/hosting` supports `html|files|json|kv|sites` with `X-Owner-Token`. Read current `hostingVersion`, then PATCH `deliveryMode: path|subdomain` with that `expectedVersion`. NEW publications without a required subdomain may switch, including non-public non-HTML content; OLD returns 200 unchanged with a notice. Sites and non-public HTML (format `html`) retain their forced subdomain policy; mismatches return a notice. A missing version applies against the stored version; a stale version also applies, with a notice, rather than 409. Use the returned link/version afterward.
-- **Page data on an already published page**: the management link's Data tab ("Turn on page data") or owner-only `PATCH /api/{ns}/{id}/state` with body `{}` and `X-Owner-Token`; a page on a `brewpage.app/...` address first moves to its own address (owner-only `PATCH .../hosting` above, `subdomain`). Saving also works on a connected custom domain. The Data tab downloads entries as CSV. Storage per page: 1 MiB, 10 MiB for a page in a profile. Guide: https://brewpage.app/llms-full.txt#page-data
-- NEW password-protected links stay clean: never generate or append `?p=`. API password requests use `X-Password`; OLD password behavior is unchanged.
-- **SITE bundles are allowlisted**: `pack` drops dot-entries (`.env`, `.git/`, `.DS_Store`; the root `.well-known/` stays, extension-less files included), `node_modules/`, `__MACOSX/`, symlinks and unknown types, and verifies the archive (bounded central-directory budgets, `unzip -t` with a 10-second timeout, name set) before `curl`, else deletes it and exits 1. `inspect` never rewrites a supplied ZIP; it exits 2 when anything unexpected, hidden or sensitive is inside (system files the server drops are left alone).
-- Keep `.link` exact (NEW subdomain roots keep `/`, OLD links their form); never reconstruct a host from IDs. Verify NEW native sites at the exact URL and asset paths in a browser; OLD sites may redirect via a landing page: check in a browser or fetch the explicit entry asset.
+Before a first anonymous create, arrange authorized private storage or owner-only delivery of its key. Refer to [ownership and receipts](references/ownership.md) for owner selection, storage and recovery. Report the exact returned reader link, effective access and any consequential notice. Deliver the private management link and owner instructions only through a protected channel. An account-owned result goes to the account’s publications. For anonymous ownership, say “saved” only after private readback. A shared destination receives reader-facing details only. Report a live publication or update only from a confirmed receipt.

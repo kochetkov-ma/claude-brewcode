@@ -79,19 +79,26 @@ function inspect(args, extraEnv = {}) {
   check('clean.bytes', r.field('BYTES'), String(statSync(z).size), 'BYTES equals the file size on disk');
 }
 
-// ── BD01: a supplied ZIP carrying private material stops for confirmation ───
+// GIVEN a supplied ZIP carrying a reserved credential store WHEN inspected THEN it cannot be confirmed.
 {
   const z = makeZip('dirty', {
     'index.html': '<h1>hi</h1>', '.env': 'API_KEY=sk-live-000', 'app.js.map': '{"version":3}',
   });
   const r = inspect(['--zip', z]);
+  check('dirty.exit', [r.status, r.field('RESULT'), r.entries], [1, 'fail', []], 'reserved material blocks the whole archive');
+}
+
+// GIVEN unexpected assets without a reserved credential WHEN inspected THEN the usual manifest review is still required.
+{
+  const z = makeZip('review', { 'index.html': '<h1>hi</h1>', '.cache/app.js': '', 'app.js.map': '{"version":3}' });
+  const r = inspect(['--zip', z]);
   check('dirty.exit', r.status, 2, 'an unexpected entry blocks the upload pending confirmation');
   check('dirty.result', r.field('RESULT'), 'confirm', 'the caller must ask before publishing');
-  check('dirty.unexpected', r.field('UNEXPECTED').split(', ').sort(), ['.env', 'app.js.map'],
+  check('dirty.unexpected', r.field('UNEXPECTED').split(', ').sort(), ['.cache/app.js', 'app.js.map'],
     'both non-allowlisted entries are named exactly');
-  check('dirty.sensitive', r.field('SENSITIVE').split(', ').sort(), ['.env', 'app.js.map'],
-    'both also match the sensitive pattern');
-  check('dirty.manifest', r.entries, ['.env', 'app.js.map', 'index.html'],
+  check('dirty.sensitive', r.field('SENSITIVE').split(', ').sort(), ['app.js.map'],
+    'the source map also matches the sensitive pattern');
+  check('dirty.manifest', r.entries, ['.cache/app.js', 'app.js.map', 'index.html'],
     'the full archive contents are shown, so the user decides on facts');
 }
 

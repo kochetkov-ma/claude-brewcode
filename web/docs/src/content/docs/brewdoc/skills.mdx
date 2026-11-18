@@ -24,7 +24,7 @@ Both setup skills implement `status | install | upgrade | enable | disable | uni
 | 2 | my-claude | [/brewdoc:my-claude](/brewdoc/skills/my-claude/) | opus | Generate documentation about Claude Code installation; `refresh` regenerates guides older than the installed brewdoc | `[ext [context]] \| [r <query>] \| [refresh]` — no args = internal installation docs |
 | 3 | memory-sync-setup | [/brewdoc:memory-sync-setup](/brewdoc/skills/memory-sync-setup/) | opus | Generator: emits a project-tailored `/memory-sync` skill into the target repo — it never syncs memory itself | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [fine-tune-prompt]` |
 | 4 | md-to-pdf | [/brewdoc:md-to-pdf](/brewdoc/skills/md-to-pdf/) | sonnet | Convert Markdown to PDF (reportlab / weasyprint) | `<file.md> [--engine name] ["prompt"] \| styles \| test` — no args = help |
-| 5 | publish | [/brewdoc:publish](/brewdoc/skills/publish/) | haiku | Publish text, files, or multi-file sites to brewpage.app — returns a shareable URL | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename] [--delivery-mode path\|subdomain]` |
+| 5 | publish | [/brewdoc:publish](/brewdoc/skills/publish/) | haiku | Draft locally, publish supplied content, create and publish, or update a specific BrewPage publication. Prefers a compatible host MCP tool and can use authorized REST. | `[prompt] <text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename] [--delivery-mode path\|subdomain] [--state JSON] [--domain hostname]` |
 
 <Callout type="tip" title="Standalone">
   All five skills work without the other plugins in the suite. The [brewcode mods](/mods/overview/) add prompt placeholders and plan-mode effort.

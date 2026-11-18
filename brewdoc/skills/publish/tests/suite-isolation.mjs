@@ -8,12 +8,18 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const lib = join(here, '../scripts/brewpage-lib.sh');
+const publishing = join(here, '../references/publishing.md');
 // Shipped User-Agent: ClaudeCode/<brewdoc plugin version> (+https://brewpage.app).
 const UA = `ClaudeCode/${JSON.parse(readFileSync(join(here, '../../..', '.claude-plugin/plugin.json'), 'utf8')).version} (+https://brewpage.app)`;
 const base = realpathSync(mkdtempSync(join(tmpdir(), 'publish-isolation-')));
 const root = join(base, 'project');
 const bin = join(base, 'bin');
 const tmp = join(base, 'tmp');
+const fixtureOwner = 'A'.repeat(32);
+const fixtureLink = 'https://brewpage.app/my/Fixture123';
+const historyPath = join(root, '.claude/brewpage-history.md');
+const testEndpoint = 'https://brewpage.app/api/html';
+const statusArgs = ['-w', '\nBP_HTTP_STATUS:%{http_code}'];
 mkdirSync(root); mkdirSync(bin); mkdirSync(tmp);
 const mock = join(bin, 'curl');
 writeFileSync(mock, [
@@ -36,7 +42,7 @@ function run(script, suffix, extraEnv = {}) {
     cwd: root, encoding: 'utf8', timeout: 10000,
     env: { ...process.env, LIB: lib, CLAUDE_SKILL_DIR: join(here, '..'), SUBST_SKILL_DIR: join(here, '..'), CLAUDE_PROJECT_DIR: root, TMPDIR: tmp,
       PATH: bin + ':' + process.env.PATH, CURL_ARGS: join(base, 'args-' + suffix), CURL_HEADERS: join(base, 'headers-' + suffix),
-      CURL_RESPONSE: JSON.stringify({ link: 'https://example.invalid/result', ownerToken: 'fixture-owner' }), ...env, ...extraEnv },
+      CURL_RESPONSE: JSON.stringify({ link: fixtureLink, ownerToken: fixtureOwner }), ...env, ...extraEnv },
   });
 }
 function prepare() {
@@ -56,9 +62,9 @@ try {
   const stale = join(tmp, 'brewpage-password.txt');
   writeFileSync(stale, 'stale-password');
   const noPassword = prepare();
-  const result = run(begin(noPassword, 'none') + '\nbp_post https://example.invalid/upload > /dev/null', 'none');
+  const result = run(begin(noPassword, 'none') + '\nbp_post ' + testEndpoint + ' > /dev/null', 'none');
   assert.equal(result.status, 0, 'THEN explicit no-password request succeeds through fake curl');
-  assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-none'), 'utf8')), ['-s', '-A', UA, '-X', 'POST', 'https://example.invalid/upload'],
+  assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-none'), 'utf8')), ['-q', '-s', '-A', UA, '-X', 'POST', testEndpoint, ...statusArgs],
     'THEN stale source creates no password header');
   assert.equal(readFileSync(stale, 'utf8'), 'stale-password', 'THEN unrelated shared source is preserved');
   assert.equal(existsSync(noPassword), false, 'THEN successful run cleans only its inputs');
@@ -69,14 +75,14 @@ try {
   const passwordSource = join(base, 'source-password.txt');
   writeFileSync(passwordSource, password + '\n', { mode: 0o600 });
   writeFileSync(join(protectedRun, 'brewpage-password-source.txt'), passwordSource + '\n');
-  const protectedResult = run(begin(protectedRun, 'file', 'subdomain') + '\nbp_post https://example.invalid/upload > /dev/null', 'file');
+  const protectedResult = run(begin(protectedRun, 'file', 'subdomain') + '\nbp_post ' + testEndpoint + ' > /dev/null', 'file');
   assert.equal(protectedResult.status, 0, 'THEN file password request succeeds');
   assert.equal(readFileSync(join(base, 'headers-file'), 'utf8'), 'X-Password: ' + password + '\n',
     'THEN fake curl reads exact header contents from private file');
   assert.deepEqual(JSON.parse(readFileSync(join(base, 'headers-file.modes'), 'utf8')), [0o600],
     'THEN supplied password header payload is private at consumer read time');
   assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-file'), 'utf8')),
-    ['-s', '-A', UA, '-X', 'POST', 'https://example.invalid/upload', '-H', '@' + protectedRun + '/password-header.txt', '-H', 'X-Delivery-Mode: subdomain'],
+    ['-q', '-s', '-A', UA, '-X', 'POST', testEndpoint, '-H', '@' + protectedRun + '/password-header.txt', '-H', 'X-Delivery-Mode: subdomain', ...statusArgs],
     'THEN password bytes stay file-only alongside the explicit delivery header');
   assert.equal(protectedResult.stdout + protectedResult.stderr, '', 'THEN helper logs no password or response');
   assert.equal(existsSync(protectedRun), false, 'THEN password transport files are cleaned on completion');
@@ -85,15 +91,15 @@ try {
   // GIVEN valid delivery choices WHEN posting THEN only the creation header changes.
   for (const mode of ['path', 'subdomain']) {
     const modeRun = prepare();
-    const outcome = run(begin(modeRun, 'none', mode) + '\nbp_post https://example.invalid/upload > /dev/null', mode);
+    const outcome = run(begin(modeRun, 'none', mode) + '\nbp_post ' + testEndpoint + ' > /dev/null', mode);
     assert.equal(outcome.status, 0, 'THEN valid delivery choice succeeds');
     assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-' + mode), 'utf8')),
-      ['-s', '-A', UA, '-X', 'POST', 'https://example.invalid/upload', '-H', 'X-Delivery-Mode: ' + mode],
+      ['-q', '-s', '-A', UA, '-X', 'POST', testEndpoint, '-H', 'X-Delivery-Mode: ' + mode, ...statusArgs],
       'THEN creation carries exact delivery header');
   }
   // GIVEN invalid delivery input WHEN beginning THEN fail before curl and clean only our run.
   const invalidRun = prepare();
-  const invalid = run(begin(invalidRun, 'none', 'invalid') + ' || exit 1\nbp_post https://example.invalid/upload', 'invalid');
+  const invalid = run(begin(invalidRun, 'none', 'invalid') + ' || exit 1\nbp_post ' + testEndpoint, 'invalid');
   assert.equal(invalid.status, 1, 'THEN invalid delivery mode fails');
   assert.equal(existsSync(join(base, 'args-invalid')), false, 'THEN invalid mode never reaches curl');
   assert.equal(existsSync(invalidRun), false, 'THEN invalid mode cleans its inputs');
@@ -135,9 +141,13 @@ try {
     'THEN a cwd-relative password file fails with no transport copy, no upload, and its run is cleaned');
 
   const skill = readFileSync(join(here, '../SKILL.md'), 'utf8');
-  assert.equal(skill.indexOf('before the first tool action') < skill.indexOf('### Step 1:'), true,
+  assert.match(skill, /Print once before the first action\.[\s\S]*PLAN — brewdoc:publish[\s\S]*## Perform the requested work/,
     'THEN PLAN instruction precedes all workflow actions');
-  const blocks = [...skill.matchAll(/```bash\n([\s\S]*?)```/g)].map(match => match[1]);
+  assert.match(skill, /```text\n\$\{CLAUDE_SKILL_DIR\}\/scripts\/brewpage-run\.sh\n```/,
+    'GIVEN the entry assigns the scoped runner path');
+  const references = readFileSync(publishing, 'utf8') + readFileSync(join(here, '../references/ownership.md'), 'utf8');
+  const blocks = [...references.matchAll(/```bash\n([\s\S]*?)```/g)]
+    .map(match => match[1].replace('{runner}', '"$SUBST_SKILL_DIR/scripts/brewpage-run.sh"'));
   for (const block of blocks) assert.equal(spawnSync('bash', ['-n'], { input: block }).status, 0,
     'THEN every shipped Bash block parses');
   // Load-time substitution, then the slots the model fills (single-quoted, '\'' escaped), as { code, env }:
@@ -146,11 +156,13 @@ try {
   const PATH_SLOTS = { path: 'SUBST_PATH', password_file: 'SUBST_PASSWORD_FILE' };
   const shipped = (marker, slots) => {
     const env = {};
+    const matches = blocks.filter(block => block.includes(marker));
+    assert.equal(matches.length, 1, 'GIVEN the reference provides one command for ' + marker);
     const code = Object.entries(slots).reduce((text, [key, value]) => {
       if (!(key in PATH_SLOTS)) return text.replaceAll('{' + key + '}', quote(value));
       env[PATH_SLOTS[key]] = value;
       return text.replaceAll('{' + key + '}', `'"$${PATH_SLOTS[key]}"'`);
-    }, blocks.find(block => block.includes(marker)).replaceAll('${CLAUDE_SKILL_DIR}', '${SUBST_SKILL_DIR}'));
+    }, matches[0]);
     return { code, env };
   };
   const runNames = () => readdirSync(tmp).filter(name => name.startsWith('brewpage.'));
@@ -160,17 +172,18 @@ try {
   const callerResult = run(caller, 'caller');
   assert.equal(callerResult.status, 0, 'THEN actual shipped caller succeeds with fake curl');
   assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-caller'), 'utf8')).map(arg => arg.replace(/brewpage\.[A-Za-z0-9]{6}/, 'brewpage.RUN')),
-    ['-s', '-A', UA, '-X', 'POST', 'https://brewpage.app/api/html?ns=my&ttl=15&format=markdown',
-      '-H', 'Content-Type: application/json', '-d', '@' + tmp + '/brewpage.RUN/payload.json'],
+    ['-q', '-s', '-A', UA, '-X', 'POST', 'https://brewpage.app/api/html?ns=my&ttl=15&format=markdown',
+      '-H', 'Content-Type: application/json', '-d', '@' + tmp + '/brewpage.RUN/payload.json', ...statusArgs],
     'THEN the my profile namespace reaches upload with the file-backed payload in a private run dir');
   assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-caller.payload'), 'utf8')), { content: hostile },
     'THEN quote, substitution, backtick and operators reach the payload verbatim');
   assert.equal(existsSync(join(root, 'injected')), false, 'THEN nothing in the text executes');
-  assert.equal(callerResult.stdout, 'OK https://example.invalid/result\n', 'THEN caller exposes URL only');
+  assert.equal(callerResult.stdout, 'OK ' + fixtureLink + '\nOWNER TOKEN SAVED\n',
+    'THEN the private result confirms the reader URL and verified storage');
   assert.equal(callerResult.stderr, '', 'THEN caller emits no response or owner token in errors');
   assert.deepEqual(runNames(), [], 'THEN actual caller cleans its owned run');
-  const history = readFileSync(join(root, '.claude/brewpage-history.md'), 'utf8');
-  assert.equal(history.split('`fixture-owner`').length - 1, 1, 'THEN response owner token is consumed into history exactly once');
+  const history = readFileSync(historyPath, 'utf8');
+  assert.equal(history.split('`' + fixtureOwner + '`').length - 1, 1, 'THEN response owner token is consumed into history exactly once');
 
   // GIVEN text split into stage chunks WHEN published by run id THEN chunks rejoin with one newline.
   const first = run(shipped('stage --run', { run_id: '', chunk: 'part one' }), 'stage-1');
@@ -183,8 +196,8 @@ try {
   assert.deepEqual([badFlag.status, badFlag.stdout, runNames()], [1, 'FAILED: namespace must be 1-32 chars of a-z0-9-\n', [staged]],
     'THEN a bad flag fails before the staged run is touched, so the text survives a retry');
   const stagedPublish = run({ ...runPublish, code: runPublish.code.replaceAll('{ns}', 'my').replaceAll('{days}', '') }, 'staged');
-  assert.equal(stagedPublish.stdout, 'OK https://example.invalid/result\n', 'THEN the staged run publishes');
-  assert.equal(JSON.parse(readFileSync(join(base, 'args-staged'), 'utf8'))[5], 'https://brewpage.app/api/html?ns=my&ttl=15&format=markdown',
+  assert.equal(stagedPublish.stdout, 'OK ' + fixtureLink + '\nOWNER TOKEN REUSED\n', 'THEN the staged run publishes under the saved owner');
+  assert.equal(JSON.parse(readFileSync(join(base, 'args-staged'), 'utf8'))[6], 'https://brewpage.app/api/html?ns=my&ttl=15&format=markdown',
     'THEN an empty ttl slot means the 15-day default');
   assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-staged.payload'), 'utf8')), { content: "part one\npart two's" },
     'THEN the payload is both chunks joined by one newline');
@@ -197,10 +210,10 @@ try {
   // GIVEN a password file WHEN the shipped text command names it THEN curl reads the header from a private file only.
   const pwRun = run(shipped("--text '{content}'", { type: 'html', ns: 'my', days: '15', delivery_mode: '', password_file: passwordSource, content: 'x' }), 'pw-shipped');
   assert.equal(pwRun.status, 0, 'THEN password publish succeeds: ' + pwRun.stdout);
-  assert.equal(readFileSync(join(base, 'headers-pw-shipped'), 'utf8'), 'X-Password: ' + password + '\n',
-    'THEN the password reaches curl only through the header file');
-  assert.equal(JSON.parse(readFileSync(join(base, 'args-pw-shipped'), 'utf8')).some(arg => arg.includes(password)), false,
-    'THEN no curl argv carries the password');
+  assert.equal(readFileSync(join(base, 'headers-pw-shipped'), 'utf8'), 'X-Password: ' + password + '\nX-Owner-Token: ' + fixtureOwner + '\n',
+    'THEN password and owner proof reach curl only through their header files');
+  assert.equal(JSON.parse(readFileSync(join(base, 'args-pw-shipped'), 'utf8')).some(arg => arg.includes(password) || arg.includes(fixtureOwner)), false,
+    'THEN no curl argv carries the password or the owner token');
 
   // GIVEN a staged run WHEN the shipped publish names a bad password file THEN fail before the run is touched.
   const runPublishWith = (runId, passwordFile) => shipped("--password-file '{password_file}' --run '{run_id}'",
@@ -222,7 +235,7 @@ try {
   const pwRetry = run(runPublishWith(pwStaged, passwordSource), 'pw-retry');
   assert.deepEqual([pwRetry.stdout, readFileSync(join(base, 'headers-pw-retry'), 'utf8'),
     JSON.parse(readFileSync(join(base, 'args-pw-retry.payload'), 'utf8')), runNames()],
-  ['OK https://example.invalid/result\n', 'X-Password: ' + password + '\n', { content: 'keep me' }, []],
+  ['OK ' + fixtureLink + '\nOWNER TOKEN REUSED\n', 'X-Password: ' + password + '\nX-Owner-Token: ' + fixtureOwner + '\n', { content: 'keep me' }, []],
   'THEN the retry with an absolute password file publishes the surviving staged text and removes the run');
 
   // GIVEN mktemp yields a non-private dir (setgid parent, default ACL) WHEN a fresh run is allocated THEN it is discarded.
@@ -257,74 +270,75 @@ try {
   const siteEntry = 'nested/hello & page.html';
   mkdirSync(join(siteSource, 'nested'), { recursive: true });
   writeFileSync(join(siteSource, siteEntry), '<h1>Fixture site</h1>');
-  const siteCode = shipped("--path '{path}'", { type: 'site-dir', ns: 'public', days: '15', entry: '', delivery_mode: '', password_file: '', path: siteSource });
-  const siteOutcome = run(siteCode, 'encoded-entry');
+  const siteCode = shipped(" publish {type} --ns '{ns}' --ttl '{days}' --entry '{entry}'", {
+    type: 'site-dir', ns: 'public', days: '15', entry: '', delivery_mode: '', password_file: '', path: siteSource,
+  });
+  const siteOutcome = run(siteCode, 'encoded-entry', { CURL_RESPONSE: JSON.stringify({
+    link: 'https://fixture-site.brewpage.app/', ownerLink: 'https://brewpage.app/api/sites/public/FixtureSite123',
+    ownerToken: fixtureOwner, fileCount: 1,
+  }) });
   assert.equal(siteOutcome.status, 0, 'THEN nested site archive verifies and reaches upload: ' + siteOutcome.stdout + siteOutcome.stderr);
   const siteArgs = JSON.parse(readFileSync(join(base, 'args-encoded-entry'), 'utf8'));
-  assert.equal(siteArgs[5], 'https://brewpage.app/api/sites?ns=public&ttl=15&entry=' + encodeURIComponent(siteEntry),
+  assert.equal(siteArgs[6], 'https://brewpage.app/api/sites?ns=public&ttl=15&entry=' + encodeURIComponent(siteEntry),
     'THEN spaces, slash and ampersand are encoded without additional query parameters');
   assert.equal(readFileSync(join(siteSource, siteEntry), 'utf8'), '<h1>Fixture site</h1>', 'THEN authored site source stays unchanged');
   assert.deepEqual(runNames(), [], 'THEN directory caller cleans its archive and transport inputs');
 
   // GIVEN shipped callers and OLD/NEW winners WHEN publishing THEN exact server identity wins.
   // Standalone copies ship their own scripts: covered by suite-standalone.mjs.
-  const variants = [
-    { name: 'brewdoc', path: join(here, '../SKILL.md'), history: '.claude/brewpage-history.md' },
-  ];
   const manage = 'https://brewpage.app/manage/html/public/Fixture123#k=fixture-key';
-  const tails = ['MANAGE: ' + manage + '\n', '', ''];
   const responses = [
-    { link: 'https://fixture123.brewpage.app/', ownerToken: 'private-new-owner', manageUrl: manage, ownerLink: 'https://brewpage.app/api/html/public/Fixture123',
+    { link: 'https://fixture123.brewpage.app/', ownerToken: 'B'.repeat(32), manageUrl: manage, ownerLink: 'https://brewpage.app/api/html/public/Fixture123',
       id: 'Fixture123', namespace: 'public', routingCohort: 'new-v1', deliveryMode: 'subdomain', modeLocked: false, hostingVersion: 1,
       createdAt: '2026-10-01T12:00:00Z', expiresAt: '2026-10-16T12:00:00Z' },
-    { link: 'https://brewpage.app/public/Legacy1234', ownerToken: 'private-old-owner' },
-    { link: 'https://brewpage.app/public/LegacyNull', ownerToken: 'private-null-owner', routingCohort: 'old', deliveryMode: null, hostingVersion: null },
+    { link: 'https://brewpage.app/public/Legacy1234', ownerToken: 'C'.repeat(32) },
+    { link: 'https://brewpage.app/public/LegacyNull', ownerToken: 'D'.repeat(32), routingCohort: 'old', deliveryMode: null, hostingVersion: null },
   ];
-  for (const variant of variants) {
-    const source = readFileSync(variant.path, 'utf8');
-    const shippedBlocks = [...source.matchAll(/```bash\n([\s\S]*?)```/g)].map(match => match[1]);
-    for (const block of shippedBlocks) assert.equal(spawnSync('bash', ['-n'], { input: block }).status, 0,
-      'THEN every variant Bash block parses');
-    const uploadBlocks = shippedBlocks.filter(block => block.includes(' publish '));
+  {
+    const uploadBlocks = blocks.filter(block => block.includes(' publish '));
     assert.equal(uploadBlocks.length, 3, 'THEN existing upload formats remain unchanged');
     assert.equal(uploadBlocks.every(block => block.includes("--delivery-mode '{delivery_mode}'")), true,
       'THEN every existing upload block carries the optional header');
-    const html = uploadBlocks.find(block => block.includes("--text '{content}'")).replaceAll('${CLAUDE_SKILL_DIR}', '${SUBST_SKILL_DIR}')
+    const html = uploadBlocks.find(block => block.includes("--text '{content}'")).trimEnd()
       .replaceAll('{type}', 'html').replaceAll('{password_file}', '');
     const textCode = mode => html.replaceAll('{ns}', 'public').replaceAll('{days}', '15')
-      .replaceAll('{delivery_mode}', mode).replaceAll('{content}', 'Fixture markdown');
+      .replaceAll('{delivery_mode}', mode).replaceAll('{content}', 'Fixture markdown') + ' --anonymous';
     const modes = [['', 'default', []], ['path', 'path', ['X-Delivery-Mode: path']], ['subdomain', 'subdomain', ['X-Delivery-Mode: subdomain']]];
     for (const [mode, label, header] of modes) for (const [index, response] of responses.entries()) {
-      const suffix = variant.name + '-' + label + '-' + index;
+      const suffix = 'brewdoc-' + label + '-' + index;
       const outcome = run(textCode(mode), suffix, { CURL_RESPONSE: JSON.stringify(response) });
       assert.equal(outcome.status, 0, 'THEN shipped HTML caller succeeds: ' + suffix + ' ' + outcome.stderr);
-      assert.equal(outcome.stdout, 'OK ' + response.link + '\n' + tails[index], 'THEN returned winner URL retains exact root slash or OLD form, with its management link');
+      assert.equal(outcome.stdout, 'OK ' + response.link + '\nOWNER TOKEN SAVED\n',
+        'THEN returned winner URL retains exact root slash or OLD form and the private receipt confirms storage');
       assert.equal(outcome.stderr, '', 'THEN caller emits no response secrets');
       const args = JSON.parse(readFileSync(join(base, 'args-' + suffix), 'utf8'));
       assert.deepEqual(args.filter(value => value.startsWith('X-Delivery-Mode:')),
         header, 'THEN only explicit requests carry a mode header even when winner differs');
+      assert.equal(readFileSync(join(base, 'headers-' + suffix), 'utf8'), '',
+        'THEN the explicitly fresh request does not send another owner’s token');
       assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-' + suffix + '.payload'), 'utf8')),
         { content: 'Fixture markdown' },
         'THEN routing metadata does not enter authored HTML payload');
-      const privateHistory = readFileSync(join(root, variant.history), 'utf8');
+      const privateHistory = readFileSync(historyPath, 'utf8');
       assert.equal(privateHistory.includes('[' + response.link + '](' + response.link + ')'), true,
         'THEN history stores exact server winner URL');
       assert.equal(privateHistory.includes('`' + response.ownerToken + '`'), true, 'THEN owner token stays in per-tool history');
       assert.equal(outcome.stdout.includes(response.ownerToken), false, 'THEN no token enters output');
-      const identityFields = ['id', 'namespace', 'type', 'routingCohort', 'deliveryMode', 'modeLocked', 'hostingVersion', 'managementLink', 'createdAt', 'expiresAt'];
+      const identityFields = ['id', 'namespace', 'type', 'routingCohort', 'deliveryMode', 'modeLocked', 'hostingVersion', 'managementLink', 'manageUrl', 'entryFile', 'createdAt', 'expiresAt'];
       const known = { ...Object.fromEntries(identityFields.map(key => [key, null])), ...response };
       const projection = Object.fromEntries(identityFields.map(key => [key, known[key]]));
       assert.equal(privateHistory.includes('`' + JSON.stringify(projection) + '`'), true,
         'THEN exact winner metadata and available original expiry, including OLD nulls, are retained');
     }
     // GIVEN invalid mode in the shipped HTML caller WHEN executed THEN reject before curl.
-    const bad = run(textCode('invalid'), variant.name + '-invalid');
+    const bad = run(textCode('invalid'), 'brewdoc-invalid');
     assert.equal(bad.status, 1, 'THEN shipped invalid mode rejects');
-    assert.equal(existsSync(join(base, 'args-' + variant.name + '-invalid')), false, 'THEN shipped invalid mode never uploads');
+    assert.equal(existsSync(join(base, 'args-brewdoc-invalid')), false, 'THEN shipped invalid mode never uploads');
 
     // GIVEN a rejected response with a token WHEN rendering failure THEN reveal no response body.
-    const rejected = run(textCode(''), variant.name + '-rejected', { CURL_RESPONSE: JSON.stringify({ ownerToken: 'error-private-owner' }) });
-    assert.equal(rejected.stdout, 'FAILED: publish rejected (no .link in response)\n', 'THEN failure prints only its safe explanation');
+    const rejectedProject = join(base, 'rejected-project'); mkdirSync(rejectedProject);
+    const rejected = run(textCode(''), 'brewdoc-rejected', { CLAUDE_PROJECT_DIR: rejectedProject, CURL_RESPONSE: JSON.stringify({ ownerToken: 'error-private-owner' }) });
+    assert.equal(rejected.stdout, 'FAILED: outcome unknown; reconcile this write before trying again (no definitive receipt)\n', 'THEN failure prints only its safe explanation');
     assert.equal(rejected.stderr, '', 'THEN no rejected-response token appears in errors');
 
     // GIVEN server error bodies and notices WHEN the shipped caller renders them THEN status + message or notices, never a token.
@@ -332,12 +346,15 @@ try {
       [{ status: 400, error: 'Bad Request', message: 'Sites allow at most 200 files.\nRemove some.', ownerToken: 'error-private-owner' },
         1, 'FAILED: publish rejected (HTTP 400: Sites allow at most 200 files. Remove some.)\n'],
       [{ status: 408, error: 'Request Timeout', message: 'Upload was interrupted before it finished; please retry.' },
-        1, 'FAILED: publish rejected (HTTP 408: Upload was interrupted before it finished; please retry.)\n'],
-      [{ link: 'https://example.invalid/n', ownerToken: 'private-notice-owner', notices: [{ code: 'a', message: 'Tags were cut.' }, { code: 'b', message: 'Second.' }] },
-        0, 'OK https://example.invalid/n\nNOTICE: Tags were cut.\nNOTICE: Second.\n'],
+        1, 'FAILED: outcome unknown; reconcile this write before trying again\n'],
+      [{ link: 'https://brewpage.app/public/Notice123', ownerToken: 'E'.repeat(32),
+        visibilityNotice: 'Anyone with the link can open it.', notices: [{ code: 'a', message: 'Tags were cut.' }, { code: 'b', message: 'Second.' }] },
+        0, 'OK https://brewpage.app/public/Notice123\nOWNER TOKEN SAVED\n'
+          + 'VISIBILITY: Anyone with the link can open it.\nNOTICE: Tags were cut.\nNOTICE: Second.\n'],
     ];
     assert.deepEqual(rendered.map(([body], i) => {
-      const r = run(textCode(''), variant.name + '-reason-' + i, { CURL_RESPONSE: JSON.stringify(body) });
+      const reasonProject = join(base, 'reason-project-' + i); mkdirSync(reasonProject);
+      const r = run(textCode(''), 'brewdoc-reason-' + i, { CLAUDE_PROJECT_DIR: reasonProject, CURL_RESPONSE: JSON.stringify(body) });
       return [r.status, r.stdout, r.stderr];
     }), rendered.map(([, status, stdout]) => [status, stdout, '']), 'THEN each response renders exactly its reason or notices');
   }
@@ -351,9 +368,9 @@ try {
     [{ status: 404, error: 'Not Found', message: 'Resource not found' }, 1, 'FAILED: limits unavailable (unexpected response)\n'],
   ];
   assert.deepEqual(limits.map(([body], i) => {
-    const r = run('bash "$SUBST_SKILL_DIR/scripts/brewpage-run.sh" limits', 'limits-' + i, { CURL_RESPONSE: JSON.stringify(body) });
+    const r = run(shipped(' limits', {}), 'limits-' + i, { CURL_RESPONSE: JSON.stringify(body) });
     return [r.status, r.stdout, JSON.parse(readFileSync(join(base, 'args-limits-' + i), 'utf8'))];
-  }), limits.map(([, status, stdout]) => [status, stdout, ['-s', '-A', UA, 'https://brewpage.app/api/limits']]),
+  }), limits.map(([, status, stdout]) => [status, stdout, ['-q', '-s', '-A', UA, 'https://brewpage.app/api/limits']]),
   'THEN limits print exact KEY: value lines from one GET, or fail on an error body');
   assert.equal(existsSync(join(root, '.claude/tmp')), false, 'THEN no run ever touched the protected project .claude/tmp');
   assert.deepEqual(readdirSync(tmp).sort(), ['brewpage-password.txt', 'first-run', 'second-run'],

@@ -22,15 +22,17 @@ Brewdoc keeps documentation in sync with the codebase, documents your Claude Cod
 | `my-claude` | Documents your Claude Code installation, architecture or a research query | [Skill](/brewdoc/skills/my-claude/) |
 | `memory-sync-setup` | Generates a project-local `/memory-sync` skill | [Skill](/brewdoc/skills/memory-sync-setup/) |
 | `md-to-pdf` | Converts Markdown to PDF with reportlab or weasyprint | [Skill](/brewdoc/skills/md-to-pdf/) |
-| `publish` | Publishes text, files or sites to brewpage.app, returns the URL | [Skill](/brewdoc/skills/publish/) |
+| `publish` | Drafts locally, publishes supplied material, creates and publishes new pages, or updates a selected BrewPage publication | [Publish guide](/brewdoc/skills/publish/) |
 
 Commands, arguments and models: [Skills](/brewdoc/skills/).
 
 ```bash
 /brewdoc:docsync-setup sync           # Sync stale docs (with confirmation)
 /brewdoc:md-to-pdf README.md          # Convert markdown to PDF
-/brewdoc:publish "Hello world"        # Publish to brewpage.app, returns the URL
+/brewdoc:publish report.md --ttl 1    # Share the report with a one-day lifetime request
 ```
+
+For publishing and updates, the skill prefers a compatible BrewPage MCP tool available in the session. If the tool is unavailable or unsuitable, the skill can use bundled REST when the host permits that route for the selected owner.
 
 <ModPromo variant="strip" />
 

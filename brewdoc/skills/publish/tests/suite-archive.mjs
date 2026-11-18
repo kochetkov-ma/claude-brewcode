@@ -34,7 +34,7 @@ const FIXTURE = {
 const EXPECTED_KEPT = [
   'about.html', 'assets/logo.png', 'css/site.css', 'deep/nested/page.html', 'index.html', 'notes.txt',
 ];
-const EXPECTED_SKIPPED = ['.DS_Store', '.env', '.git', 'app.js.map', 'build.sh', 'node_modules'];
+const EXPECTED_SKIPPED = ['.DS_Store', '.git', '1 protected credential inputs', 'app.js.map', 'build.sh', 'node_modules'];
 
 // ── harness ─────────────────────────────────────────────────────────────────
 let passed = 0;
@@ -96,6 +96,22 @@ try {
     writeFileSync(join(SITE, rel), body);
   }
 
+  // GIVEN protected project artifacts and explicitly selected private inputs.
+  {
+    const source = join(BASE, 'protected-source');
+    mkdirSync(join(source, 'nested'), { recursive: true });
+    writeFileSync(join(source, 'index.html'), '<h1>Only public bytes</h1>');
+    const retained = ['BREWPAGE-HISTORY.MD', 'nested/brewpage-recovery.txt', 'secret-read-input.txt', 'nested/external-proof.txt'];
+    for (const name of retained) writeFileSync(join(source, name), 'FIXTURE_CREDENTIAL_MUST_NOT_PUBLISH');
+    // WHEN preparing the archive THEN both the inspected list and extracted bytes contain only the intended page.
+    const result = pack(['--dir', source, '--out', OUT, '--password-file', join(source, retained[2]), '--exclude-file', join(source, retained[3])]);
+    const bytes = spawnSync('unzip', ['-p', OUT], { encoding: 'utf8' });
+    check('pack.protected', [result.status, result.entries, archived(OUT), bytes.status, bytes.stdout],
+      [0, ['index.html'], ['index.html'], 0, '<h1>Only public bytes</h1>'], 'private workspace artifacts never enter archive members or bytes');
+    check('pack.protected.locations', retained.map(name => result.out.includes(name)), retained.map(() => false),
+      'ordinary manifests aggregate protected exclusions without disclosing their private locations');
+  }
+
   // ── pack: allowlist, manifest, verified artifact (BD01 + BD-N03) ────────────
   {
     const r = pack(['--dir', SITE, '--out', OUT]);
@@ -106,7 +122,7 @@ try {
     check('pack.manifest.count', r.field('FILES'), '6', 'FILES matches the manifest length');
     check('pack.entry', r.field('ENTRY'), 'index.html', 'index.html wins entry auto-detection');
     check('pack.skipped', r.field('SKIPPED').replace(/^\d+ \(|\)$/g, '').split(', ').filter((x) => x !== '').sort(),
-      EXPECTED_SKIPPED, 'every excluded entry is named, not silently dropped');
+      EXPECTED_SKIPPED, 'ordinary skipped names remain useful while protected locations are counted safely');
 
     const listed = archived(OUT);
     check('pack.archive.set', listed, EXPECTED_KEPT,

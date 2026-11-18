@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Shell contract: `scripts/brewpage-lib.sh` (BD03 history location, protection, validation) + SKILL.md commands and
+// Shell contract: `scripts/brewpage-lib.sh` (BD03 history location, protection, validation) + publishing reference commands and
 // `scripts/brewpage-run.sh` (BD02 values as single-quoted argv of one allow-listed command).
 // Fixtures under one mkdtemp base, removed at end; no network, no upload, no real `.claude` touched.
 import { spawnSync } from 'node:child_process';
@@ -12,6 +12,8 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LIB = join(HERE, '..', 'scripts', 'brewpage-lib.sh');
 const SKILL = readFileSync(join(HERE, '..', 'SKILL.md'), 'utf8');
+const PUBLISHING = readFileSync(join(HERE, '..', 'references', 'publishing.md'), 'utf8');
+const OWNERSHIP = readFileSync(join(HERE, '..', 'references', 'ownership.md'), 'utf8');
 const LINES = SKILL.split('\n');
 
 const BASE = realpathSync(mkdtempSync(join(tmpdir(), 'brewdoc-publish-s-')));
@@ -53,13 +55,15 @@ function sh(code, { cwd, env = {} } = {}) {
 }
 
 const countLines = (re) => LINES.filter((l) => re.test(l)).length;
+check('cleanup.fixed-recovery-parent', /bp_discard[^\n]*BP_RECOVERY_DIR/.test(readFileSync(LIB, 'utf8')), false,
+  'a fixed owner recovery parent never enters recursive temporary-directory cleanup');
 
-// GIVEN the namespace question WHEN rendering public guidance THEN benefits and the read-by-anyone warning both show.
+// GIVEN the publishing reference WHEN reading public guidance THEN discovery and disclosure are both explained.
 check('skill.discovery.public', [
-  'public pages, sites and files are listed in the public gallery and the sitemap, so Google, Bing and AI search can find and index them and people can discover them.',
-  'Anyone can find and read a public publication: never put secrets, tokens or personal data there.',
-].map((s) => SKILL.includes(s)), [true, true], 'public namespace states its discovery benefits and its exposure warning');
-check('skill.discovery.obsolete', SKILL.includes('Dedicated subdomain hosts use noindex'), false,
+  'Public pages, sites and files appear in the gallery and sitemap, so readers and search engines can discover them.',
+  'Keep confidential content and personal data intended for a limited audience out of public discovery.',
+].map((s) => PUBLISHING.includes(s)), [true, true], 'public namespace states its discovery benefits and its exposure warning');
+check('skill.discovery.obsolete', (SKILL + PUBLISHING).includes('Dedicated subdomain hosts use noindex'), false,
   'the removed blanket subdomain noindex claim stays absent');
 
 // ── BD03: project root resolution ──────────────────────────────────────────
@@ -108,14 +112,14 @@ check('skill.discovery.obsolete', SKILL.includes('Dedicated subdomain hosts use 
     'the token-bearing file is owner-only — the skill used to only ask the user to keep it private');
   const readLines = (p) => (existsSync(p) ? readFileSync(p, 'utf8').split('\n').filter((l) => l !== '') : ['<missing>']);
   // Run dirs moved out of the protected .claude/ to $TMPDIR, so .claude/tmp/ is neither made nor ignored.
-  check('history.init.gitignore', readLines(gi), ['.claude/brewpage-history.md'],
+  check('history.init.gitignore', readLines(gi), ['.claude/brewpage-history.md', '.claude/brewpage-recovery.json', 'brewpage-reconciliation.json'],
     'the token file is ignored, not merely documented');
   check('history.init.notmp', existsSync(join(proj, '.claude', 'tmp')), false,
     'no run-dir parent is created under the protected .claude/');
 
   sh('bp_history_init', { cwd: proj, env: { CLAUDE_PROJECT_DIR: proj } });
   check('history.init.idempotent', readLines(gi),
-    ['.claude/brewpage-history.md'], 're-running adds no duplicate ignore lines');
+    ['.claude/brewpage-history.md', '.claude/brewpage-recovery.json', 'brewpage-reconciliation.json'], 're-running adds no duplicate ignore lines');
 
   check('history.header.token', readLines(hist).join('\n').includes('X-Owner-Token: TOKEN'), true,
     'the header carries the delete recipe');
@@ -268,40 +272,49 @@ check('skill.frontmatter.invocation', FM.filter((l) => /^(user-invocable|disable
 {
   // GIVEN the one allowed-tools Bash rule WHEN every shipped bash fence is read THEN each is that single command.
   const rules = [...FM.join('\n').matchAll(/'Bash\(([^)]*) \*\)'/g)].map((m) => m[1]);
-  const fences = [...SKILL.matchAll(/```bash\n([\s\S]*?)```/g)].map((m) => m[1].replace(/\n$/, ''));
+  const runner = SKILL.match(/```text\n([^\n]+\/scripts\/brewpage-run\.sh)\n```/)?.[1];
+  const fences = [...(SKILL + PUBLISHING + OWNERSHIP).matchAll(/```bash\n([\s\S]*?)```/g)]
+    .map((m) => m[1].replace(/\n$/, '').replace('{runner}', runner));
   const outsideQuotes = (cmd) => cmd.replace(/'[^']*'/g, '');
   check('skill.fences.rule', [rules, fences.length, fences.map((f) => [
     f.startsWith(rules[0] + ' '), f.includes('\n'), /[;&|$`()<>"\\]/.test(outsideQuotes(f.slice(rules[0].length))),
-  ])], [['bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh'], 7, Array(7).fill([true, false, false])],
+  ])], [['bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh'], 13, Array(13).fill([true, false, false])],
   'GIVEN the rule prefix WHEN each fence is checked THEN it starts with it, is one line and has no operator, quote or expansion outside single quotes');
   check('skill.fences.subcommands', fences.map((f) => f.split(' ')[2]),
-    ['probe', 'limits', 'publish', 'publish', 'stage', 'publish', 'cleanup'],
-    'GIVEN the shipped fences WHEN their subcommands are listed THEN probe, limits, path/text/staged publish, stage and cleanup are covered');
+    ['probe', 'limits', 'publish', 'publish', 'stage', 'publish', 'cleanup', 'preflight', 'update', 'owner-store', 'owner-recovery', 'owner-pending', 'owner-reconcile'],
+    'GIVEN the shipped fences WHEN their subcommands are listed THEN all documented operations retain scoped examples');
   check('skill.fences.slots', fences.filter((f) => f.includes(' publish ')).map((f) => [...f.matchAll(/ --([a-z-]+) '\{?([a-z_]*)\}?'/g)].map((m) => m[1] + '=' + m[2])), [
     ['ns=ns', 'ttl=days', 'entry=entry', 'delivery-mode=delivery_mode', 'password-file=password_file', 'path=path'],
     ['ns=ns', 'ttl=days', 'entry=', 'delivery-mode=delivery_mode', 'password-file=password_file', 'text=content'],
     ['ns=ns', 'ttl=days', 'entry=', 'delivery-mode=delivery_mode', 'password-file=password_file', 'run=run_id'],
   ], 'GIVEN the publish fences WHEN their flags are read THEN every value sits in a single-quoted slot');
+  check('skill.fences.preflight-update-owner', fences.slice(-6), [
+    `${rules[0]} preflight {local_type} --path '{path}'`,
+    `${rules[0]} update {update_type} --target '{target}' --password-file '' --path '{path}'`,
+    `${rules[0]} owner-store --target '{owner_api_url}' --reader '{reader_url}' --owner-token-file '{owner_token_file}'`,
+    `${rules[0]} owner-recovery --private-output`,
+    `${rules[0]} owner-pending --private-output`,
+    `${rules[0]} owner-reconcile --operation '{operation_id}' --resolution-file '{resolution_file}' --private-output`,
+  ], 'GIVEN selection, update and storage fences WHEN resolved THEN each path and target remains single-quoted');
 }
 check('skill.lib.sourced', countRun(/^\. "\$HERE\/brewpage-lib\.sh"$/), 1,
   'the entry script sources the lib exactly once');
-check('skill.validate.called', countRun(/^  bp_begin "\$ns" "\$days" "\$entry" "\$id" "\$pwmode" "\$mode" \|\| exit 1$/), 1,
+check('skill.validate.called', countRun(/^  bp_begin "\$\{ns:-target\}" "\$days" "\$entry" "\$id" "\$pwmode" "\$mode" \|\| exit 1$/), 1,
   'every publish runs the shared prelude, which validates before uploading');
 check('skill.history.init', [
   sh("run=$(bp_prepare); bp_begin 'mysite' '15' '' \"${run##*/}\" none >/dev/null", { cwd: BASE, env: { CLAUDE_PROJECT_DIR: BASE } }).status,
   sh("run=$(bp_prepare); bp_begin 'my site' '15' '' \"${run##*/}\" none >/dev/null", { cwd: BASE, env: { CLAUDE_PROJECT_DIR: BASE } }).status,
 ], [0, 1], 'bp_begin validates and prepares the history file, and fails the block on a bad namespace');
-check('skill.history.relative', countLines(/HISTORY_FILE="\.claude/) + countRun(/HISTORY_FILE="\.claude/), 0,
+check('skill.history.relative', countLines(/HISTORY_FILE="\.claude/) + countRun(/HISTORY_FILE="\.claude/) + Number(PUBLISHING.includes('HISTORY_FILE=".claude')), 0,
   'no shipped command hardcodes a cwd-relative history path');
-check('skill.heredoc', (SKILL + RUN).split('BREWPAGE_EOF').length - 1, 0,
+check('skill.heredoc', (SKILL + PUBLISHING + OWNERSHIP + RUN).split('BREWPAGE_EOF').length - 1, 0,
   'no content heredoc: a BREWPAGE_EOF line in the content can never close one');
-check('skill.placeholders', [
-  SKILL.split('{original_json}').length - 1,
-  SKILL.split('{password_header}').length - 1,
-  SKILL.split('{run_dir}').length - 1,
-], [0, 0, 0], 'no raw JSON, password or run-dir placeholder is left in SKILL.md');
-check('skill.password.file', countRun(/response=\$\(bp_post "https:\/\/brewpage\.app\/api\//), 4,
-  'every upload (html, json, file, site) POSTs through bp_post, which adds the X-Password header from a file');
+check('skill.placeholders', ['{original_json}', '{password_header}', '{run_dir}']
+  .map(slot => (SKILL + PUBLISHING + OWNERSHIP).split(slot).length - 1),
+[0, 0, 0], 'no raw JSON, password or run-dir placeholder is left in the shipped instructions');
+check('skill.password.file', [countRun(/response=\$\(bp_request "\$method" "\$endpoint"/),
+  readFileSync(LIB, 'utf8').includes('set -- -H "@$BP_HEADER_FILE" "$@"')], [4, true],
+  'every upload (html, json, file, site) uses the common request helper and file-backed password header');
 check('skill.payload.file', countRun(/-d @"\$(BP_RUN_DIR\/payload\.json|content)"/), 2,
   'JSON and markdown bodies are posted from files, never inlined');
 
@@ -309,15 +322,17 @@ check('skill.payload.file', countRun(/-d @"\$(BP_RUN_DIR\/payload\.json|content)
 {
   const packLine = RUN_LINES.findIndex((l) => l.includes('publish.mjs" pack'));
   const inspectLine = RUN_LINES.findIndex((l) => l.includes('publish.mjs" inspect'));
-  const gateLines = RUN_LINES.map((l, i) => [l, i]).filter(([l]) => l.includes('bp_archive_gate')).map(([, i]) => i);
+  const gateLine = RUN_LINES.findIndex((l) => l.includes('bp_archive_gate'));
+  const selectLine = RUN_LINES.findIndex((l) => l.includes('bp_selected_site "$type" "$path" || exit $?; resolved_entry'));
   const curlLine = RUN_LINES.findIndex((l) => l.includes('form_file archive'));
   check('gate.calls', [packLine >= 0, inspectLine >= 0], [true, true],
     'the directory branch packs and the supplied-ZIP branch inspects');
   check('gate.curl.count', countRun(/form_file archive/), 1, 'exactly one upload line sends an archive, shared by both site types');
-  check('gate.order', [packLine < gateLines[0], inspectLine < gateLines[1], gateLines[1] < curlLine], [true, true, true],
+  check('gate.order', [packLine < gateLine, inspectLine < gateLine, gateLine < selectLine, selectLine < curlLine], [true, true, true, true],
     'the manifest and the gate come before the upload line in both branches');
-  check('gate.abort', countRun(/^ {8}bp_archive_gate "\$rc" "\$manifest" "(\$archive)?" \|\| exit \$\?$/), 2,
-    'both branches abort through the shared gate on a non-zero verifier exit before reaching curl');
+  check('gate.abort', [countRun(/^  bp_archive_gate "\$rc" "\$manifest" "\$CHECKED_PATH"$/),
+    countRun(/bp_selected_site "\$type" "\$path"(?: "\$mcp_out")? \|\| exit \$\?/)], [1, 3],
+    'both preflight branches and the upload abort on a non-zero shared verifier exit');
   const gateZip = join(BASE, 'gate.zip'); writeFileSync(gateZip, 'fixture');
   const digest = createHash('sha256').update('fixture').digest('hex');
   const confirm = sh('bp_archive_gate 2 "ENTRY: index.html" "$GATE_ZIP"', { cwd: BASE, env: { BREWPAGE_CONFIRMED: undefined, GATE_ZIP: gateZip } });
@@ -325,9 +340,9 @@ check('skill.payload.file', countRun(/-d @"\$(BP_RUN_DIR\/payload\.json|content)
   check('gate.confirm', [confirm.status, confirm.out, ok.status, ok.out],
     [2, `REVIEW_SHA256: ${digest}\nCONFIRM: review this manifest, then re-run with --confirmed --review-sha256 ${digest}`, 0, 'index.html'],
     'the gate stops for confirmation on flagged entries and otherwise hands back the manifest ENTRY');
-  check('gate.confirmed.flag', [countRun(/^  BREWPAGE_CONFIRMED=0$/), countRun(/--confirmed\) BREWPAGE_CONFIRMED=1; shift ;;/)], [1, 1],
+  check('gate.confirmed.flag', [countRun(/^  BREWPAGE_CONFIRMED=0$/), countRun(/--confirmed\) BREWPAGE_CONFIRMED=1; shift ;;/)], [2, 2],
     'only the --confirmed flag confirms: an inherited BREWPAGE_CONFIRMED is reset first');
-  check('gate.tmpzip', countRun(/^ {8}archive="\$BP_RUN_DIR\/site\.zip"$/), 1,
+  check('gate.tmpzip', countRun(/^    CHECKED_PATH="\$BP_RUN_DIR\/site\.zip"$/), 1,
     'the archive path belongs to the unique private run directory');
   check('gate.mktemp', countRun(/\$\(mktemp/), 0,
     'the entry script never calls mktemp itself — its 0-byte file is what made zip exit 3 (BD-N03)');

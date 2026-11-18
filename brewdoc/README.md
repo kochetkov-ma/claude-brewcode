@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.12.13 |
+| Version | 6.13.0 |
 | Skills | 5 |
 | Agents | 0 |
 | Hooks | 0 |
@@ -56,7 +56,7 @@ After an update, run `/reload-plugins`, then `/brewcode:setup-status upgrade` in
 
 ## Overview
 
-Brewdoc tracks stale docs and syncs them with the codebase, and documents your Claude Code installation. It also generates a project-tailored `/memory-sync` skill, converts Markdown to PDF and publishes text, files and sites to brewpage.app. Each skill is self-contained.
+Brewdoc tracks stale docs and syncs them with the codebase, and documents your Claude Code installation. It also generates a project-tailored `/memory-sync` skill, converts Markdown to PDF and helps you draft, publish and update BrewPage content. Each skill is self-contained.
 
 Dev mode (no install): `claude --plugin-dir ./brewdoc`.
 
@@ -70,7 +70,7 @@ Dev mode (no install): `claude --plugin-dir ./brewdoc`.
 /brewdoc:my-claude refresh            # Regenerate guides older than the installed brewdoc, no questions
 /brewdoc:memory-sync-setup install    # Emit a project-tailored /memory-sync skill into this repo
 /brewdoc:md-to-pdf README.md          # Convert markdown to PDF
-/brewdoc:publish "Hello world"        # Publish to brewpage.app -- returns URL
+/brewdoc:publish "Hello world"        # Publish supplied text and return a reader link
 ```
 
 ## Skills
@@ -83,18 +83,22 @@ A `-setup` suffix marks a skill that *installs a mechanism*; both setup skills s
 | [`/brewdoc:my-claude`](skills/my-claude/README.md) | Document your Claude Code installation: setup, plugins and mods, architecture, web research; `refresh` regenerates guides older than the installed brewdoc | opus | `[ext [context]] \| [r <query>] \| [refresh]` -- no args = internal installation docs |
 | [`/brewdoc:memory-sync-setup`](skills/memory-sync-setup/README.md) | Generator: emits a project-tailored `.claude/skills/memory-sync/` | opus | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [fine-tune-prompt]` |
 | [`/brewdoc:md-to-pdf`](skills/md-to-pdf/README.md) | Markdown to PDF via reportlab or weasyprint | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
-| [`/brewdoc:publish`](skills/publish/README.md) | Publish text/file/site to brewpage.app, returns the URL | haiku | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename] [--delivery-mode path\|subdomain]` |
+| [`/brewdoc:publish`](skills/publish/README.md) | Draft locally, publish supplied content, create and publish a page, or update a specific BrewPage publication | haiku | `[prompt] <text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename] [--delivery-mode path\|subdomain] [--state JSON] [--domain hostname]` |
 
 What each skill needs and writes locally:
 
 | Skill | Needs | Writes |
 |-------|-------|--------|
-| `publish` | POSIX (macOS/Linux/WSL), `bash`, `curl`, `jq`, Python 3 with `fcntl`; Git inside Git checkouts; sites also `node`, `unzip`; directories also `zip` ([requirements](skills/publish/SKILL.md#notes)) | owner-token history `.claude/brewpage-history.md` (mode 600, git-ignored); unsafe history writes stop publication; you get the page link and a private management link, a token is shown when you ask |
+| `publish` | Inline MCP uses an available, compatible BrewPage tool. Local file checks and REST use [POSIX runner requirements](skills/publish/README.md#connection-and-local-checks). | Local drafts. When saving anonymous owner proof, the runner uses `.claude/brewpage-history.md` (mode `0600`, git-ignored). |
 | `md-to-pdf` | `reportlab` or `weasyprint` | the PDF next to the source; the engine choice in `.claude/md-to-pdf.config.json` |
 | `my-claude` | nothing extra | only under `.claude/brewdoc/`: guides in `my-claude/`, plus `INDEX.jsonl` |
 | `my-claude refresh` | nothing extra | a new dated guide; the older file stays (a same-day run overwrites) |
 
-Portable, plugin-free publish: [`brewpage-publish`](../skills/brewpage-publish/) (Claude Code), [`openclaw/brewpage-publish`](../openclaw/brewpage-publish/) (OpenClaw).
+Publish prefers a compatible BrewPage MCP tool. If it lacks a needed capability, Claude can choose authorized REST that supports the selected owner and input before sending a write. A denial ends the attempt. If the outcome is uncertain, Claude keeps the original route and checks the selected owner's receipt or inventory before another write. Updates require the exact live publication and owner access. [Write routes](skills/publish/SKILL.md#select-one-write-route)
+
+Explicit account publishing waits for authorization in the MCP client. For anonymous publishing, Claude reuses the selected key or arranges private storage or delivery for a new one. Claude confirms saves by private readback and uses private recovery if a completed publication's key could not be saved. [Ownership and receipts](skills/publish/references/ownership.md)
+
+Portable options include [`brewpage-publish`](../skills/brewpage-publish/) for compatible hosts and the [OpenClaw package](../openclaw/brewpage-publish/).
 
 ## Architecture
 

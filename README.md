@@ -11,7 +11,7 @@
 
 **Claude Code plugin suite.** Keeps big tasks on track: bounded units, a six-field brief per spawn, the plan re-anchored after a compaction. 4 plugins, 27 skills, 10 agents. [**Full documentation**](https://doc-claude.brewcode.app/getting-started/) | [**Approaches**](APPROACHES.md) | [**Update**](UPDATE.md)
 
-> **Security:** code is scanned on every commit ([Gitleaks](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/gitleaks.yml), [CodeQL](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/codeql.yml), [Semgrep](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/semgrep.yml)); no personal data is collected or transmitted.
+> **Security.** Gitleaks scans Git history when a stable `vX.Y.Z` release tag is pushed or the workflow is started manually. CodeQL and Semgrep run on demand. No personal data is collected or transmitted. [Gitleaks](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/gitleaks.yml), [CodeQL](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/codeql.yml), [Semgrep](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/semgrep.yml).
 
 ## Install in 30 seconds
 
@@ -121,14 +121,14 @@ Modes: `status | install | upgrade | enable | disable | uninstall | purge`. `dis
 
 ### 5. Publish to <img src="assets/brewpage-logo.svg" width="20" height="20" alt="BrewPage logo"> [brewpage.app](https://brewpage.app)
 
-[`/brewdoc:publish`](https://doc-claude.brewcode.app/brewdoc/skills/publish/) shares text, Markdown, JSON, a file, a folder or a ZIP site as a public link. Your content lives at your own URL, not in a Claude artifact. No sign-up; pages expire after their TTL (default 15 days). Claude may run it mid-task when you ask it to share something.
+Use `/brewdoc:publish` to prepare a local draft, publish supplied content, create and publish a page, or update an existing publication in place. It accepts text, Markdown, HTML, JSON, files and built sites. Claude prefers a compatible BrewPage MCP tool in the current session and can select authorized REST through the bundled runner before sending a write. [Publish manual](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
 
 ```
 /brewdoc:publish report.pdf --ttl 1
 /brewdoc:publish docs/v1/ --entry hub.html
 ```
 
-A private slug is unlisted, not locked: anyone with the link can open the page unless you set a password.
+You can publish without an account. Use the returned reader link for sharing. Anyone with an unlisted link can open the publication unless it is password-protected.
 
 ### More
 
@@ -156,7 +156,7 @@ How the pieces fit, in the order they are used. Full page: [doc-claude.brewcode.
 2. **Once per project.** `/brewcode:semble-setup install`, `/brewcode:convention-setup install`, `/brewcode:teams-setup install`, `/brewcode:superreview-setup install`; docs-heavy repos also `/brewdoc:docsync-setup install`. Check with `/brewcode:setup-status`.
 3. **Every bigger task.** Start with `++m` (manager: task graph and delegation); design in plan mode with `++m` (plan-effort raises effort to `xhigh`); long runs add `+++` (anti-drift cron).
 4. **Review.** `++r` or `++rr` after each phase, the generated `/superreview` before merge.
-5. **Share and stay current.** `/brewdoc:publish` returns a link; update with the release prompt or `/brewtools:plugin-update`, then `/reload-plugins` and, in each project, `/brewcode:setup-status upgrade`.
+5. **Share and stay current.** Use `/brewdoc:publish` to share a reader link. Update the plugins with the release prompt or `/brewtools:plugin-update`, then run `/reload-plugins` and `/brewcode:setup-status upgrade` in each project.
 
 ```mermaid
 flowchart TD
@@ -228,12 +228,12 @@ One subagent = one bounded unit (one deliverable, ~5 files, ~10 steps); bigger w
 
 ### Portable skills (standalone)
 
-Self-contained `SKILL.md` folders that ship outside the four plugins -- drop them into any compatible agent runtime. Both publish content to [brewpage.app](https://brewpage.app) (text, markdown, files, multi-file sites) and return a shareable URL.
+Install either self-contained `brewpage-publish` folder in a compatible skill host. Both offer the same BrewPage workflows and include a REST runner for hosts that permit shell access.
 
 | Skill | Runtime | Path |
 |-------|---------|------|
-| `brewpage-publish` | Claude Code | [`skills/brewpage-publish`](skills/brewpage-publish/) |
-| `brewpage-publish` | OpenClaw / AgentSkills | [`openclaw/brewpage-publish`](openclaw/brewpage-publish/) |
+| `brewpage-publish` | Claude Code and compatible skill hosts | [`skills/brewpage-publish`](skills/brewpage-publish/) |
+| `brewpage-publish` | OpenClaw | [`openclaw/brewpage-publish`](openclaw/brewpage-publish/) |
 
 ## Agents (10 total)
 

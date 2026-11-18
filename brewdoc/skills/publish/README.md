@@ -1,42 +1,52 @@
 # Publish (BrewPage)
 
-Publishes text, markdown, JSON, a file, a folder or a ZIP site to [brewpage.app](https://brewpage.app) and returns a shareable URL. No sign-up; content expires after its TTL (default 15 days). Private means unlisted, not locked: anyone with the link can open it unless a password is set. You get the page link and a private management link; the owner token goes to a local history file.
-
-BrewPage needs no account; anonymous publications last up to 30 days, or up to 90 days with a profile. Updates keep the original expiry. To compare it with GitHub Pages, Netlify Drop, Tiiny Host and others, see [brewpage.app/compare](https://brewpage.app/compare).
-
-Optional: sign in free (Google or any email) at [account.brewpage.app](https://account.brewpage.app) to manage publications and owner-token history. Publications still expire; sign-in is not needed to publish.
+Prepare a local draft, share supplied content, create and publish a page, or update an existing publication on [BrewPage](https://brewpage.app). You can publish anonymously or under a connected account.
 
 ## Install
 
-Install the [Brewdoc plugin](../../README.md#install), then `/reload-plugins`. Requires a POSIX runtime (macOS/Linux or WSL), `bash`, `curl`, `jq`, Python 3 (`python3`) with `fcntl`, and `git` inside Git checkouts. Site uploads also need Node.js (`node`) and `unzip`; directories need `zip`. Native Windows Python is unsupported.
-
-The skill is model-invocable: ask Claude to "publish this" or "share a link". One scoped `allowed-tools` rule (`scripts/brewpage-run.sh`) covers every step, so there are no Bash or Write prompts. Headless and `dontAsk` runs need `Skill(brewdoc:publish *)` allowed.
+Install the [Brewdoc plugin](../../README.md#install), then run `/reload-plugins` in Claude Code. Use `/brewdoc:publish` or tell Claude what to do in plain language. Allow `Skill(brewdoc:publish *)` in headless or `dontAsk` sessions.
 
 ## Usage
 
-| Input | Example | Endpoint |
-|-------|---------|----------|
-| Text / Markdown | `/brewdoc:publish "# Hello"` | `/api/html` |
-| HTML file, or whole HTML document as text | `/brewdoc:publish page.html` | `/api/html` (`format=html`; non-UTF-8 file: `/api/files`, bytes untouched) |
-| JSON (starts with `{` or `[`) | `/brewdoc:publish '{"key": "value"}'` | `/api/json` |
-| Any other file | `/brewdoc:publish report.pdf --ttl 1` | `/api/files` |
-| Directory site | `/brewdoc:publish docs/v1/ --entry hub.html` | `/api/sites` |
-| ZIP site | `/brewdoc:publish site.zip` | `/api/sites` |
+| Goal | Example | Result |
+|------|---------|--------|
+| Draft | “Prepare a draft RSVP page for BrewPage, local only.” | Local files and, for saved answers, a Page data declaration. Drafts make zero BrewPage calls. |
+| Publish supplied content | `/brewdoc:publish "# Hello"` | A reader link for the supplied Markdown. |
+| Compose and publish | “Create and publish an event announcement from these details.” | A reader link for the page Claude creates. |
+| Update | “Update this publication at `<existing reader URL>` using `page.html`.” | Replacing content in its current format keeps the address and saved visitor entries. |
 
-Flags: `--ttl N` (days), `--entry <filename>` (sites), `--delivery-mode path|subdomain` (omit for the server default), `--state JSON` (a page that saves what visitors enter: `{}` turns Page data on; entries appear in the management link's Data tab). The skill requires explicit namespace and password choices before upload. Choose `public` or a private slug, then no password or an existing local password-file path; never paste the password contents. Explicit “Skip” selects the suggested private slug or no password for its respective question. An empty, unavailable, ambiguous or unanswered choice stops before upload. Headless runs need both choices already explicit for the current content/workflow.
+Give Claude the exact existing link when updating. For an explicit format or hosting change, share the effective returned reader link. An update needs owner access to that publication. A read-only target requires a separate request to publish a new copy.
 
-In `public`, pages, sites and files are listed in the public gallery and the sitemap, so Google, Bing and AI search can find and index them and people can discover them. Use it for anything meant to be found or shared. Anyone can find and read a public publication, so never put secrets, tokens or personal data there. A private slug is unlisted and not indexed; anyone with the link can still open it unless a password is set.
+## Publishing options
 
-It returns `Published: <exact server URL>`; share that link exactly. It also returns the management link: it is private, anyone who has it can edit or delete the page. Owner tokens stay in `.claude/brewpage-history.md` (mode `600`, git-ignored); Claude shows one when you ask and never posts it or the management link publicly. Unsafe history writes stop publication. To delete a page locally, use `curl -A "ClaudeCode/6.12.13 (+https://brewpage.app)" -X DELETE "{ownerLink}" -H "X-Owner-Token: {ownerToken}"` with both values from that history.
+Link-only shares use an unlisted namespace. Anyone with the link can open it unless it is password-protected. Request `public` when you want eligible content to appear in the gallery and sitemap. Give Claude a path to an existing local password file if you want password protection. Claude uses your choices and asks only about missing details that affect the work.
 
-Site entry is the root `index.html`, else the shallowest page (`--entry` overrides); the root `.well-known/` ships; the skill knows the upload limits ([details](https://doc-claude.brewcode.app/brewdoc/skills/publish/)).
+- `--ttl N` sets the lifetime in days. New REST publications request 15 days by default.
+- `--entry filename` selects a built site's starting page. A new site defaults to the root `index.html`, then the shallowest HTML page. To replace a site, supply the complete bundle. The update uses the verified existing entry unless you request a change.
+- `--delivery-mode path|subdomain` requests a hosting mode. Use the effective mode shown in the result.
+- `--state JSON` enables Page data for eligible HTML pages and sites. `{}` uses private visitor entries by default. See the [Page data recipe](references/page-data.md).
+- `--domain hostname` requests a hostname you control for a new eligible HTML page or site. REST requires an existing owner key with account permission to manage the domain. See [Custom domains](references/custom-domain.md).
 
-Local ZIP inspection is bounded and rejects unsupported archives before upload; see [local safety requirements](SKILL.md#notes).
+Try `/brewdoc:publish page.html`, `/brewdoc:publish report.pdf --ttl 1`, `/brewdoc:publish '{"key":"value"}'`, or `/brewdoc:publish dist/ --entry index.html`. You can also supply a built site as a ZIP. The directory packer includes eligible files in the root `.well-known/` directory. For a new publication, REST treats non-UTF-8 HTML or Markdown as a downloadable file.
 
-Do not publish `.env` files or secrets: pages are reachable by anyone with the link.
+## Connection and local checks
+
+Claude prefers a compatible BrewPage MCP tool available in the current session. For files, folders and ZIPs, it checks the local input before sending bytes. If the tool cannot handle the request, Claude can select the bundled REST runner before sending a write when it supports the requested owner and input.
+
+Before an anonymous MCP create, Claude verifies an owner-only result channel or an authorized private handoff; protected storage alone cannot protect a shared tool transcript. An established owner-only context needs no extra question. Otherwise it selects authorized REST with protected receipts before writing, or leaves an MCP-only request pending.
+
+Local checks and the REST runner use `bash` and Python 3 on macOS, Linux or WSL. Local checks also require Node.js. ZIPs need `unzip`, and packing folders needs `zip`. The REST runner adds `curl`, `jq` and Python's `fcntl`, with `git` for owner history in a Git checkout. REST requests use `ClaudeCode/6.13.0 (+https://brewpage.app)`. See [local input checks and runner usage](references/publishing.md).
+
+## Ownership and receipts
+
+Claude prefers a suitable connected account when you have no other owner selected. If you ask to publish under your account, complete authorization in the MCP client when prompted. If the connection is unavailable, the request stays pending. For anonymous publishing, Claude reuses the selected saved owner key or arranges a private place to save or deliver a new key. The bundled runner can save it in `.claude/brewpage-history.md`, a workspace file readable only by its owner. Claude confirms a save after reading it back.
+
+Share the exact returned reader link and check its effective access. The ordinary REST runner result omits owner keys, management links and private receipt paths. If saving the key fails after publication, Claude reports both outcomes.
+
+The runner's `--private-output` can show a management link, private receipt or recovery path. Use it only in a verified owner-only channel. If you decline saving a new anonymous key, the runner requires `--no-save --private-output` in that channel. See [private receipts and recovery](references/ownership.md).
 
 ## Documentation
 
-- [Publish docs](https://doc-claude.brewcode.app/brewdoc/skills/publish/): hosting modes, security, owner operations.
-- [Skill source](SKILL.md) and [MD to PDF](../md-to-pdf/README.md) for PDFs before publishing.
-- Tests: `bash brewdoc/skills/publish/tests/run.sh` (no network, no upload).
+- [Publish manual](https://doc-claude.brewcode.app/brewdoc/skills/publish/) for hosting modes and examples.
+- [Skill source](SKILL.md) and [MD to PDF](../md-to-pdf/README.md) for preparing a PDF to share.
+- Local validation from the repository root uses `bash brewdoc/skills/publish/tests/run.sh`.

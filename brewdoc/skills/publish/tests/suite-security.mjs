@@ -16,6 +16,141 @@ const bin = join(base, 'bin'); mkdirSync(bin);
 writeFileSync(join(bin, 'curl'), '#!/bin/sh\nprintf \'{"link":"https://example.invalid/fixture","ownerToken":"fixture"}\\n\'\n', { mode: 0o755 });
 after(() => rmSync(base, { recursive: true, force: true }));
 
+function runtime(prefix, curl) {
+  const project = mkdtempSync(join(base, prefix));
+  const tmp = join(project, 'tmp'); mkdirSync(tmp);
+  const bin = join(project, 'bin'); mkdirSync(bin);
+  const history = join(project, '.claude', 'brewpage-history.md');
+  const traffic = join(project, 'traffic');
+  writeFileSync(join(bin, 'curl'), `#!/usr/bin/env node\n${curl}\n`, { mode: 0o700 });
+  const env = { ...process.env, CLAUDE_PROJECT_DIR: project, TMPDIR: tmp, PATH: bin + ':' + process.env.PATH, HISTORY: history, TRAFFIC: traffic };
+  const runner = join(scripts, 'brewpage-run.sh');
+  const run = (...args) => spawnSync('bash', [runner, ...args], { cwd: project, env, encoding: 'utf8', timeout: 10000 });
+  const runAsync = (...args) => new Promise((resolve, reject) => {
+    const child = spawn('bash', [runner, ...args], { cwd: project, env, timeout: 10000 });
+    let stdout = '';
+    child.stdout.on('data', chunk => { stdout += chunk; });
+    child.on('error', reject);
+    child.on('close', status => resolve({ status, stdout }));
+  });
+  return { project, history, traffic, run, runAsync };
+}
+
+const OWNER_MOCK = `
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+const method = args[args.indexOf('-X') + 1];
+const url = new URL(args.find(arg => arg.startsWith('https://')));
+const token = 'A'.repeat(32);
+const proof = args.filter((arg, i) => args[i - 1] === '-H' && arg.startsWith('@')).map(arg => [
+  fs.readFileSync(arg.slice(1), 'utf8').trim(), fs.statSync(arg.slice(1)).mode & 511
+]);
+fs.appendFileSync(process.env.TRAFFIC, JSON.stringify([method, url.href, proof, args.some(arg => arg.includes(token))]) + '\\n');
+const count = fs.readFileSync(process.env.TRAFFIC, 'utf8').trim().split('\\n').length;
+const id = method === 'PUT' ? url.pathname.split('/').at(-1) : 'Fixture' + String(count).padStart(3, '0');
+const result = { link: 'https://brewpage.app/fixture/' + id, ownerLink: 'https://brewpage.app/api/html/fixture/' + id, id, namespace: 'fixture' };
+if (!proof.length) result.ownerToken = token;
+if (args.some(arg => arg.startsWith('@') && fs.readFileSync(arg.slice(1), 'utf8').includes('simulate-save-failure'))) fs.chmodSync(process.env.HISTORY, 0o644);
+process.stdout.write(JSON.stringify(result));`;
+
+test('concurrent creates select one owner and another process updates the exact first target', async () => {
+  // GIVEN two fresh callers sharing an empty workspace and an offline API.
+  const fixture = runtime('owner-race-', OWNER_MOCK);
+  const publish = text => fixture.runAsync('publish', 'html', '--ns', 'fixture', '--password-file', '', '--text', text);
+  // WHEN both publish and a new process updates the first saved reader URL.
+  const created = await Promise.all([publish('first'), publish('second')]);
+  const link = 'https://brewpage.app/fixture/Fixture001';
+  const updated = fixture.run('update', 'html', '--target', link, '--password-file', '', '--text', 'replacement');
+  // THEN only one owner is minted and private proof reaches the exact three requests.
+  const token = 'A'.repeat(32);
+  const proof = [['X-Owner-Token: ' + token, 0o600]];
+  const createUrl = 'https://brewpage.app/api/html?ns=fixture&ttl=15&format=markdown';
+  const rows = readFileSync(fixture.traffic, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  assert.deepEqual([created.map(r => r.status), created.map(r => r.stdout.replace(/^OK .*\n/, '')).sort(), updated.status, updated.stdout,
+    rows, statSync(fixture.history).mode & 0o777, readFileSync(fixture.history, 'utf8').split('`' + token + '`').length - 1], [
+    [0, 0], ['OWNER TOKEN REUSED\n', 'OWNER TOKEN SAVED\n'], 0, `OK ${link}\nOWNER TOKEN REUSED\n`,
+    [['POST', createUrl, [], false], ['POST', createUrl, proof, false], ['PUT', 'https://brewpage.app/api/html/fixture/Fixture001?verbatim=true', proof, false]], 0o600, 3,
+  ], 'saved readback survives restart and the typed PUT reuses proof without exposing it in argv');
+});
+
+test('a failed first save leaves one create and exact protected recovery', () => {
+  // GIVEN a fixture API accepts the write and makes history unusable before saving.
+  const fixture = runtime('owner-recovery-', OWNER_MOCK);
+  const args = ['publish', 'html', '--ns', 'fixture', '--password-file', '', '--text', 'simulate-save-failure'];
+  // WHEN the successful response cannot be saved and another unqualified create starts.
+  const first = fixture.run(...args);
+  const again = fixture.run(...args);
+  const recovery = join(dirname(fixture.history), 'brewpage-recovery.json');
+  const recovered = fixture.run('owner-recovery', '--private-output');
+  // THEN the private fallback keeps the exact proof and a new process cannot replay the create.
+  assert.match(recovery ?? '', /\/brewpage-recovery\.json$/, 'the failed save retains protected recovery without exposing its location');
+  const token = 'A'.repeat(32);
+  assert.deepEqual([first.status, again.status, (first.stdout + first.stderr).includes(token), statSync(recovery).mode & 0o777,
+    [recovered.status, JSON.parse(recovered.stdout).ownerToken], readFileSync(fixture.traffic, 'utf8').trim().split('\n').map(line => JSON.parse(line)[0])],
+  [1, 1, false, 0o600, [0, token], ['POST']], 'a new private recovery process locates exact proof without a scan, disclosure or repeated create');
+  const imported = fixture.run('owner-store', '--target', 'https://brewpage.app/api/html/fixture/Fixture001', '--reader', 'https://brewpage.app/fixture/Fixture001', '--owner-token-file', recovery);
+  assert.deepEqual([imported.status, existsSync(recovery)], [0, false], 'verified import consumes only the exact recovered receipt');
+  const next = fixture.run('publish', 'html', '--ns', 'fixture', '--password-file', '', '--text', 'new publication');
+  const wire = readFileSync(fixture.traffic, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  assert.deepEqual([next.status, wire.slice(1), statSync(fixture.history).mode & 0o777, readFileSync(fixture.history, 'utf8').includes('`' + token + '`')],
+    [0, [['POST', 'https://brewpage.app/api/html?ns=fixture&ttl=15&format=markdown', [['X-Owner-Token: ' + token, 0o600]], false]], 0o600, true],
+    'a separately requested publication uses the exact recovered owner and saves it when history is available');
+});
+
+test('mixed five- and seven-column history resolves exact targets without guessing between owners', () => {
+  // GIVEN two retained owners with independently addressable publications.
+  const fixture = runtime('owners-retained-', OWNER_MOCK);
+  const first = 'https://brewpage.app/fixture/Legacy0001';
+  const second = 'https://owned-fixture.brewpage.app/';
+  const secondApi = 'https://brewpage.app/api/html/fixture/Legacy0002';
+  const firstToken = 'A'.repeat(32);
+  const secondToken = 'B'.repeat(32);
+  const old = `| date | [${first}](${first}) | \`${firstToken}\` | 15d | html |\n` +
+    `| date | [${second}](${second}) | \`${secondToken}\` | 15d | html | ${secondApi} | \`{"id":"Legacy0002","namespace":"fixture"}\` |\n`;
+  mkdirSync(dirname(fixture.history), { mode: 0o700 });
+  writeFileSync(fixture.history, old, { mode: 0o600 });
+  const create = ['publish', 'html', '--ns', 'fixture', '--password-file', '', '--text', 'next'];
+  // WHEN an unqualified create, exact legacy update and selected-owner create are attempted separately.
+  const ambiguous = fixture.run(...create);
+  assert.deepEqual([ambiguous.status, existsSync(fixture.traffic), /multiple saved owners/.test(ambiguous.stderr)], [1, false, true], 'an unresolved owner causes zero requests');
+  const update = fixture.run('update', 'html', '--target', first, '--password-file', '', '--text', 'edit legacy target');
+  const selected = fixture.run(...create, '--owner-target', secondApi);
+  // THEN only the requested routes receive their own proof and all original rows survive.
+  const wire = readFileSync(fixture.traffic, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  assert.deepEqual([update.status, selected.status, wire, readFileSync(fixture.history, 'utf8').slice(0, old.length)], [0, 0, [
+    ['PUT', 'https://brewpage.app/api/html/fixture/Legacy0001?verbatim=true', [['X-Owner-Token: ' + firstToken, 0o600]], false],
+    ['POST', 'https://brewpage.app/api/html?ns=fixture&ttl=15&format=markdown', [['X-Owner-Token: ' + secondToken, 0o600]], false],
+  ], old], 'old and new rows keep their exact owner capabilities and map to official API endpoints');
+});
+
+test('MCP preflight and REST reject protected inputs before either transport', () => {
+  // GIVEN a built directory, reserved history, selected password and arbitrary protected input.
+  const fixture = runtime('protected-input-', "require('node:fs').appendFileSync(process.env.TRAFFIC, 'unexpected'); process.exit(99);");
+  const site = join(fixture.project, 'site'); mkdirSync(site);
+  const history = join(site, 'BREWPAGE-HISTORY.MD');
+  const password = join(site, 'visitor-input.txt');
+  const proof = join(site, 'away.txt');
+  const body = '<h1>Exact public HTML</h1>';
+  writeFileSync(join(site, 'index.html'), body);
+  for (const path of [history, password, proof]) writeFileSync(path, 'FIXTURE_CREDENTIAL');
+  const zip = join(fixture.project, 'existing.zip');
+  assert.equal(spawnSync('zip', ['-q', zip, 'index.html', basename(history)], { cwd: site }).status, 0, 'prebuilt fixture contains a named protected member');
+  // WHEN each route checks the selected inputs and only the directory can produce checked content.
+  const dir = fixture.run('preflight', 'site-dir', '--path', site, '--password-file', password, '--exclude-file', proof);
+  const mcp = /^MCP_FILES_PATH: (.+)$/m.exec(dir.stdout)?.[1];
+  assert.match(mcp ?? '', /\/mcp-files\.json$/, 'directory preflight produces the checked MCP array');
+  const cases = [['file', history], ['file', proof], ['site-zip', zip]];
+  const rejected = cases.flatMap(([kind, path]) => ['preflight', 'publish'].map(command => {
+    const flags = command === 'publish' ? ['--ns', 'fixture', '--password-file', ''] : [];
+    const review = kind === 'site-zip' ? ['--confirmed', '--review-sha256', '0'.repeat(64)] : [];
+    return fixture.run(command, kind, '--path', path, '--exclude-file', proof, ...flags, ...review);
+  }));
+  // THEN neither reserved bytes nor operation-specific private paths reach the checked payload or API.
+  assert.deepEqual([dir.status, JSON.parse(readFileSync(mcp, 'utf8')),
+    rejected.map(r => [r.status, r.stdout.includes('reserved credential input')]), existsSync(fixture.traffic)],
+  [0, [{ path: 'index.html', content: body }], Array(6).fill([1, true]), false], 'both routes refuse named protected files even with attempted archive approval');
+});
+
 for (const mode of ['direct', 'runner']) for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) test(`${mode} cancellation with ${signal} removes snapshot and partial archive`, async () => {
   // GIVEN a real pack suspended inside ZIP after benign snapshot bytes and a partial archive exist.
   const fixture = mkdtempSync(join(base, 'pack-cancel-'));
@@ -123,7 +258,7 @@ for (const type of ['site-dir', 'site-zip']) test(`${type} confirmation binds ex
   const temp = join(project, 'tmp'); mkdirSync(temp);
   const localBin = join(project, 'bin'); mkdirSync(localBin);
   const captured = join(project, 'captured.zip');
-  writeFileSync(join(localBin, 'curl'), '#!/usr/bin/env node\nconst fs=require("node:fs"),path=require("node:path"); const arg=process.argv.find(a=>a.startsWith("archive=@")); const file=JSON.parse(arg.slice(9)); fs.writeFileSync(process.env.SOURCE_FILE,"source replaced at upload"); fs.copyFileSync(file,process.env.CAPTURED); fs.writeFileSync(process.env.CAPTURED+".json",JSON.stringify([fs.statSync(file).mode&511,fs.statSync(path.dirname(file)).mode&511])); process.stdout.write(\'{"link":"https://example.invalid/fixture","fileCount":3}\');\n', { mode: 0o700 });
+  writeFileSync(join(localBin, 'curl'), '#!/usr/bin/env node\nconst fs=require("node:fs"),path=require("node:path"); const arg=process.argv.find(a=>a.startsWith("archive=@")); const file=JSON.parse(arg.slice(9)); fs.writeFileSync(process.env.SOURCE_FILE,"source replaced at upload"); fs.copyFileSync(file,process.env.CAPTURED); fs.writeFileSync(process.env.CAPTURED+".json",JSON.stringify([fs.statSync(file).mode&511,fs.statSync(path.dirname(file)).mode&511])); process.stdout.write(\'{"link":"https://brewpage.app/fixture/Fixture001","ownerLink":"https://brewpage.app/api/sites/fixture/Fixture001","ownerToken":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","fileCount":3}\');\n', { mode: 0o700 });
   writeFileSync(join(site, 'index.html'), '<h1>fixture</h1>');
   writeFileSync(join(site, 'secret-config.json'), '{"fixture":"reviewed"}');
   const zip = join(project, 'source.zip');
@@ -266,18 +401,24 @@ test('expanded ZIP limits are checked before integrity decompression', () => {
   assert.deepEqual([result.status, result.stdout.trim(), existsSync(marker)], [1, 'FAILED: archive exceeds local inspection limits\nRESULT: fail', false], 'archive expansion cannot reach the integrity checker');
 });
 
-test('history failure never reports OK and hands the link, management link and token to the user', () => {
-  // GIVEN a successful response and a failed secure write WHEN finishing THEN no OK; the unsaved values are printed once.
+test('history failure retains reader facts without disclosing private proof in ordinary output', () => {
+  // GIVEN a successful response and a failed secure write WHEN finishing THEN safe reader facts remain visible.
   const result = spawnSync('bash', ['-c', '. "$LIB"; bp_history_append() { return 1; }; bp_finish \'{"link":"https://example.invalid/fixture","ownerToken":"fixture-secret","manageUrl":"https://example.invalid/manage#k=fixture-key"}\' 15 html'], { encoding: 'utf8', env: { ...process.env, LIB: join(scripts, 'brewpage-lib.sh') } });
-  assert.deepEqual([result.status, result.stdout], [1, 'FAILED: published but owner token could not be saved securely\nURL: https://example.invalid/fixture\nMANAGE: https://example.invalid/manage#k=fixture-key\nOWNER TOKEN: fixture-secret\n'], 'a live page is never left without its link, management link and token');
+  assert.deepEqual([result.status, result.stdout], [1, 'NOTICE: publication confirmed; owner history could not be saved securely\nOK https://example.invalid/fixture\n'], 'a confirmed reader result cannot expose management capability or owner proof');
 });
 
 test('privacy and recovery instructions fail closed in every distribution', () => {
-  // GIVEN all distributed instructions WHEN read THEN silence stops, the user gets both links, nothing goes public.
+  // GIVEN all distributed instructions WHEN read THEN explicit access, private management and replay prevention are required.
   const repo = join(root, '../../../..');
   for (const relative of ['brewdoc/skills/publish', 'skills/brewpage-publish', 'openclaw/brewpage-publish']) {
-    const text = readFileSync(join(repo, relative, 'SKILL.md'), 'utf8');
-    assert.deepEqual([text.includes('Never infer publication consent from silence.'), text.includes('Give the user the page link and the management link'), text.includes('Never post the management link or the token publicly (public page, repo, shared channel).'), /never chat|NEVER print the ownerToken|NEVER appear/i.test(text), /no answer →|defaults; nothing blocks/.test(text)], [true, true, true, false, false], `${relative}: privacy choice and management-link rules agree`);
+    const text = ['SKILL.md', 'references/publishing.md', 'references/ownership.md'].map(path => join(repo, relative, path))
+      .filter(path => existsSync(path)).map(path => readFileSync(path, 'utf8')).join('\n');
+    assert.deepEqual([
+      /Never infer publication consent from silence|Ask for any unresolved access choice that changes the audience/.test(text),
+      /Give the user the page link and the management link|Report the exact returned reader link/.test(text),
+      /Never post the management link or the token publicly|A shared destination receives reader-facing details only/.test(text),
+      /never chat|NEVER print the ownerToken|NEVER appear/i.test(text), /no answer →|defaults; nothing blocks/.test(text),
+    ], [true, true, true, false, false], `${relative}: access is explicit and private proof stays out of shared receipts`);
   }
 });
 

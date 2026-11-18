@@ -38,8 +38,16 @@ const FIXTURE = {
   'nested/.idea/workspace.xml': 'excluded fixture',
   'nested/.vscode/settings.json': 'excluded fixture',
   'nested/.cache/build.json': 'excluded fixture',
+  'brewpage-history.md': 'excluded history fixture',
+  'nested/brewpage-history.md': 'excluded history fixture',
+  '.claude/brewpage-history.md': 'excluded history fixture',
+  'brewpage-recovery.txt': 'excluded recovery fixture',
+  'brewpage-recovery.json': 'excluded recovery fixture',
+  'nested/brewpage-recovery.json': 'excluded recovery fixture',
+  '.claude/brewpage-recovery.json': 'excluded recovery fixture',
+  'brewpage-reconciliation.json': 'excluded reconciliation fixture',
 };
-const EXPECTED_FILES = ['assets/site.css', 'index.html', 'nested/about.html'];
+const EXPECTED_FILES = ['assets/site.css', 'build.log', 'index.html', 'nested/about.html'];
 const NOT_VERIFIED = 'FAILED: archive not verified (publish.mjs exit 1) — nothing was uploaded';
 // Fakes `zip -q -X -@ <out>` ($4 = archive); reads the piped list to EOF like real `-@`, else exiting
 // first races node's stdin write: EPIPE -> publish.mjs prints "zip failed (EPIPE)" (flaky on Linux CI).
@@ -70,16 +78,20 @@ function binWith(stubs) {
   return bin;
 }
 const UPLOAD_STUB = 'printf "%s\\n" "$@" > "$TEST_BASE/curl-args"\nfor arg in "$@"; do\n  case "$arg" in archive=@*) file="${arg#archive=@}"; file="${file#\\\"}"; file="${file%\\\"}"; cp "$file" "$TEST_BASE/uploaded.zip" || exit 1 ;; esac\ndone\n'
-  + 'printf %s \'{"link":"https://example.test/","fileCount":3}\'';
+  + 'python3 -I -S -c \'import json,sys,zipfile; print(json.dumps({"link":"https://example.test/","ownerLink":"https://brewpage.app/api/sites/fixture/Archive001","ownerToken":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","fileCount":sum(not x.is_dir() for x in zipfile.ZipFile(sys.argv[1]).infolist())}))\' "$TEST_BASE/uploaded.zip"';
 const REDIRECT_STUB = 'args=()\nfor a in "$@"; do args+=("${a/#https:\\/\\/brewpage.app/$BP_ENDPOINT}"); done\nexec "$REAL_CURL" --disable --proxy "" "${args[@]}"';
 
 function siteFence(copy, slots) {
-  const source = readFileSync(join(copy.dir, 'SKILL.md'), 'utf8');
-  const found = [...source.matchAll(/```bash\n([\s\S]*?)```/g)].map(m => m[1].replace(/\n$/, '')).filter(f => f.includes("--path '{path}'"));
+  const entry = readFileSync(join(copy.dir, 'SKILL.md'), 'utf8');
+  const source = readFileSync(join(copy.dir, 'references/publishing.md'), 'utf8');
+  const runner = entry.match(/```text\n([^\n]+\/scripts\/brewpage-run\.sh)\n```/)?.[1];
+  assert.equal(runner, copy.token + '/scripts/brewpage-run.sh', 'GIVEN the installed runner binding');
+  const found = [...source.matchAll(/```bash\n([\s\S]*?)```/g)].map(m => m[1].trimEnd())
+    .filter(f => f.startsWith('bash {runner} publish ') && f.includes("--path '{path}'"));
   assert.equal(found.length, 1, 'GIVEN exactly one ' + copy.name + ' path fence');
   // Skill dir and {path} become env refs filled by runSync/runAsync: paths never enter the command text.
   return Object.entries(slots).reduce((code, [key, value]) => code.replaceAll('{' + key + '}', value.replaceAll("'", "'\\''")),
-    found[0].replaceAll(copy.token, '${SUBST_SKILL_DIR}').replaceAll('{path}', `'"$SUBST_PATH"'`));
+    found[0].replace('{runner}', '"$SUBST_SKILL_DIR/scripts/brewpage-run.sh"').replace('{path}', `'"$SUBST_PATH"'`)) + ' --anonymous';
 }
 const slots = (type, extra = {}) => ({ type, ns: 'fixture', days: '7', entry: '', delivery_mode: '', password_file: '', ...extra });
 function writeTree(dir, files) {
@@ -111,6 +123,7 @@ function runAsync(copy, code, path, bin, extraEnv) {
   });
 }
 const lastLine = out => out.trimEnd().split('\n').pop();
+const okLine = out => out.split('\n').find(line => line.startsWith('OK '));
 const clearUpload = () => ['curl-args', 'uploaded.zip'].forEach(name => rmSync(join(base, name), { force: true }));
 
 after(() => rmSync(base, { recursive: true, force: true }));
@@ -133,7 +146,7 @@ for (const copy of COPIES) {
         request.on('end', () => {
           requests.push({ url: request.url, userAgent: request.headers['user-agent'], body: Buffer.concat(chunks) });
           reply.writeHead(200, { 'Content-Type': 'application/json' });
-          reply.end(JSON.stringify({ link: 'https://example.test/', fileCount: 2 }));
+          reply.end(JSON.stringify({ link: 'https://example.test/', ownerLink: 'https://brewpage.app/api/sites/fixture/Archive001', ownerToken: 'A'.repeat(32), fileCount: 1 }));
         });
       });
       await new Promise(listening => server.listen(0, '127.0.0.1', listening));
@@ -150,8 +163,8 @@ for (const copy of COPIES) {
           outcomes.push(await runAsync(copy, siteFence(copy, slots(kind)), site + uploadSuffix, bin, { BP_ENDPOINT: endpoint, REAL_CURL: realCurl }));
         }
         // THEN each entry decodes to its original name, the copy's user agent and real ZIP bytes reach the server.
-        assert.deepEqual(outcomes.map(o => [o.status, lastLine(o.stdout), o.stdout.split('\n').filter(l => l.startsWith('ENTRY: '))]),
-          entries.map(entry => [0, 'OK https://example.test/ | Files: 2', ['ENTRY: ' + entry]]), 'both uploads succeed with the manifest entry');
+        assert.deepEqual(outcomes.map(o => [o.status, okLine(o.stdout), o.stdout.split('\n').filter(l => l.startsWith('ENTRY: '))]),
+          entries.map(entry => [0, 'OK https://example.test/ | Files: 1', ['ENTRY: ' + entry]]), 'both uploads succeed with the manifest entry and a complete owner receipt');
         assert.deepEqual(requests.map(r => Object.fromEntries(new URL(r.url, endpoint).searchParams)),
           entries.map(entry => ({ ns: 'fixture', ttl: '7', entry })), 'query decoding preserves every entry character');
         assert.equal(requests[0].url, '/api/sites?ns=fixture&ttl=7&entry=pages%2FA%20%26%20B.html', 'slash, space and ampersand are percent-encoded');
@@ -185,10 +198,30 @@ for (const copy of COPIES) {
     const listing = spawnSync('unzip', ['-Z1', archive], { encoding: 'utf8' }).stdout.trim().split('\n').filter(n => !n.endsWith('/')).sort();
     const bytes = EXPECTED_FILES.map(name => spawnSync('unzip', ['-p', archive, name], { encoding: 'utf8' }).stdout);
     const args = readFileSync(join(base, 'curl-args'), 'utf8').split('\n');
-    assert.deepEqual([r.status, lastLine(r.stdout), listing, bytes, args[args.indexOf('-A') + 1], args.includes('X-Delivery-Mode: subdomain'),
+    assert.deepEqual([r.status, okLine(r.stdout), listing, bytes, args[args.indexOf('-A') + 1], args.includes('X-Delivery-Mode: subdomain'),
       spawnSync('unzip', ['-tq', archive]).status, runNames(), readFileSync(join(site, '.env'), 'utf8')],
-    [0, 'OK https://example.test/ | Files: 3', EXPECTED_FILES, EXPECTED_FILES.map(name => FIXTURE[name]), shippedUa(copy), true, 0, [], 'excluded fixture'],
+    [0, 'OK https://example.test/ | Files: 4', EXPECTED_FILES, EXPECTED_FILES.map(name => FIXTURE[name]), shippedUa(copy), true, 0, [], 'excluded fixture'],
     'allowlisted files only, intact bytes, headers kept, run dir removed, source untouched');
+  });
+
+  test(`${copy.name}: direct and archived owner stores and recovery are rejected before upload`, () => {
+    // GIVEN synthetic private stores alone and in separate ZIPs WHEN selected THEN none reaches curl.
+    const site = join(base, copy.name + '-protected');
+    const names = ['brewpage-history.md', 'brewpage-recovery.json', '.claude/.credentials.json', 'brewpage-reconciliation.json'];
+    writeTree(site, Object.fromEntries([['index.html', '<p>Fixture</p>'], ...names.map(name => [name, 'synthetic private fixture'])]));
+    const bin = binWith({ curl: UPLOAD_STUB });
+    const refusal = /reserved credential input/;
+    const inputs = names.flatMap((name, index) => {
+      const zip = site + '-' + index + '.zip';
+      assert.equal(spawnSync('zip', ['-q', zip, 'index.html', name], { cwd: site }).status, 0, 'each ZIP contains its selected protected member');
+      return [['file', join(site, name)], ['site-zip', zip]];
+    });
+    const outcomes = inputs.map(([type, path]) => {
+      clearUpload();
+      const result = runSync(copy, siteFence(copy, slots(type)), path, bin);
+      return [result.status, refusal.test(result.stdout + result.stderr), existsSync(join(base, 'curl-args')), runNames()];
+    });
+    assert.deepEqual(outcomes, inputs.map(() => [1, true, false, []]), 'each refuses the reserved input and cleans its invocation');
   });
 
   for (const [failure, stub, message] of FAILURES) {
@@ -228,8 +261,8 @@ for (const copy of COPIES) {
     const askedState = [asked.status, asked.stdout.split('\n').filter(l => l.startsWith('SENSITIVE: ')), lastLine(asked.stdout), existsSync(join(base, 'curl-args')), runNames()];
     const confirmed = runSync(copy, command + ' --confirmed --review-sha256 ' + digest, site, bin);
     const listing = spawnSync('unzip', ['-Z1', join(base, 'uploaded.zip')], { encoding: 'utf8' }).stdout.trim().split('\n').sort();
-    assert.deepEqual([askedState, confirmed.status, lastLine(confirmed.stdout), listing, runNames()],
-      [[2, ['SENSITIVE: secret-config.json'], confirmLine(digest), false, []], 0, 'OK https://example.test/ | Files: 3', ['index.html', 'secret-config.json'], []],
+    assert.deepEqual([askedState, confirmed.status, okLine(confirmed.stdout), listing, runNames()],
+      [[2, ['SENSITIVE: secret-config.json'], confirmLine(digest), false, []], 0, 'OK https://example.test/ | Files: 2', ['index.html', 'secret-config.json'], []],
       'nothing uploads until the identical command is re-run with --confirmed');
   });
 }
