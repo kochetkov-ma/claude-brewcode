@@ -1,8 +1,8 @@
 ---
 name: brewpage-publish
 description: "Prepare BrewPage drafts, publish supplied content or a new page, and update a specific BrewPage publication. Supports HTML, Markdown, JSON, files, built sites, and forms with saved visitor answers. Use for BrewPage, share this as a link, publish site, RSVP, poll, черновик BrewPage, опубликуй, обнови страницу."
-license: MIT
 allowed-tools: Read Glob AskUserQuestion Bash(bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh *)
+license: MIT
 ---
 
 ## Prompt contract

@@ -40,7 +40,7 @@ function wrapper(text, openclaw, openclawUA) {
   const header = text.split('---\n')[1];
   if (!openclaw) {
     const frontmatter = header.split('\n').filter(line => /^(name|description|license):/.test(line));
-    frontmatter.push('allowed-tools: Read Glob AskUserQuestion Bash(bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh *)');
+    frontmatter.splice(2, 0, 'allowed-tools: Read Glob AskUserQuestion Bash(bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh *)');
     text = replaceOne(text, header, frontmatter.join('\n') + '\n');
     text = replaceOne(text, 'Invoke only its scoped Bash command shape.',
       'Use the actual installed skill folder if the host leaves the path marker literal. Keep the scoped command shape.');

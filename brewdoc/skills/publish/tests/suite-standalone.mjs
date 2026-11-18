@@ -22,8 +22,8 @@ const FRONTMATTER = {
   skills: [
     'name: brewpage-publish',
     description,
-    'license: MIT',
     'allowed-tools: Read Glob AskUserQuestion Bash(bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh *)',
+    'license: MIT',
   ],
   openclaw: [
     'name: brewpage-publish',
