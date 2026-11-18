@@ -2,6 +2,8 @@
 
 Use this recipe when the user asks a page to save visitor input. An RSVP uses a private collection. A visitor can update their response from the same browser. The author reads all entries from the private management link's Data tab.
 
+Put a new page title in HTML `<title>`, not `publish.title`. Bind submit/click handlers before asynchronous state or configuration reads; await readiness inside the handler so the first interaction is saved.
+
 ```html
 <!doctype html>
 <html lang="en">
@@ -12,7 +14,7 @@ Use this recipe when the user asks a page to save visitor input. An RSVP uses a 
     <select name="reply"><option value="yes">Yes</option><option value="no">No</option></select>
   </label>
   <p>Your response is saved on BrewPage and can be read by the page’s author.</p>
-  <button>Save response</button>
+  <button type="submit">Save response</button>
 </form>
 <p role="status"></p>
 <script src="https://brewpage.app/js/state.js"></script>
