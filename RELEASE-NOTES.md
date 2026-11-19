@@ -2,6 +2,18 @@
 
 ---
 
+## v6.13.0 (2026-11-19)
+
+> Docs: [Publish with BrewPage](https://doc-claude.brewcode.app/brewdoc/skills/publish/) · [Codex CLI placeholder setup](https://github.com/kochetkov-ma/claude-brewcode/blob/v6.13.0/brewmod-placeholders/codex/README.md)
+
+**What changed for you**
+
+- Ask the BrewPage skill for a local draft, publish supplied material as-is, or update a specific publication in place. Updates to page content keep the reader link and saved visitor answers.
+- Publish anonymously or choose an authorized account through a compatible BrewPage MCP client. The bundled runner can publish directly when the host lacks a suitable MCP tool and the selected owner is supported.
+- Codex CLI users can opt in to a placeholder picker in the Ctrl+G external editor and attach context with the native submit hook.
+
+---
+
 ## v6.12.13 (2026-11-17)
 
 > Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
