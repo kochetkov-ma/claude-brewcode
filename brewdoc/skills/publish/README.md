@@ -35,7 +35,7 @@ Claude prefers a compatible BrewPage MCP tool available in the current session. 
 
 Before an anonymous MCP create, Claude verifies an owner-only result channel or an authorized private handoff; protected storage alone cannot protect a shared tool transcript. An established owner-only context needs no extra question. Otherwise it selects authorized REST with protected receipts before writing, or leaves an MCP-only request pending.
 
-Local checks and the REST runner use `bash` and Python 3 on macOS, Linux or WSL. Local checks also require Node.js. ZIPs need `unzip`, and packing folders needs `zip`. The REST runner adds `curl`, `jq` and Python's `fcntl`, with `git` for owner history in a Git checkout. REST requests use `ClaudeCode/6.13.0 (+https://brewpage.app)`. See [local input checks and runner usage](references/publishing.md).
+Local checks and the REST runner use `bash` and Python 3 on macOS, Linux or WSL. Local checks also require Node.js. ZIPs need `unzip`, and packing folders needs `zip`. The REST runner adds `curl`, `jq` and Python's `fcntl`, with `git` for owner history in a Git checkout. REST requests use `ClaudeCode/6.13.1 (+https://brewpage.app)`. See [local input checks and runner usage](references/publishing.md).
 
 ## Ownership and receipts
 

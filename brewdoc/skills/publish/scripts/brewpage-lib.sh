@@ -40,7 +40,7 @@ HISTORY_FILE="$BP_ROOT/.claude/brewpage-history.md"
 BP_TMPDIR="${TMPDIR:-/tmp}"
 BP_TMPDIR="${BP_TMPDIR%/}"
 # User-Agent on every brewpage.app request: <client>/<shipped version> (+https://brewpage.app).
-BP_UA="ClaudeCode/6.13.0 (+https://brewpage.app)"
+BP_UA="ClaudeCode/6.13.1 (+https://brewpage.app)"
 
 bp_history() {
   local operation="$1"
@@ -56,7 +56,7 @@ bp_history_init() {
 # brewpage.app — Published Pages
 
 > Owner tokens allow delete and in-place PUT (html/json/kv/files/sites). A 409 OLD_PUBLICATION_READ_ONLY needs an explicit replacement decision before a new create. This file and its manage URLs are private; disclose proof only through verified owner-only delivery.
-> Delete: `curl -s -A "ClaudeCode/6.13.0 (+https://brewpage.app)" -X DELETE "<Owner API>" -H "X-Owner-Token: TOKEN"`; rows without one: `https://brewpage.app/api/<type>/<ns>/<id>`, type = html|json|files|kv|sites.
+> Delete: `curl -s -A "ClaudeCode/6.13.1 (+https://brewpage.app)" -X DELETE "<Owner API>" -H "X-Owner-Token: TOKEN"`; rows without one: `https://brewpage.app/api/<type>/<ns>/<id>`, type = html|json|files|kv|sites.
 > Update a site (same URL; old publications answer 409, see above): `PUT /api/sites/<ns>/<id>` with the same `-A`, `X-Owner-Token: TOKEN` + the new bundle.
 
 | Date | URL | Owner Token | TTL | Type | Owner API | Identity |

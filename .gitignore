@@ -66,6 +66,7 @@ brewmod-*/.state/
 /.claude/rules/*
 !/.claude/rules/astro-avoid.md
 !/.claude/rules/astro-best-practice.md
+!/.claude/rules/brewpage-skill-distribution.md
 !/.claude/rules/web-accessibility.md
 !/.claude/rules/docker-avoid.md
 !/.claude/scripts/

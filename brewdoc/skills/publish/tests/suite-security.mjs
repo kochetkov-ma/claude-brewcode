@@ -53,6 +53,27 @@ if (!proof.length) result.ownerToken = token;
 if (args.some(arg => arg.startsWith('@') && fs.readFileSync(arg.slice(1), 'utf8').includes('simulate-save-failure'))) fs.chmodSync(process.env.HISTORY, 0o644);
 process.stdout.write(JSON.stringify(result));`;
 
+test('archive commands preserve checked arguments despite host ZIP defaults', () => {
+  // GIVEN compressible publishable HTML and a host preference for stored ZIP entries.
+  const project = mkdtempSync(join(base, 'archive-options-'));
+  const site = join(project, 'site');
+  mkdirSync(site);
+  writeFileSync(join(site, 'index.html'), '<p>repeat</p>'.repeat(800));
+  const env = { ...process.env, ZIPOPT: '-0' };
+  const archive = '-bundle.zip';
+  const packer = join(scripts, 'publish.mjs');
+  const invoke = (...args) => spawnSync(process.execPath, [packer, ...args], { cwd: project, env, encoding: 'utf8', timeout: 10000 });
+  // WHEN packing and rechecking an option-shaped relative archive name.
+  const packed = invoke('pack', '--dir', site, '--out', archive);
+  const checked = invoke('inspect', '--zip', archive);
+  const compression = spawnSync('python3', ['-I', '-S', '-c',
+    'import sys,zipfile; print(zipfile.ZipFile(sys.argv[1]).getinfo("index.html").compress_type)', join(project, archive)],
+  { encoding: 'utf8', timeout: 10000 });
+  // THEN the relative path is data and the selected ZIP command still uses deflate.
+  assert.deepEqual([packed.status, checked.status, compression.status, compression.stdout], [0, 0, 0, '8\n'],
+    'fixed ZIP arguments override host defaults and both archive paths resolve in the calling workspace');
+});
+
 test('concurrent creates select one owner and another process updates the exact first target', async () => {
   // GIVEN two fresh callers sharing an empty workspace and an offline API.
   const fixture = runtime('owner-race-', OWNER_MOCK);

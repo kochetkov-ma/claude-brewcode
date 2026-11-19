@@ -2,6 +2,16 @@
 
 ---
 
+## v6.13.1 (2026-11-19)
+
+> Docs: [Publish with BrewPage](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+**What changed for you**
+
+- Publishing a site now uses the same checked archive settings even when your system has its own ZIP defaults.
+
+---
+
 ## v6.13.0 (2026-11-19)
 
 > Docs: [Publish with BrewPage](https://doc-claude.brewcode.app/brewdoc/skills/publish/) · [Codex CLI placeholder setup](https://github.com/kochetkov-ma/claude-brewcode/blob/v6.13.0/brewmod-placeholders/codex/README.md)

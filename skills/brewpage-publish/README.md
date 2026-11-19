@@ -54,7 +54,7 @@ For other flagged site contents, review the manifest, then rerun with `--confirm
 For current site limits, run the helper's `limits` command or query the public API.
 
 ```bash
-curl -s -A "ClaudeCode/6.13.0 (+https://brewpage.app)" https://brewpage.app/api/limits
+curl -s -A "ClaudeCode/6.13.1 (+https://brewpage.app)" https://brewpage.app/api/limits
 ```
 
 ## Ownership and updates

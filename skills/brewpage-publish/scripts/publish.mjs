@@ -3,7 +3,7 @@
  * Exit 0 verified, manifest printed -> upload | 2 verified, flagged entries -> ask user | 1 failure, partial archive removed -> never upload. */
 import { spawn, spawnSync } from 'node:child_process';
 import { readdirSync, statSync, lstatSync, existsSync, rmSync, accessSync, constants, readFileSync, realpathSync, mkdtempSync, chmodSync, openSync, closeSync, readSync } from 'node:fs';
-import { join, relative, extname, basename, delimiter, isAbsolute } from 'node:path';
+import { join, relative, resolve, extname, basename, delimiter, isAbsolute } from 'node:path';
 import { tmpdir } from 'node:os';
 
 /** Publishable web assets. Allowlist by design: an unknown extension is dropped, never shipped. */
@@ -299,12 +299,16 @@ function isExecutable(p) {
   try { accessSync(p, constants.X_OK); return statSync(p).isFile(); } catch { return false; }
 }
 
-/** PATH lookup only, nothing is run: an exec probe reads as shell execution to skill scanners. */
+/** Check executable availability through filesystem metadata on PATH. */
 function requireTool(bin) {
   const exts = process.platform === 'win32' ? ['', ...(process.env.PATHEXT || '.EXE;.CMD;.BAT').split(';')] : [''];
   const dirs = (process.env.PATH || '').split(delimiter).filter(Boolean);
   if (!dirs.some((dir) => exts.some((ext) => isExecutable(join(dir, bin + ext))))) die(`${bin} required`);
 }
+
+// Keep Info-ZIP option defaults out of the fixed archive arguments.
+const archiveEnv = { ...process.env };
+for (const key of ['ZIP', 'ZIPOPT', 'UNZIP', 'UNZIPOPT', 'ZIPINFO', 'ZIPINFOOPT']) delete archiveEnv[key];
 
 /** Why a spawnSync child failed, '' on success; its own non-zero exit wins over the EPIPE it causes. */
 function failure(bin, r) {
@@ -315,7 +319,7 @@ function failure(bin, r) {
 
 /** One `unzip` run: { out }, or { why } telling a bad archive (non-zero exit) from a check that never finished. */
 function unzip(flag, zipPath) {
-  const r = spawnSync('unzip', [flag, zipPath], { encoding: 'utf8', maxBuffer: LIST_MAX_BUFFER, timeout: CHECK_TIMEOUT_MS, killSignal: 'SIGKILL' });
+  const r = spawnSync('unzip', [flag, zipPath], { env: archiveEnv, encoding: 'utf8', maxBuffer: LIST_MAX_BUFFER, timeout: CHECK_TIMEOUT_MS, killSignal: 'SIGKILL' });
   if (r.status !== 0 && r.status !== null) return { why: 'archive failed its integrity check' };
   const why = failure('unzip', r);
   return why ? { why: `archive could not be checked: ${why}` } : { out: r.stdout || '' };
@@ -353,8 +357,8 @@ function report(names, bytes, entry, skipped, zipPath, unexpected = [], protecte
 
 async function pack(args) {
   let dir = args.dir;
-  const out = args.out;
-  if (!dir || !out) die('pack needs --dir and --out');
+  if (!dir || !args.out) die('pack needs --dir and --out');
+  const out = resolve(args.out);
   if (!out.endsWith('.zip')) die('--out must end with .zip');
   if (!existsSync(dir) || !statSync(dir).isDirectory()) die(`not a directory: ${dir}`);
   const entryArg = validateEntry(args.entry);
@@ -388,7 +392,7 @@ async function pack(args) {
   // Keep the event loop available for ordinary cancellation; child output is discarded, never retained or printed.
   const run = (bin, argv, options) => new Promise((resolve) => {
     if (interrupted) { resolve({ status: null, signal: interrupted }); return; }
-    const child = spawn(bin, argv, { cwd: options.cwd, stdio: ['pipe', 'ignore', 'ignore'] });
+    const child = spawn(bin, argv, { cwd: options.cwd, env: options.env, stdio: ['pipe', 'ignore', 'ignore'] });
     const result = { status: null, signal: null };
     let escalation;
     const stop = (signal) => {
@@ -419,7 +423,7 @@ async function pack(args) {
     });
     snapshotWhy = failure('python3', copied);
     if (!snapshotWhy) z = await run('zip', ['-q', '-X', '-@', out], {
-      cwd: snapshot, input: `${kept.join('\n')}\n`, encoding: 'utf8',
+      cwd: snapshot, env: archiveEnv, input: `${kept.join('\n')}\n`, encoding: 'utf8',
     });
   } finally {
     if (snapshot) rmSync(snapshot, { recursive: true, force: true });
@@ -456,8 +460,8 @@ async function pack(args) {
 }
 
 function inspect(args) {
-  const zipPath = args.zip;
-  if (!zipPath) die('inspect needs --zip');
+  if (!args.zip) die('inspect needs --zip');
+  const zipPath = resolve(args.zip);
   if (!existsSync(zipPath) || !statSync(zipPath).isFile()) die(`not a file: ${zipPath}`);
   const entryArg = validateEntry(args.entry);
   requireTool('unzip');
