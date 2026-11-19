@@ -18,7 +18,7 @@ bp_project_root() {
     return 0
   fi
   local root
-  root=$(git rev-parse --show-toplevel 2>/dev/null) || root=""
+  root=$(command env -i PATH="$PATH" LC_ALL=C GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git rev-parse --show-toplevel 2>/dev/null) || root=""
   if [ -n "$root" ]; then
     printf '%s\n' "$root"
     return 0
@@ -34,6 +34,12 @@ bp_project_root() {
   printf '%s\n' "$PWD"
 }
 
+bp_python() { command python3 -I -S "$@"; }
+
+bp_curl() { command env -i PATH="$PATH" LC_ALL=C curl -q --proto '=https' "$@"; }
+
+bp_scan_input() { bp_python "$HERE/inputs.py" scan "$1" "$2" "${BP_HEADER_FILE:-}"; }
+
 BP_ROOT="$(bp_project_root)"
 BP_HISTORY_ROOT=""
 HISTORY_FILE=""
@@ -45,14 +51,14 @@ BP_SAFE_VERSION=$(cat "$HERE/../VERSION")
 BP_UA="BrewPageSkillstoreSafe/$BP_SAFE_VERSION (+https://brewpage.app)"
 
 bp_state_begin() {
-  BP_HISTORY_ROOT=$(python3 -I -S "$HERE/history.py" state-root "$BP_ROOT") || return 1
+  BP_HISTORY_ROOT=$(bp_python "$HERE/history.py" state-root "$BP_ROOT") || return 1
   HISTORY_FILE="$BP_HISTORY_ROOT/brewpage-history.md"
 }
 
 bp_history() {
   local operation="$1"
   shift
-  python3 -I -S "$HERE/history.py" "$operation" "$BP_HISTORY_ROOT" "$@"
+  bp_python "$HERE/history.py" "$operation" "$BP_HISTORY_ROOT" "$@"
 }
 
 # The state root is outside Git; the history file is owned and verified as 0600.
@@ -107,12 +113,12 @@ bp_is_markdown_path() {
 
 # rc 0: file holds a whole HTML document: doctype or <html> first, after an optional BOM and whitespace.
 bp_is_html_document() {
-  python3 -c 'import re,sys; sys.exit(0 if re.match(rb"(?:\xef\xbb\xbf)?\s*<(?:!doctype\s+html|html)(?=[\s>])", open(sys.argv[1],"rb").read(), re.I) else 1)' "$1"
+  bp_python -c 'import re,sys; sys.exit(0 if re.match(rb"(?:\xef\xbb\xbf)?\s*<(?:!doctype\s+html|html)(?=[\s>])", open(sys.argv[1],"rb").read(), re.I) else 1)' "$1"
 }
 
 # rc 0: file decodes as UTF-8; jq --rawfile would silently replace any other bytes.
 bp_is_utf8() {
-  python3 -c 'import sys; open(sys.argv[1],"rb").read().decode("utf-8")' "$1" 2>/dev/null
+  bp_python -c 'import sys; open(sys.argv[1],"rb").read().decode("utf-8")' "$1" 2>/dev/null
 }
 
 # Allocate before writing inputs; only the generated ASCII basename is substituted into blocks.
@@ -146,22 +152,6 @@ bp_discard() {
   case "${1:-}" in "$BP_TMPDIR"/brewpage.??????) rm -rf -- "$1" ;; esac
 }
 
-# jq: X-Password header line from $password; error() on <4 chars or a control char (header injection).
-# shellcheck disable=SC2016 # $password/$p are jq variables
-BP_PW_FILTER='($password | rtrimstr("\n")) as $p |
-  if ($p | length) >= 4 and ($p | explode | all(. >= 32 and . != 127))
-  then "X-Password: " + $p else error("invalid password") end'
-
-# {password_file} slot: absolute path to a readable non-symlink regular file with a valid password.
-bp_password_check() {
-  case "${1:-}" in /*) : ;; *) echo "FAILED: password file must be an absolute path"; return 1 ;; esac
-  [ -f "$1" ] && [ ! -L "$1" ] || { echo "FAILED: password source must be a non-symlink regular file"; return 1; }
-  [ -r "$1" ] || { echo "FAILED: password file is not readable"; return 1; }
-  command -v jq >/dev/null || { echo "FAILED: jq required"; return 1; }
-  jq -ner --rawfile password "$1" "$BP_PW_FILTER" >/dev/null 2>&1 ||
-    { echo "FAILED: password must have at least 4 characters and no control characters"; return 1; }
-}
-
 # Prelude: explicit run id/password policy, no implicit shared credential discovery.
 bp_begin() {
   NS="$1"; DAYS="$2"; ENTRY="$3"
@@ -174,19 +164,9 @@ bp_begin() {
   case "${5:-}" in none|file) BP_PASSWORD_MODE="$5" ;; *) echo "FAILED: explicit password mode required"; return 1 ;; esac
   bp_history_init || { echo "FAILED: cannot initialize protected owner storage"; return 1; }
   command -v jq >/dev/null || { echo "FAILED: jq required"; return 1; }
-  BP_HEADER_FILE=""
-  if [ "$BP_PASSWORD_MODE" = file ]; then
-    local source_file="$BP_RUN_DIR/brewpage-password-source.txt" password_source=""
-    [ -f "$source_file" ] && [ ! -L "$source_file" ] || { echo "FAILED: password source path file missing or unsafe"; return 1; }
-    IFS= read -r password_source < "$source_file" || true
-    bp_password_check "$password_source" || return 1
-    local password_file="$BP_RUN_DIR/brewpage-password.txt"
-    [ ! -e "$password_file" ] && [ ! -L "$password_file" ] || { echo "FAILED: password transport file already exists"; return 1; }
-    (umask 077; cat -- "$password_source" > "$password_file") || return 1
-    BP_HEADER_FILE="$BP_RUN_DIR/password-header.txt"
-    # Re-checks the copied bytes: the source may change after bp_password_check.
-    (umask 077; jq -ner --rawfile password "$password_file" "$BP_PW_FILTER" > "$BP_HEADER_FILE") 2>/dev/null ||
-      { echo "FAILED: password must have at least 4 characters and no control characters"; return 1; }
+  if [ "$BP_PASSWORD_MODE" = file ] && [ ! -f "$BP_HEADER_FILE" ]; then
+    echo 'FAILED: private password header is unavailable'
+    return 1
   fi
 }
 
@@ -211,7 +191,7 @@ bp_request() {
   local output status
   : > "$BP_RUN_DIR/http-status.txt" || return 1
   if [ "$method" = POST ]; then printf '%s' "$BP_OPERATION_REQUEST" | bp_history pending || return 1; fi
-  output=$(curl -q -s -A "$BP_UA" -X "$method" "$url" "$@" -w $'\nBP_HTTP_STATUS:%{http_code}') || return 1
+  output=$(bp_curl -s -A "$BP_UA" -X "$method" "$url" "$@" -w $'\nBP_HTTP_STATUS:%{http_code}') || return 1
   status="${output##*$'\n'BP_HTTP_STATUS:}"
   case "$status" in
     [0123456789][0123456789][0123456789])
@@ -230,13 +210,13 @@ bp_owner_begin() {
   selected=$(bp_history select "$intent" "$target" "$BP_OWNER_HEADER_FILE") || return 1
   BP_OWNER_API="$selected"
   if [ ! -f "$BP_OWNER_HEADER_FILE" ]; then BP_OWNER_HEADER_FILE=""; fi
-  BREWPAGE_OPERATION_ID=$(python3 -I -S -c 'import secrets; print(secrets.token_hex(12))') || return 1
+  BREWPAGE_OPERATION_ID=$(bp_python -c 'import secrets; print(secrets.token_hex(12))') || return 1
   export BREWPAGE_OPERATION_ID
 }
 
 bp_operation_request() {
   [ "$1" = POST ] || return 0
-  BP_OPERATION_REQUEST=$(printf '%s' "${5:-}" | python3 -I -S -c '
+  BP_OPERATION_REQUEST=$(printf '%s' "${5:-}" | bp_python -c '
 import hashlib,json,os,stat,sys
 from datetime import datetime,timezone
 from urllib.parse import urlsplit,parse_qs
@@ -293,7 +273,7 @@ bp_receipt_link() {
     | . as $link | select([($body.ownerToken // ""), ($proof | sub("^X-Owner-Token: ";"") | rtrimstr("\n"))]
         | map(strings | select(length > 0) | . as $secret | $link | contains($secret)) | any | not)
     | {link: ., ownerApi: $body.ownerLink}
-  ' 2>/dev/null | python3 -I -S "$HERE/history.py" reader-check 2>/dev/null
+  ' 2>/dev/null | bp_python "$HERE/history.py" reader-check 2>/dev/null
 }
 
 # Every confirmed result retains effective reader facts, independently of credential storage.
@@ -379,9 +359,17 @@ bp_archive_gate() {
     echo "FAILED: archive not verified (publish.mjs exit $rc) — nothing was uploaded"
     return 1
   fi
+  ENTRY=$(printf '%s' "$manifest" | jq -ser --argjson code "$rc" '
+    select(length == 1) | .[0] | select(.result == (if $code == 2 then "confirm" else "ok" end))
+    | .entry | strings | select(length > 0)
+  ' 2>/dev/null) || { echo 'FAILED: archive review metadata is invalid'; return 1; }
+  bp_scan_input "$zip" site || return 1
+  printf '%s' "$manifest" | bp_scan_input - json || return 1
+  printf 'ARCHIVE MANIFEST (JSON)\n'
+  printf '%s' "$manifest" | jq -ac . || return 1
   if [ "$rc" -eq 2 ] || [ "${BREWPAGE_CONFIRMED:-0}" = 1 ] || [ -n "${BREWPAGE_REVIEW_SHA256:-}" ]; then
     local digest
-    digest=$(python3 - "$zip" <<'PY'
+    digest=$(bp_python - "$zip" <<'PY'
 import hashlib, os, stat, sys
 fd = os.open(sys.argv[1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
 with os.fdopen(fd, 'rb') as archive:
@@ -400,5 +388,4 @@ PY
       return 2
     fi
   fi
-  ENTRY=$(printf '%s\n' "$manifest" | sed -n 's/^ENTRY: //p')
 }

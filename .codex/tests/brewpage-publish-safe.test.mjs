@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { gzipSync } from 'node:zlib';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -26,29 +27,36 @@ function fixture() {
   const state = folder('state');
   const stateBase = process.platform === 'darwin' ? join(home, 'Library', 'Application Support') : state;
   const store = join(stateBase, 'brewpage-publish-safe');
+  const controls = join(root, 'controls.json');
   const traffic = join(root, 'traffic.jsonl');
   const env = { ...process.env, HOME: home, XDG_STATE_HOME: state, TMPDIR: folder('tmp'), CLAUDE_PROJECT_DIR: project,
     PATH: bin + ':' + process.env.PATH, TRAFFIC: traffic, SYNTHETIC_OWNER: syntheticToken, SYNTHETIC_RECEIPT: JSON.stringify({ link: reader, ownerLink: endpoint,
       id: 'Receipt001', namespace: 'fixture', ownerToken: syntheticToken, manageUrl: syntheticManagement }) };
   writeFileSync(join(bin, 'curl'), `#!/usr/bin/env node
 const fs = require('node:fs');
+const fixture = JSON.parse(fs.readFileSync(${JSON.stringify(controls)}, 'utf8'));
 const args = process.argv.slice(2);
-if (process.env.WIRE_DIGEST) {
+if (fixture.CHECK_ENV && (process.env.BREWPAGE_FIXTURE_AMBIENT || args[0] !== '-q' || !args.includes('=https'))) process.exit(94);
+if (fixture.CHECK_PASSWORD) {
+  const headerPath = args.find(arg => arg.startsWith('@') && arg.endsWith('password-header.txt'))?.slice(1);
+  if (!headerPath || fs.readFileSync(headerPath, 'utf8') !== 'X-Password: ' + fixture.CHECK_PASSWORD + '\\n' || (fs.statSync(headerPath).mode & 511) !== 384) process.exit(93);
+}
+if (fixture.WIRE_DIGEST) {
   const index = args.indexOf('--data-binary');
   if (index < 0) process.exit(95);
   const body = fs.readFileSync(args[index + 1].slice(1));
-  fs.writeFileSync(process.env.WIRE_DIGEST, require('node:crypto').createHash('sha256').update(body).digest('hex'));
+  fs.writeFileSync(fixture.WIRE_DIGEST, require('node:crypto').createHash('sha256').update(body).digest('hex'));
 }
 const method = args[args.indexOf('-X') + 1];
-const receipt = JSON.parse(process.env.SYNTHETIC_RECEIPT);
+const receipt = JSON.parse(fixture.SYNTHETIC_RECEIPT);
 const ownerHeader = args.find(arg => arg.startsWith('@') && arg.endsWith('owner-token.txt'));
 const proof = ownerHeader ? fs.readFileSync(ownerHeader.slice(1), 'utf8').trim() : '';
-const status = process.env.TEST_HTTP_STATUS || (method === 'PUT' ? '200' : '201');
+const status = fixture.TEST_HTTP_STATUS || (method === 'PUT' ? '200' : '201');
 const url = args.find(arg => arg.startsWith('https://'));
 if (!url.startsWith('https://brewpage.app/api/')) process.exit(99);
-fs.appendFileSync(process.env.TRAFFIC, JSON.stringify([method, url, proof === 'X-Owner-Token: ' + process.env.SYNTHETIC_OWNER]) + '\\n');
-if (process.env.DAMAGE_HISTORY) {
-  const root = process.env.DAMAGE_HISTORY;
+fs.appendFileSync(fixture.TRAFFIC, JSON.stringify([method, url, proof === 'X-Owner-Token: ' + fixture.SYNTHETIC_OWNER]) + '\\n');
+if (fixture.DAMAGE_HISTORY) {
+  const root = fixture.DAMAGE_HISTORY;
   const slot = fs.readdirSync(root)[0];
   fs.chmodSync(root + '/' + slot + '/brewpage-history.md', 0o644);
 }
@@ -57,8 +65,13 @@ receipt.notices = [{ code: 'fixture', message: secretText }];
 receipt.message = secretText;
 process.stdout.write(JSON.stringify(receipt) + '\\nBP_HTTP_STATUS:' + status);
 `, { mode: 0o700 });
-  return { root, env, project, store, run: (variant, args, extra = {}) => spawnSync('bash', [join(repo, variant, 'scripts/brewpage-run.sh'), ...args],
-    { cwd: project, env: { ...env, ...extra }, encoding: 'utf8', timeout: 10000 }),
+  const run = (variant, args, extra = {}) => {
+    const launch = { ...env, ...extra };
+    const settings = Object.fromEntries(['TRAFFIC', 'SYNTHETIC_OWNER', 'SYNTHETIC_RECEIPT', 'TEST_HTTP_STATUS', 'WIRE_DIGEST', 'DAMAGE_HISTORY', 'CHECK_PASSWORD', 'CHECK_ENV'].map(key => [key, launch[key]]));
+    writeFileSync(controls, JSON.stringify(settings), { mode: 0o600 });
+    return spawnSync('bash', [join(repo, variant, 'scripts/brewpage-run.sh'), ...args], { cwd: project, env: launch, encoding: 'utf8', timeout: 10000 });
+  };
+  return { root, env, project, store, run,
   traffic: () => existsSync(traffic) ? readFileSync(traffic, 'utf8').trim().split('\n').map(JSON.parse) : [],
   savedDir: () => join(store, readdirSync(store)[0]) };
 }
@@ -148,7 +161,7 @@ test('uncertain creates stay bound to their exact request and selected authority
       const evidence = { source: 'owner-verified-first-party', verifiedByOperator: true, reference: 'Synthetic first-party operator finding' };
       const record = { schema: 'brewpage-safe-reconciliation-v1', operationId: attempt.operationId, requestSha256: attempt.requestSha256,
         evidence, outcome: reuse ? 'publication-owned' : 'no-write' };
-      const protectedReceipt = { origin: 'https://brewpage.app', ownerApi: 'https://brewpage.app/api/json/fixture/Receipt002', readerUrl: 'https://fixture-reader.brewpage.app/',
+      const protectedReceipt = { origin: 'https://brewpage.app', ownerApi: 'https://brewpage.app/api/json/fixture/Receipt002', readerUrl: 'https://fixture-abcde12345.brewpage.app/',
         ownerToken: syntheticToken, operationId: attempt.operationId, identity: { id: 'Receipt002', namespace: 'fixture' } };
       const contradictory = reuse ? { ...record, receipt: { ...protectedReceipt, ownerToken: 'B'.repeat(32) } } : { ...record, requestSha256: '0'.repeat(64) };
       // WHEN the runner receives mismatched and then verified outcomes in separate processes.
@@ -184,6 +197,8 @@ test('contradictory response authority never poisons saved proof', () => {
     [publish, 'POST', { type: 'json' }],
     [update, 'PUT', { link: 'https://brewpage.app/fixture/Different001' }],
     [update, 'PUT', { link: 'https://brewpage.app/manage/html/fixture/Receipt001' }],
+    [update, 'PUT', { link: 'https://example.test/fixture/Receipt001' }],
+    [update, 'PUT', { link: 'https://wrong-abcde12345.brewpage.app/' }],
   ];
   const decisions = cases.map(([action, method, conflict]) => {
     const f = fixture();
@@ -201,4 +216,66 @@ test('contradictory response authority never poisons saved proof', () => {
   // THEN existing proof remains usable without importing any contradictory response.
   assert.deepEqual(decisions, cases.map(([, method]) => [method, 0, 1, 1, 0, false, false, [false, false], [['POST', false], [method, true], ['PUT', true]]]),
     'conflicting tokens, ownership flags, types and reader links fail without replacing the verified original owner');
+});
+
+test('Safe limits launchers, Git discovery, and the private password snapshot', () => {
+  // GIVEN trusted test tools, an owner-only password and a separate Git-backed state fixture.
+  const f = fixture();
+  const blocked = fixture();
+  try {
+    const python = spawnSync('which', ['python3'], { encoding: 'utf8' }).stdout.trim();
+    const runnerBin = f.env.PATH.split(':')[0];
+    const trustedCommand = "'" + python.replaceAll("'", "'\\''") + "'";
+    writeFileSync(join(runnerBin, 'python3'), `#!/bin/bash\n[ "$1" = -I ] && [ "$2" = -S ] || exit 93\nexec ${trustedCommand} "$@"\n`, { mode: 0o700 });
+    const workspaceBin = join(f.project, 'bin'); mkdirSync(workspaceBin);
+    writeFileSync(join(workspaceBin, 'python3'), '#!/bin/sh\nexit 99\n', { mode: 0o700 });
+    const password = 'synthetic-visitor-pass';
+    const source = join(f.root, 'visitor-proof.txt');
+    writeFileSync(source, password + '\n', { mode: 0o600 });
+    const gitRoot = process.platform === 'darwin' ? blocked.env.HOME : blocked.root;
+    assert.equal(spawnSync('git', ['init', '-q', gitRoot]).status, 0, 'the restricted state fixture is in an actual local Git repository');
+    // WHEN the user selects a valid password, a readable-by-others password, and a Git-backed state location.
+    const options = [...publish.slice(0, 4), '--password-file', source, '--text', 'Fixture text'];
+    const allowed = f.run(safe, options, { PATH: `.:${workspaceBin}:${f.env.PATH}`,
+      CHECK_PASSWORD: password, CHECK_ENV: '1', BREWPAGE_FIXTURE_AMBIENT: 'sentinel' });
+    chmodSync(source, 0o644);
+    const unsafePassword = f.run(safe, options);
+    const unsafeGit = blocked.run(safe, publish, { GIT_CEILING_DIRECTORIES: gitRoot });
+    // THEN only the verified descriptor reaches a file-backed header and Git overrides cannot hide unsafe state.
+    assert.deepEqual([allowed.status, unsafePassword.status, unsafeGit.status, f.traffic().length, blocked.traffic().length,
+      [allowed, unsafePassword, unsafeGit].some(result => (result.stdout + result.stderr).includes(password))],
+    [0, 1, 1, 1, 0, false], 'isolated tool startup and private inputs permit one bounded request');
+  } finally { for (const item of [f, blocked]) rmSync(item.root, { recursive: true, force: true }); }
+});
+
+test('Safe reviews exact archive metadata and rejects credential-like or opaque bytes', () => {
+  // GIVEN authorized public site content, a skipped multiline name and one reviewable asset.
+  const f = fixture();
+  try {
+    const site = join(f.project, 'site'); mkdirSync(site);
+    writeFileSync(join(site, 'index.html'), '<h1>Approved fixture</h1>');
+    writeFileSync(join(site, 'token-guide.md'), 'Fixture documentation');
+    writeFileSync(join(site, 'skipped\ntext.txt'), 'Fixture');
+    const options = ['publish', 'site-dir', '--ns', 'fixture', '--password-file', '', '--path', site];
+    const receipt = JSON.stringify({ ...JSON.parse(f.env.SYNTHETIC_RECEIPT), ownerLink: 'https://brewpage.app/api/sites/fixture/Receipt001',
+      link: 'https://fixture-abcde12345.brewpage.app/', fileCount: 2 });
+    const fixtureKey = 'synthetic-only-credential-101';
+    // WHEN the user reviews a checked ZIP and separate selected inputs contain a fixture key or nested compression.
+    const review = f.run(safe, options);
+    const manifest = JSON.parse(review.stdout.split('\n')[1]);
+    const digest = /^REVIEW_SHA256: ([a-f0-9]{64})$/m.exec(review.stdout)?.[1];
+    assert.match(digest ?? '', /^[a-f0-9]{64}$/, 'verified manifest identifies exact review bytes');
+    const inline = f.run(safe, [...publish.slice(0, -1), `{"api_key":"${fixtureKey}"}`]);
+    const nested = join(site, 'opaque.txt'); writeFileSync(nested, gzipSync('Synthetic compressed file'));
+    const opaque = f.run(safe, options); rmSync(nested);
+    const captured = join(site, 'fixture.txt'); writeFileSync(captured, `{"api_key":"${fixtureKey}"}`);
+    const credential = f.run(safe, options); rmSync(captured);
+    const sent = f.run(safe, [...options, '--confirmed', '--review-sha256', digest], { SYNTHETIC_RECEIPT: receipt });
+    // THEN only the reviewed clean ZIP reaches the API and arbitrary skipped text does not enter the manifest.
+    assert.deepEqual([manifest.entries, manifest.entry, manifest.skipped, review.stdout.includes('text.txt'),
+      [review, inline, opaque, credential, sent].map(r => r.status), f.traffic().length,
+      [inline, opaque, credential].some(r => (r.stdout + r.stderr).includes(fixtureKey))],
+    [['index.html', 'token-guide.md'], 'index.html', 1, false, [2, 1, 1, 1, 0], 1, false],
+    'escaped manifest data and bounded content checks apply to the actual uploaded snapshot');
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
 });

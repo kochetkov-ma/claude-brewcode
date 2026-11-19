@@ -26,6 +26,7 @@ RESOLUTION = 'brewpage-reconciliation.json'
 OWNER_TOKEN = re.compile(r'[A-Za-z0-9]{32}')
 OWNER_ORIGIN = 'https://brewpage.app'
 OWNER_PATH = re.compile(r'/api/(html|json|kv|files|sites)/([a-z0-9-]{1,32})/([A-Za-z0-9_-]{1,128})')
+CONTROL_LABELS = frozenset('unlock www api admin assets static cdn status health metrics grafana prometheus monitoring autoconfig autodiscover fe-bounces account check'.split())
 ROW_KIND = {'html': 'html', 'json': 'json', 'kv': 'kv', 'file': 'files', 'files': 'files', 'site': 'sites', 'sites': 'sites'}
 
 
@@ -73,7 +74,8 @@ def read(directory, name, private=False):
 
 
 def git(root, arguments, allowed=(0, 1)):
-    result = subprocess.run(['git', '-C', root] + arguments, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env={**os.environ, 'LC_ALL': 'C'})
+    environment = {'PATH': os.environ['PATH'], 'LC_ALL': 'C', 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': os.devnull}
+    result = subprocess.run(['git', '-C', root] + arguments, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment)
     if result.returncode not in allowed:
         raise ValueError('Git safety check failed; repair repository configuration before publishing')
     return result
@@ -83,7 +85,7 @@ def repository(root):
     if shutil.which('git') is None:
         parent = root
         while True:
-            if os.path.lexists(os.path.join(parent, '.git')) or os.environ.get('GIT_DIR'):
+            if os.path.lexists(os.path.join(parent, '.git')):
                 raise ValueError('git required to protect history in a repository')
             ancestor = os.path.dirname(parent)
             if ancestor == parent:
@@ -161,7 +163,16 @@ def reader_url(value, target):
     if target is None or not isinstance(value, str) or not re.fullmatch(r'https://[A-Za-z0-9.-]+(?:[/?][^\s\x00-\x20\x7f#|`\[\]]*)?', value):
         raise ValueError('receipt needs an official target and valid reader URL')
     parsed = urlsplit(value)
-    if parsed.hostname.rstrip('.').lower() == 'brewpage.app' and (parsed.path != f'/{target[2]}/{target[3]}' or parsed.query):
+    hostname = parsed.hostname.rstrip('.').lower()
+    namespace, item = target[2], target[3]
+    if hostname == 'brewpage.app':
+        expected = f'/{namespace}/{item}'
+    else:
+        prefix = '' if namespace == 'public' else ('n' if namespace.startswith('-') else '') + namespace + '-'
+        if hostname.split('.', 1)[0] in CONTROL_LABELS or not re.fullmatch(re.escape(prefix) + r'[a-z0-9]{10}\.brewpage\.app', hostname):
+            raise ValueError('reader URL needs a supported BrewPage publication host')
+        expected = '/'
+    if parsed.path != expected or parsed.query:
         raise ValueError('reader URL conflicts with the publication identity')
     return value
 
