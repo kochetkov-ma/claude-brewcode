@@ -26,7 +26,6 @@ RESOLUTION = 'brewpage-reconciliation.json'
 OWNER_TOKEN = re.compile(r'[A-Za-z0-9]{32}')
 OWNER_ORIGIN = 'https://brewpage.app'
 OWNER_PATH = re.compile(r'/api/(html|json|kv|files|sites)/([a-z0-9-]{1,32})/([A-Za-z0-9_-]{1,128})')
-READER_PATH = re.compile(r'/([a-z0-9-]{1,32})/([A-Za-z0-9_-]{1,128})')
 ROW_KIND = {'html': 'html', 'json': 'json', 'kv': 'kv', 'file': 'files', 'files': 'files', 'site': 'sites', 'sites': 'sites'}
 
 
@@ -158,33 +157,30 @@ def owner_api(value):
     return OWNER_PATH.fullmatch(value[len(OWNER_ORIGIN):])
 
 
+def reader_url(value, target):
+    if target is None or not isinstance(value, str) or not re.fullmatch(r'https://[A-Za-z0-9.-]+(?:[/?][^\s\x00-\x20\x7f#|`\[\]]*)?', value):
+        raise ValueError('receipt needs an official target and valid reader URL')
+    parsed = urlsplit(value)
+    if parsed.hostname.rstrip('.').lower() == 'brewpage.app' and (parsed.path != f'/{target[2]}/{target[3]}' or parsed.query):
+        raise ValueError('reader URL conflicts with the publication identity')
+    return value
+
+
 def rows(data):
     for line in data.decode('utf-8').splitlines():
         parts = [value.strip() for value in line.split('|')[1:-1]]
-        if len(parts) not in (5, 7):
+        if len(parts) != 7:
             continue
         reader = re.fullmatch(r'\[(https://[^\]\s]+)\]\(\1\)', parts[1])
         if reader is None:
             continue
-        link = reader[1]
-        parsed = urlsplit(link)
-        if not parsed.hostname or parsed.username is not None or parsed.fragment or parsed.port not in (None, 443):
+        api = parts[5]
+        target = owner_api(api)
+        if target is None:
             continue
-        kind = ROW_KIND.get(parts[4].split(' ', 1)[0])
-        api = parts[5] if len(parts) == 7 else ''
-        if api:
-            match = owner_api(api)
-            if match is None:
-                continue
-            kind, ns, item = match.groups()
-            cells = json.loads(parts[6].strip('`')) if parts[6].strip('`') else {}
-            validate_identity(cells, match)
-        else:
-            path = READER_PATH.fullmatch(parsed.path) if parsed.netloc == 'brewpage.app' and not parsed.query else None
-            if path is not None and kind:
-                api = OWNER_ORIGIN + f'/api/{kind}/{path[1]}/{path[2]}'
-            elif not (parsed.hostname == 'brewpage.app' or parsed.hostname.endswith('.brewpage.app')):
-                api = None
+        link = reader_url(reader[1], target)
+        cells = json.loads(parts[6].strip('`')) if parts[6].strip('`') else {}
+        validate_identity(cells, target)
         token = parts[2].strip('`')
         if token:
             yield link, api, token
@@ -240,8 +236,7 @@ def validate_receipt(receipt, target):
 
 def owner_row(target, reader, token, identity):
     api = owner_api(target)
-    if api is None or not isinstance(reader, str) or not re.fullmatch(r'https://[^\s\x00-\x20\x7f|`\[\]]+', reader):
-        raise ValueError('owner store needs the official target and exact receipt URL')
+    reader_url(reader, api)
     kind, ns, item = api.groups()
     if not isinstance(token, str) or not OWNER_TOKEN.fullmatch(token):
         raise ValueError('owner receipt has invalid proof or conflicting target identity')
@@ -352,6 +347,10 @@ def main():
     mode, *args = sys.argv[1:]
     if mode == 'state-root':
         print(state_root(*args))
+        return
+    if mode == 'reader-check':
+        receipt = json.load(sys.stdin)
+        print(reader_url(receipt['link'], owner_api(receipt['ownerApi'])))
         return
     root, *args = args
     directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)

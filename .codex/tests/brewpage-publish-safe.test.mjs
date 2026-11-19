@@ -148,12 +148,16 @@ test('uncertain creates stay bound to their exact request and selected authority
       const evidence = { source: 'owner-verified-first-party', verifiedByOperator: true, reference: 'Synthetic first-party operator finding' };
       const record = { schema: 'brewpage-safe-reconciliation-v1', operationId: attempt.operationId, requestSha256: attempt.requestSha256,
         evidence, outcome: reuse ? 'publication-owned' : 'no-write' };
-      const protectedReceipt = { origin: 'https://brewpage.app', ownerApi: 'https://brewpage.app/api/json/fixture/Receipt002', readerUrl: 'https://brewpage.app/fixture/Receipt002',
+      const protectedReceipt = { origin: 'https://brewpage.app', ownerApi: 'https://brewpage.app/api/json/fixture/Receipt002', readerUrl: 'https://fixture-reader.brewpage.app/',
         ownerToken: syntheticToken, operationId: attempt.operationId, identity: { id: 'Receipt002', namespace: 'fixture' } };
       const contradictory = reuse ? { ...record, receipt: { ...protectedReceipt, ownerToken: 'B'.repeat(32) } } : { ...record, requestSha256: '0'.repeat(64) };
       // WHEN the runner receives mismatched and then verified outcomes in separate processes.
       writeFileSync(file, JSON.stringify(contradictory), { mode: 0o600 });
       const rejected = f.run(safe, ['owner-reconcile']);
+      const otherReader = 'https://brewpage.app/fixture/Different001';
+      writeFileSync(file, JSON.stringify({ ...record, outcome: 'publication-owned', receipt: { ...protectedReceipt, readerUrl: otherReader } }));
+      const badReader = f.run(safe, ['owner-reconcile']);
+      const wrongTarget = f.run(safe, ['update', 'json', '--target', otherReader, '--password-file', '', '--text', payload]);
       writeFileSync(file, JSON.stringify(reuse ? { ...record, receipt: protectedReceipt } : record));
       const reconciled = f.run(safe, ['owner-reconcile']);
       const fresh = f.run(safe, publish);
@@ -161,12 +165,13 @@ test('uncertain creates stay bound to their exact request and selected authority
       return { setup, unknown: unknown.status, blocked: blocked.status, rejected: rejected.status, reconciled: reconciled.status, fresh: fresh.status,
         wire: [pending.request.payloadSha256, readFileSync(wireDigest, 'utf8')], permission: statSync(f.savedDir()).mode & 0o777,
         pending: [status.pending.length, attempt.receiptAvailable, existsSync(pendingPath), existsSync(file)],
-        calls: [callsWhilePending, f.traffic().length, f.traffic().at(-1)[2]], leak: [unknown, blocked, rejected, reconciled, fresh].some(r => disclosure(r).some(Boolean)) };
+        readers: [badReader.status, wrongTarget.status], calls: [callsWhilePending, f.traffic().length, f.traffic().at(-1)[2]],
+        leak: [unknown, blocked, rejected, badReader, wrongTarget, reconciled, fresh].some(r => disclosure(r).some(Boolean)) };
     } finally { rmSync(f.root, { recursive: true, force: true }); }
   });
   const digest = createHash('sha256').update('{\n  "label": "fixture"\n}\n').digest('hex');
   assert.deepEqual(cases, [false, true].map(reuse => ({ setup: 0, unknown: 1, blocked: 1, rejected: 1, reconciled: 0, fresh: 0,
-    wire: [digest, digest], permission: 0o700, pending: [1, false, false, false], calls: [reuse ? 2 : 1, reuse ? 3 : 2, reuse], leak: false })),
+    wire: [digest, digest], permission: 0o700, pending: [1, false, false, false], readers: [1, 1], calls: [reuse ? 2 : 1, reuse ? 3 : 2, reuse], leak: false })),
   'every POST journals exact payload bytes, and only a verified request and owner match closes that attempt');
 });
 
@@ -177,6 +182,8 @@ test('contradictory response authority never poisons saved proof', () => {
     [update, 'PUT', { ownerToken: conflictingProof }],
     [publish, 'POST', { result: { action: 'created', extras: { isOwner: false } } }],
     [publish, 'POST', { type: 'json' }],
+    [update, 'PUT', { link: 'https://brewpage.app/fixture/Different001' }],
+    [update, 'PUT', { link: 'https://brewpage.app/manage/html/fixture/Receipt001' }],
   ];
   const decisions = cases.map(([action, method, conflict]) => {
     const f = fixture();
@@ -187,11 +194,11 @@ test('contradictory response authority never poisons saved proof', () => {
       const bad = f.run(safe, action, { SYNTHETIC_RECEIPT: JSON.stringify(receipt) });
       const recover = f.run(safe, ['owner-recover']);
       const valid = f.run(safe, update);
-      return [method, first.status, bad.status, recover.status, valid.status,
+      return [method, first.status, bad.status, recover.status, valid.status, /^OK /m.test(bad.stdout),
         (bad.stdout + bad.stderr).includes(conflictingProof), disclosure(bad), f.traffic().map(row => [row[0], row[2]])];
     } finally { rmSync(f.root, { recursive: true, force: true }); }
   });
   // THEN existing proof remains usable without importing any contradictory response.
-  assert.deepEqual(decisions, cases.map(([, method]) => [method, 0, 1, 1, 0, false, [false, false], [['POST', false], [method, true], ['PUT', true]]]),
-    'conflicting tokens, ownership flags and types are rejected without replacing the verified original owner');
+  assert.deepEqual(decisions, cases.map(([, method]) => [method, 0, 1, 1, 0, false, false, [false, false], [['POST', false], [method, true], ['PUT', true]]]),
+    'conflicting tokens, ownership flags, types and reader links fail without replacing the verified original owner');
 });

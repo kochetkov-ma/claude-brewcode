@@ -292,7 +292,8 @@ bp_receipt_link() {
     | $body.link | strings | select(test("^https://[A-Za-z0-9.-]+(?:/[^[:space:][:cntrl:]#|`]*|[?][^[:space:][:cntrl:]#|`]*)?$") and . != $body.manageUrl and . != $body.managementLink)
     | . as $link | select([($body.ownerToken // ""), ($proof | sub("^X-Owner-Token: ";"") | rtrimstr("\n"))]
         | map(strings | select(length > 0) | . as $secret | $link | contains($secret)) | any | not)
-  ' 2>/dev/null
+    | {link: ., ownerApi: $body.ownerLink}
+  ' 2>/dev/null | python3 -I -S "$HERE/history.py" reader-check 2>/dev/null
 }
 
 # Every confirmed result retains effective reader facts, independently of credential storage.
