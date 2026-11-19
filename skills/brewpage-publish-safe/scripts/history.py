@@ -30,6 +30,10 @@ CONTROL_LABELS = frozenset('unlock www api admin assets static cdn status health
 ROW_KIND = {'html': 'html', 'json': 'json', 'kv': 'kv', 'file': 'files', 'files': 'files', 'site': 'sites', 'sites': 'sites'}
 
 
+class UnsupportedReaderHost(ValueError):
+    pass
+
+
 def regular(directory, name):
     try:
         fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
@@ -170,7 +174,7 @@ def reader_url(value, target):
     else:
         prefix = '' if namespace == 'public' else ('n' if namespace.startswith('-') else '') + namespace + '-'
         if hostname.split('.', 1)[0] in CONTROL_LABELS or not re.fullmatch(re.escape(prefix) + r'[a-z0-9]{10}\.brewpage\.app', hostname):
-            raise ValueError('reader URL needs a supported BrewPage publication host')
+            raise UnsupportedReaderHost('reader URL needs a supported BrewPage publication host')
         expected = '/'
     if parsed.path != expected or parsed.query:
         raise ValueError('reader URL conflicts with the publication identity')
@@ -189,7 +193,10 @@ def rows(data):
         target = owner_api(api)
         if target is None:
             continue
-        link = reader_url(reader[1], target)
+        try:
+            link = reader_url(reader[1], target)
+        except UnsupportedReaderHost:
+            continue
         cells = json.loads(parts[6].strip('`')) if parts[6].strip('`') else {}
         validate_identity(cells, target)
         token = parts[2].strip('`')
@@ -209,11 +216,15 @@ def select(data, intent, target, out):
     token, = tokens
     if not OWNER_TOKEN.fullmatch(token):
         raise ValueError('stored owner proof is invalid')
-    if intent == 'update':
+    if intent == 'update' or target:
         endpoints = {api for api, _ in candidates}
         if len(endpoints) != 1:
             raise ValueError('update target is ambiguous')
         print(next(iter(endpoints)))
+    write_owner_header(out, token)
+
+
+def write_owner_header(out, token):
     fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, 'w', encoding='ascii') as header:
         header.write('X-Owner-Token: ' + token + '\n')
@@ -377,6 +388,12 @@ def main():
         pending_bytes = read(directory, PENDING, private=True)
         pending = pending_record(pending_bytes) if pending_bytes is not None else None
         operation = os.environ.get('BREWPAGE_OPERATION_ID', '')
+        if mode == 'recover-target':
+            receipt, target, _ = receipt_row(recovery)
+            check_create(pending, receipt.get('operationId'), target, receipt['ownerToken'])
+            write_owner_header(args[0], receipt['ownerToken'])
+            print(json.dumps({'reader': receipt['readerUrl'], 'ownerApi': receipt['ownerApi']}, separators=(',', ':')))
+            return
         if mode == 'pending-list':
             state = []
             if pending:

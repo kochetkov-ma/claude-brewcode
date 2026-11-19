@@ -7,29 +7,57 @@ unset LD_PRELOAD LD_LIBRARY_PATH DYLD_INSERT_LIBRARIES DYLD_LIBRARY_PATH DYLD_FR
 
 source_path=${BASH_SOURCE[0]}
 case "$source_path" in */*) source_path=${source_path%/*} ;; *) source_path=. ;; esac
-HERE="$(cd "$source_path" && pwd -P)"
+HERE="$(builtin cd "$source_path" && builtin pwd -P)"
 
-# Skip launchers inside the publication workspace and relative PATH entries.
-work_path="$(pwd -P)"
-trusted_root="$work_path"
-if [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
-  trusted_root="$(cd "$CLAUDE_PROJECT_DIR" && pwd -P)"
-else
-  while [ "$work_path" != / ]; do
-    if [ -e "$work_path/.git" ]; then trusted_root="$work_path"; break; fi
-    work_path="${work_path%/*}"
-    work_path="${work_path:-/}"
+bp_workspace() {
+  local d fallback="" profile_home="" profile_config=""
+  if [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
+    (builtin cd "$CLAUDE_PROJECT_DIR" && builtin pwd -P)
+    return
+  fi
+  d=$(builtin pwd -P)
+  if [ -n "${HOME:-}" ]; then profile_home=$(builtin cd "$HOME" 2>/dev/null && builtin pwd -P) || true; fi
+  if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then profile_config=$(builtin cd "$CLAUDE_CONFIG_DIR" 2>/dev/null && builtin pwd -P) || true; fi
+  while [ "$d" != / ]; do
+    if [ -e "$d/.git" ]; then printf '%s\n' "$d"; return; fi
+    if [ -z "$fallback" ] && [ -d "$d/.claude" ] && [ "$d" != "$profile_home" ] && [ "$d/.claude" != "$profile_config" ]; then fallback="$d"; fi
+    d="${d%/*}"
+    d="${d:-/}"
   done
-fi
-IFS=: read -r -a runtime_dirs <<< "${PATH:-/usr/bin:/bin}"
+  if [ -n "$fallback" ]; then printf '%s\n' "$fallback"; else builtin pwd -P; fi
+}
+
+bp_external_launchers() {
+  local executable target depth parent
+  for executable in python3 node git jq curl zip unzip; do
+    target="$1/$executable"
+    [ -x "$target" ] || continue
+    depth=0
+    while [ -L "$target" ]; do
+      depth=$((depth + 1))
+      [ "$depth" -le 40 ] || return 1
+      parent="${target%/*}"
+      target=$(/usr/bin/readlink "$target") || return 1
+      case "$target" in /*) : ;; *) target="$parent/$target" ;; esac
+    done
+    parent=$(builtin cd "${target%/*}" && builtin pwd -P) || return 1
+    case "$parent" in "$BP_ROOT"|"$BP_ROOT/"*) return 1 ;; esac
+  done
+}
+
+# Resolve the same workspace before looking up any external launcher.
+BP_ROOT=$(bp_workspace)
+IFS=: read -r -a runtime_dirs <<< "${PATH:-/usr/bin:/bin}:/usr/bin:/bin"
 runtime_path=""
 for runtime_dir in "${runtime_dirs[@]}"; do
   case "$runtime_dir" in /*) : ;; *) continue ;; esac
-  runtime_dir=$(cd "$runtime_dir" 2>/dev/null && pwd -P) || continue
-  case "$runtime_dir" in "$trusted_root"|"$trusted_root/"*) continue ;; esac
+  runtime_dir=$(builtin cd "$runtime_dir" 2>/dev/null && builtin pwd -P) || continue
+  case "$runtime_dir" in "$BP_ROOT"|"$BP_ROOT/"*) continue ;; esac
+  bp_external_launchers "$runtime_dir" || continue
   runtime_path="${runtime_path:+$runtime_path:}$runtime_dir"
 done
-export PATH="${runtime_path:+$runtime_path:}/usr/bin:/bin"
+[ -n "$runtime_path" ] || { printf '%s\n' 'FAILED: trusted runtime launchers unavailable' >&2; exit 1; }
+export PATH="$runtime_path"
 
 # shellcheck source=SCRIPTDIR/brewpage-lib.sh
 . "$HERE/brewpage-lib.sh"
@@ -170,7 +198,16 @@ lock_history() {
 
 cmd_owner_recover() {
   [ "$#" = 0 ] || die 'owner-recover takes no arguments'
+  local metadata reader owner_api
   lock_history || die 'cannot lock protected owner storage'
+  new_run
+  bp_run_dir "${BP_FRESH##*/}" || exit 1
+  trap bp_cleanup EXIT
+  local proof="$BP_RUN_DIR/recovery-owner-header.txt"
+  metadata=$(bp_history recover-target "$proof") || die 'no readable protected recovery receipt'
+  reader=$(printf '%s' "$metadata" | jq -er '.reader') || exit 1
+  owner_api=$(printf '%s' "$metadata" | jq -er '.ownerApi') || exit 1
+  bp_verify_reader "$reader" "$owner_api" "$proof" || die 'recovered reader host could not be verified'
   bp_history recover || die 'no readable protected recovery receipt'
   echo 'OWNER TOKEN RECOVERED'
 }
@@ -345,6 +382,9 @@ cmd_publish() {
   bp_begin "${ns:-target}" "$days" "$entry" "$id" "$pwmode" "$mode" || exit 1
   ENTRY="$resolved_entry"
   bp_owner_begin "$intent" "$target" || exit 1
+  if [ -n "$target" ]; then
+    bp_verify_reader "$target" "$BP_OWNER_API" "$BP_OWNER_HEADER_FILE" || die 'saved reader host does not match the selected publication'
+  fi
   bp_history receipt-ready || die "cannot prepare protected owner recovery; run owner-recover if pending"
   case "$type" in html | html-file) kind=html ;; site-dir | site-zip) kind=sites ;; file) kind=files ;; *) kind="$type" ;; esac
   if [ "$action" = update ]; then

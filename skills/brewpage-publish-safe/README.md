@@ -22,7 +22,7 @@ Review the exact bytes you select for publication. The runner checks for common 
 
 Safe stores owner records under `~/Library/Application Support/brewpage-publish-safe` on macOS or `$XDG_STATE_HOME/brewpage-publish-safe` on Linux. The Linux default is `~/.local/state/brewpage-publish-safe`. It selects a separate `0700` directory for each resolved workspace and uses `0600` owner records. The chosen storage location must be outside Git. An unsafe or unavailable store stops publishing before the request.
 
-Use the same OS account and workspace to update the exact saved publication in a new session. When the runner reports `OWNER RECOVERY SAVED`, use `owner-recover` from that workspace.
+Use the same OS account and workspace to update the exact saved publication in a new session. When the runner reports `OWNER RECOVERY SAVED`, use `owner-recover` from that workspace. For a BrewPage subdomain, the runner verifies ownership and publication identity through the first-party API before using the link.
 
 ```bash
 bash {runner} owner-recover

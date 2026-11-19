@@ -2,45 +2,12 @@
 # Sourced (!=executed) by scripts/brewpage-run.sh, the skill's only entry: sets HISTORY_FILE + helpers.
 # Owns token-history location (BD03) and URL-safety of prompt-derived query params (BD02).
 
-# rc 0: $1 is HOME or the active config dir's parent - its .claude is a profile, never a project root.
-bp_is_profile_parent() {
-  local p
-  p=$(cd "$1" 2>/dev/null && pwd -P) || return 1
-  [ -n "${HOME:-}" ] && [ "$p" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ] && return 0
-  [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$p/.claude" = "$(cd "$CLAUDE_CONFIG_DIR" 2>/dev/null && pwd -P)" ]
-}
-
-# Project root, canonical recipe: CLAUDE_PROJECT_DIR -> git toplevel -> upward
-# walk for .git/.claude (profile parents skipped) -> PWD. The history file must not follow a nested cwd.
-bp_project_root() {
-  if [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
-    printf '%s\n' "$CLAUDE_PROJECT_DIR"
-    return 0
-  fi
-  local root
-  root=$(command env -i PATH="$PATH" LC_ALL=C GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git rev-parse --show-toplevel 2>/dev/null) || root=""
-  if [ -n "$root" ]; then
-    printf '%s\n' "$root"
-    return 0
-  fi
-  local d="$PWD"
-  while [ "$d" != "/" ]; do
-    if [ -d "$d/.git" ] || { [ -d "$d/.claude" ] && ! bp_is_profile_parent "$d"; }; then
-      printf '%s\n' "$d"
-      return 0
-    fi
-    d=$(dirname "$d")
-  done
-  printf '%s\n' "$PWD"
-}
-
 bp_python() { command python3 -I -S "$@"; }
 
 bp_curl() { command env -i PATH="$PATH" LC_ALL=C curl -q --proto '=https' "$@"; }
 
 bp_scan_input() { bp_python "$HERE/inputs.py" scan "$1" "$2" "${BP_HEADER_FILE:-}"; }
 
-BP_ROOT="$(bp_project_root)"
 BP_HISTORY_ROOT=""
 HISTORY_FILE=""
 # Run dirs stay outside .claude/ (protected path); only brewpage-run.sh writes into them.
@@ -204,6 +171,37 @@ bp_request() {
 
 bp_response_status() { cat "$BP_RUN_DIR/http-status.txt"; }
 
+bp_reader_host() {
+  local host="${1#https://}"
+  host="${host%%/*}"
+  printf '%s' "${host%.}" | tr '[:upper:]' '[:lower:]'
+}
+
+bp_verify_reader() {
+  local reader="$1" target="$2" proof="$3" host metadata
+  host=$(bp_reader_host "$reader")
+  [ "$host" != brewpage.app ] || return 0
+  [ -n "$proof" ] || return 1
+  metadata=$(BP_OWNER_HEADER_FILE="$proof" BP_HEADER_FILE='' bp_request GET "https://brewpage.app/api/hosts/$host/owner-check") || return 1
+  [ "$(bp_response_status)" = 200 ] || return 1
+  printf '%s' "$metadata" | jq -se --arg target "$target" '
+    def segment: if . == "site" then "sites" elif . == "file" then "files" else . end;
+    ($target | split("/")) as $api | select(length == 1) | .[0]
+    | .isOwner == true and (.type | segment) == $api[4] and .namespace == $api[5] and .id == $api[6]
+  ' >/dev/null 2>&1
+}
+
+bp_verify_public_redirect() {
+  local reader="$1" owner_api="$2" apex output
+  [ "$(bp_reader_host "$reader")" != brewpage.app ] || return 0
+  apex="https://brewpage.app/${owner_api#https://brewpage.app/api/*/}"
+  output=$(bp_curl -sI --output /dev/null --write-out '%{http_code}\n%{redirect_url}' "$apex") || return 1
+  case "$output" in
+    301$'\n'"$reader" | 302$'\n'"$reader" | 307$'\n'"$reader" | 308$'\n'"$reader") return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 bp_owner_begin() {
   local intent="$1" target="$2" selected
   BP_OWNER_HEADER_FILE="$BP_RUN_DIR/owner-token.txt"
@@ -314,14 +312,30 @@ bp_finish() {
   receipt=$(printf '%s' "$response" | jq -c --rawfile proof "${BP_OWNER_HEADER_FILE:-/dev/null}" --arg api "$owner_api" --arg op "${BREWPAGE_OPERATION_ID:-}" \
     '{origin:"https://brewpage.app",ownerApi:$api,readerUrl:.link,ownerToken:((.ownerToken | strings | select(test("^[A-Za-z0-9]{32}$"))) // ($proof | sub("^X-Owner-Token: ";"") | rtrimstr("\n"))),operationId:$op,
       identity:{id,namespace,type,routingCohort,deliveryMode,modeLocked,hostingVersion,managementLink,manageUrl,entryFile,createdAt,expiresAt},manageUrl}')
+  if [ "$nonowned_merge" = 1 ]; then
+    if [ "$method" = POST ]; then bp_history clear || return 1; fi
+    if ! bp_verify_public_redirect "$url" "$owner_api"; then
+      echo 'NOTICE: existing publication returned without ownership; its reader URL could not be verified'
+      return 1
+    fi
+  elif [ "$(bp_reader_host "$url")" != brewpage.app ]; then
+    local verification_header="$BP_OWNER_HEADER_FILE"
+    if [ -z "$verification_header" ] && [ -n "$token" ]; then
+      verification_header="$BP_RUN_DIR/receipt-owner-header.txt"
+      (set -o noclobber; printf 'X-Owner-Token: %s\n' "$token" > "$verification_header") || return 1
+    fi
+    if ! bp_verify_reader "$url" "$owner_api" "$verification_header"; then
+      if [ "$method" = POST ] && printf '%s\n' "$receipt" | bp_history receipt; then echo 'OWNER RECOVERY SAVED'; fi
+      echo 'FAILED: reader host could not be verified; check recovery before another write'
+      return 1
+    fi
+  fi
   local label="$type"
   if [ "$type" = site ]; then
     fcount=$(printf '%s' "$response" | jq -r '(.fileCount | numbers) // "?"')
     label="site ($fcount files)"
   fi
-  if [ "$nonowned_merge" = 1 ]; then
-    if [ "$method" = POST ]; then bp_history clear || return 1; fi
-  elif [ -n "${token:-$reused}" ]; then
+  if [ "$nonowned_merge" = 0 ] && [ -n "${token:-$reused}" ]; then
     if bp_history_append "$url" "${token:-$reused}" "$days" "$label" "$owner_api" "$identity" "$method"; then
       saved=1
     else
@@ -329,7 +343,7 @@ bp_finish() {
       else echo 'NOTICE: update confirmed; protected history could not be updated'; fi
       failed=1
     fi
-  elif [ "$method" = POST ]; then
+  elif [ "$nonowned_merge" = 0 ] && [ "$method" = POST ]; then
     echo 'NOTICE: owner proof missing from the receipt; recover it before another create'
     failed=1
   fi
@@ -361,10 +375,10 @@ bp_archive_gate() {
   fi
   ENTRY=$(printf '%s' "$manifest" | jq -ser --argjson code "$rc" '
     select(length == 1) | .[0] | select(.result == (if $code == 2 then "confirm" else "ok" end))
-    | .entry | strings | select(length > 0)
+    | .entry as $entry | select(.entries | index($entry) != null) | $entry | strings | select(length > 0)
   ' 2>/dev/null) || { echo 'FAILED: archive review metadata is invalid'; return 1; }
   bp_scan_input "$zip" site || return 1
-  printf '%s' "$manifest" | bp_scan_input - json || return 1
+  printf '%s' "$manifest" | jq -r '.entries[]' | bp_scan_input - json || return 1
   printf 'ARCHIVE MANIFEST (JSON)\n'
   printf '%s' "$manifest" | jq -ac . || return 1
   if [ "$rc" -eq 2 ] || [ "${BREWPAGE_CONFIRMED:-0}" = 1 ] || [ -n "${BREWPAGE_REVIEW_SHA256:-}" ]; then
