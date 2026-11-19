@@ -182,7 +182,7 @@ bp_verify_reader() {
   host=$(bp_reader_host "$reader")
   [ "$host" != brewpage.app ] || return 0
   [ -n "$proof" ] || return 1
-  metadata=$(BP_OWNER_HEADER_FILE="$proof" BP_HEADER_FILE='' bp_request GET "https://brewpage.app/api/hosts/$host/owner-check") || return 1
+  metadata=$(BP_OWNER_HEADER_FILE="$proof" BP_HEADER_FILE='' bp_request GET "https://brewpage.app/api/hosts/$host/owner-check" --max-time 15) || return 1
   [ "$(bp_response_status)" = 200 ] || return 1
   printf '%s' "$metadata" | jq -se --arg target "$target" '
     def segment: if . == "site" then "sites" elif . == "file" then "files" else . end;
@@ -195,7 +195,7 @@ bp_verify_public_redirect() {
   local reader="$1" owner_api="$2" apex output
   [ "$(bp_reader_host "$reader")" != brewpage.app ] || return 0
   apex="https://brewpage.app/${owner_api#https://brewpage.app/api/*/}"
-  output=$(bp_curl -sI --output /dev/null --write-out '%{http_code}\n%{redirect_url}' "$apex") || return 1
+  output=$(bp_curl -sI -A "$BP_UA" --max-time 15 --output /dev/null --write-out '%{http_code}\n%{redirect_url}' "$apex") || return 1
   case "$output" in
     301$'\n'"$reader" | 302$'\n'"$reader" | 307$'\n'"$reader" | 308$'\n'"$reader") return 0 ;;
     *) return 1 ;;
