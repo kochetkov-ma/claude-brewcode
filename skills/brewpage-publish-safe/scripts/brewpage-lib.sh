@@ -72,7 +72,7 @@ HEADER
 # shellcheck disable=SC2016 # backticks = literal markdown code spans
 bp_history_append() {
   printf '| %s | [%s](%s) | `%s` | %sd | %s | %s | `%s` |\n' \
-    "$(date -u '+%Y-%m-%d %H:%M')" "$1" "$1" "$2" "$3" "$4" "$5" "$6" | bp_history append
+    "$(date -u '+%Y-%m-%d %H:%M')" "$1" "$1" "$2" "$3" "$4" "$5" "$6" | bp_history append "$7"
 }
 
 # BD02: ns/ttl/entry arrive as single-quoted literals; re-checked here as data before the URL.
@@ -208,11 +208,9 @@ bp_request() {
   if [ -n "${BP_HEADER_FILE:-}" ]; then
     set -- -H "@$BP_HEADER_FILE" "$@"
   fi
-  if [ "${BP_FIRST_CREATE:-0}" = 1 ]; then
-    if [ "$method" != GET ]; then printf '%s' "$BP_OPERATION_REQUEST" | bp_history pending || return 1; fi
-  fi
   local output status
   : > "$BP_RUN_DIR/http-status.txt" || return 1
+  if [ "$method" = POST ]; then printf '%s' "$BP_OPERATION_REQUEST" | bp_history pending || return 1; fi
   output=$(curl -q -s -A "$BP_UA" -X "$method" "$url" "$@" -w $'\nBP_HTTP_STATUS:%{http_code}') || return 1
   status="${output##*$'\n'BP_HTTP_STATUS:}"
   case "$status" in
@@ -231,22 +229,18 @@ bp_owner_begin() {
   BP_OWNER_HEADER_FILE="$BP_RUN_DIR/owner-token.txt"
   selected=$(bp_history select "$intent" "$target" "$BP_OWNER_HEADER_FILE") || return 1
   BP_OWNER_API="$selected"
-  BP_FIRST_CREATE=0
-  if [ ! -f "$BP_OWNER_HEADER_FILE" ]; then
-    BP_OWNER_HEADER_FILE=""
-    if [ "$intent" != update ]; then BP_FIRST_CREATE=1; fi
-  fi
+  if [ ! -f "$BP_OWNER_HEADER_FILE" ]; then BP_OWNER_HEADER_FILE=""; fi
   BREWPAGE_OPERATION_ID=$(python3 -I -S -c 'import secrets; print(secrets.token_hex(12))') || return 1
   export BREWPAGE_OPERATION_ID
 }
 
 bp_operation_request() {
-  [ "${BP_FIRST_CREATE:-0}" = 1 ] || return 0
+  [ "$1" = POST ] || return 0
   BP_OPERATION_REQUEST=$(printf '%s' "${5:-}" | python3 -I -S -c '
 import hashlib,json,os,stat,sys
 from datetime import datetime,timezone
 from urllib.parse import urlsplit,parse_qs
-operation,method,endpoint,kind,source,delivery,password=sys.argv[1:]
+operation,method,endpoint,kind,source,delivery,password,proof=sys.argv[1:]
 fd=os.open(source,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
 with os.fdopen(fd,"rb") as payload:
  info=os.fstat(payload.fileno())
@@ -257,8 +251,11 @@ request={"method":method,"endpoint":endpoint,"kind":kind,"namespace":parse_qs(ur
 state=sys.stdin.buffer.read()
 if state: request["stateSha256"]=hashlib.sha256(state).hexdigest()
 if kind=="files": request["uploadName"]=os.path.basename(source)
-print(json.dumps({"operationId":operation,"request":request,"recordedAt":datetime.now(timezone.utc).isoformat()},separators=(",",":")))
-' "$BREWPAGE_OPERATION_ID" "$1" "$2" "$3" "$4" "${BP_DELIVERY_MODE:-}" "$BP_PASSWORD_MODE")
+authority=None
+if proof:
+ with os.fdopen(os.open(proof,os.O_RDONLY|os.O_NOFOLLOW),"rb") as owner: authority=hashlib.sha256(owner.read(64).split(b": ",1)[1].strip()).hexdigest()
+print(json.dumps({"operationId":operation,"request":request,"recordedAt":datetime.now(timezone.utc).isoformat(),"ownerProofSha256":authority},separators=(",",":")))
+' "$BREWPAGE_OPERATION_ID" "$1" "$2" "$3" "$4" "${BP_DELIVERY_MODE:-}" "$BP_PASSWORD_MODE" "$BP_OWNER_HEADER_FILE")
 }
 
 # Private recovery is separate from the ordinary reader-facing result.
@@ -276,13 +273,18 @@ bp_unsaved() {
 bp_receipt_link() {
   local response="$1" status="$2" method="$3" endpoint="$4"
   printf '%s' "$response" | jq -ser --arg status "$status" --arg method "$method" --arg endpoint "${endpoint%%\?*}" --arg ns "$NS" --rawfile proof "${BP_OWNER_HEADER_FILE:-/dev/null}" '
+    def kind: if . == "site" then "sites" elif . == "file" then "files" else . end;
     select(length == 1) | .[0] | select(type == "object") | . as $body
     | .result.action as $action
+    | [.isOwner, .result.isOwner, .result.extras.isOwner] | map(select(. != null)) as $ownership
+    | select(($ownership | all(type == "boolean")) and ($ownership | unique | length <= 1) and (($ownership | index(false)) == null or $action == "merged"))
+    | $body
     | select(if $method == "PUT" then $status == "200" and ($action == null or $action == "updated")
              elif $status == "200" then $action == "merged"
              else $status == "201" and ($action == null or $action == "created" or $action == "created_missing_assets" or $action == "merged") end)
     | .ownerLink | strings | capture("^https://brewpage\\.app/api/(?<kind>html|json|files|sites)/(?<ns>[a-z0-9-]{1,32})/(?<id>[A-Za-z0-9_-]{1,128})$") as $owner
     | select($body.id == $owner.id and $body.namespace == $owner.ns)
+    | select(($body.ns == null or $body.ns == $owner.ns) and ([$body.type, $body.kind] | all(. == null or kind == $owner.kind)))
     | ("https://brewpage.app/api/" + $owner.kind) as $api
     | (if $method == "PUT" then "/" + $owner.ns + "/" + $owner.id else "" end) as $target
     | select(($api + $target) == $endpoint or ($owner.kind == "html" and $endpoint == ("https://brewpage.app/api/files" + $target)))
@@ -303,7 +305,7 @@ bp_finish() {
   status=$(bp_response_status) || return 1
   url=$(bp_receipt_link "$response" "$status" "$method" "$endpoint") || url=""
   if [ -z "$url" ]; then
-    if [ "${BP_FIRST_CREATE:-0}" = 1 ] && [ -n "$status" ] && [ "$status" -ge 400 ] && [ "$status" -lt 500 ] && [ "$status" -ne 408 ]; then
+    if [ "$method" = POST ] && [ -n "$status" ] && [ "$status" -ge 400 ] && [ "$status" -lt 500 ] && [ "$status" -ne 408 ]; then
       bp_history clear || return 1
     fi
     case "$status" in
@@ -314,10 +316,17 @@ bp_finish() {
     esac
     return 1
   fi
-  if printf '%s' "$response" | jq -e '.result.action == "merged" and .result.extras.isOwner == false' >/dev/null 2>&1; then
+  if printf '%s' "$response" | jq -e '.result.action == "merged" and ([.isOwner, .result.isOwner, .result.extras.isOwner] | index(false) != null)' >/dev/null 2>&1; then
     token=""; reused=""; nonowned_merge=1
   else
-    token=$(printf '%s' "$response" | jq -r '.ownerToken | strings | select(test("^[A-Za-z0-9]{32}$"))')
+    token=$(printf '%s' "$response" | jq -er '.ownerToken | if . == null then "" else strings | select(test("^[A-Za-z0-9]{32}$")) end' 2>/dev/null) || {
+      echo 'FAILED: publication receipt carries invalid owner proof; verify the outcome before another write'
+      return 1
+    }
+  fi
+  if [ -n "$reused" ] && [ -n "$token" ] && [ "$token" != "$reused" ]; then
+    echo 'FAILED: publication receipt conflicts with the saved owner; verify the outcome before another write'
+    return 1
   fi
   owner_api=$(printf '%s' "$response" | jq -r '.ownerLink')
   identity=$(printf '%s' "$response" | jq -c '{id, namespace, type, routingCohort, deliveryMode, modeLocked, hostingVersion, managementLink, manageUrl, entryFile, createdAt, expiresAt}')
@@ -329,20 +338,18 @@ bp_finish() {
     fcount=$(printf '%s' "$response" | jq -r '(.fileCount | numbers) // "?"')
     label="site ($fcount files)"
   fi
-  if [ -n "$reused" ] && [ -n "$token" ] && [ "$token" != "$reused" ]; then
-    bp_unsaved "$receipt" || true
-    failed=1
-  elif [ "$nonowned_merge" = 1 ]; then
-    if [ "${BP_FIRST_CREATE:-0}" = 1 ]; then bp_history clear || return 1; fi
+  if [ "$nonowned_merge" = 1 ]; then
+    if [ "$method" = POST ]; then bp_history clear || return 1; fi
   elif [ -n "${token:-$reused}" ]; then
-    if bp_history_append "$url" "${token:-$reused}" "$days" "$label" "$owner_api" "$identity"; then
+    if bp_history_append "$url" "${token:-$reused}" "$days" "$label" "$owner_api" "$identity" "$method"; then
       saved=1
     else
-      bp_unsaved "$receipt" || true
+      if [ "$method" = POST ]; then bp_unsaved "$receipt" || true
+      else echo 'NOTICE: update confirmed; protected history could not be updated'; fi
       failed=1
     fi
-  elif [ "${BP_FIRST_CREATE:-0}" = 1 ]; then
-    echo 'NOTICE: owner proof missing from the first receipt; recover it before another create'
+  elif [ "$method" = POST ]; then
+    echo 'NOTICE: owner proof missing from the receipt; recover it before another create'
     failed=1
   fi
   if [ "$type" = site ]; then

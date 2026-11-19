@@ -38,7 +38,7 @@ const isWellKnownBare = (rel) => rel.startsWith(`${TRUSTED_DOT_DIR}/`) && extnam
 
 /** Entries that still need a human OK if they survive the allowlist. */
 const SENSITIVE_RE = /(^|\/)(\.env|id_rsa|id_ed25519)|secret|credential|password|token|\.(pem|key|p12|pfx|crt|map)$/i;
-const RESERVED_RE = /^(?:brewpage-publish-safe|\.env(?:\..*)?|\.brewpage-(?:[a-f0-9]{24}|owner.*)|id_(?:rsa|ed25519)|brewpage(?:\.[a-z0-9]{6}|-pack-[a-z0-9]{6}|[-_.]history\.md|[-_.]reconciliation\.json)|\.?(?:brewpage[-_.])?(?:owner[-_]token|credentials?|password(?:[-_]source)?|password[-_]header|recovery(?:[-_]receipt)?)(?:\.(?:md|txt|json|env|key))?|auth\.json|auth-profiles\.json|tokens\.json)$/i;
+const RESERVED_RE = /^(?:brewpage-publish-safe|\.env(?:\..*)?|\.brewpage-(?:[a-f0-9]{24}|owner.*)|id_(?:rsa|ed25519)|brewpage(?:\.[a-z0-9]{6}|-pack-[a-z0-9]{6}|[-_.]history\.md|[-_.](?:reconciliation|pending-create)\.json)|\.?(?:brewpage[-_.])?(?:owner[-_]token|credentials?|password(?:[-_]source)?|password[-_]header|recovery(?:[-_]receipt)?)(?:\.(?:md|txt|json|env|key))?|auth\.json|auth-profiles\.json|tokens\.json)$/i;
 const reservedMessage = 'reserved credential input; select only publishable files or rebuild the archive without credentials';
 
 function reservedPaths(args) {

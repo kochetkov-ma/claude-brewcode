@@ -38,6 +38,7 @@ brewpage-run.sh update <html|html-file|json|file|site-dir|site-zip> --target URL
   [--entry F] [--state JSON] [--confirmed --review-sha256 SHA256] (--text T | --run ID | --path P)
 brewpage-run.sh owner-recover
 brewpage-run.sh owner-pending
+brewpage-run.sh owner-reconcile
 brewpage-run.sh cleanup --run <run_id>
 --ns and --password-file are required; --password-file '' explicitly selects no password.
 Repeat --exclude-file ABS for additional protected files on publish or update.
@@ -151,6 +152,13 @@ cmd_owner_pending() {
   [ "$#" = 0 ] || die 'owner-pending takes no arguments'
   lock_history || die 'cannot lock protected owner storage'
   bp_history pending-list
+}
+
+cmd_owner_reconcile() {
+  [ "$#" = 0 ] || die 'owner-reconcile takes no arguments'
+  lock_history || die 'cannot lock protected owner storage'
+  bp_history reconcile || die 'verified reconciliation is missing or does not match the pending create'
+  echo 'OWNER RECONCILIATION RECORDED'
 }
 
 check_review() {
@@ -329,13 +337,13 @@ cmd_publish() {
         case "$endpoint" in *\?*) endpoint="$endpoint&verbatim=true" ;; *) endpoint="$endpoint?verbatim=true" ;; esac
       fi
       bp_operation_request "$method" "$endpoint" "$kind" "$BP_RUN_DIR/payload.json" || die "cannot preserve request fingerprint before dispatch"
-      response=$(bp_request "$method" "$endpoint" -H "Content-Type: application/json" -d @"$BP_RUN_DIR/payload.json") || die "$unknown"
+      response=$(bp_request "$method" "$endpoint" -H "Content-Type: application/json" --data-binary @"$BP_RUN_DIR/payload.json") || die "$unknown"
       bp_finish "$response" "$DAYS" html "$method" "$endpoint"
       ;;
     json)
       jq empty "$content" 2>/dev/null || die "payload is not valid JSON"
       bp_operation_request "$method" "$endpoint" "$kind" "$content" || die "cannot preserve request fingerprint before dispatch"
-      response=$(bp_request "$method" "$endpoint" -H "Content-Type: application/json" -d @"$content") || die "$unknown"
+      response=$(bp_request "$method" "$endpoint" -H "Content-Type: application/json" --data-binary @"$content") || die "$unknown"
       bp_finish "$response" "$DAYS" json "$method" "$endpoint"
       ;;
     file)
@@ -372,6 +380,7 @@ case "$cmd" in
   publish | update) cmd_publish "$cmd" "$@" ;;
   owner-recover) cmd_owner_recover "$@" ;;
   owner-pending) cmd_owner_pending "$@" ;;
+  owner-reconcile) cmd_owner_reconcile "$@" ;;
   cleanup) cmd_cleanup "$@" ;;
   -h | --help) usage ;;
   *) usage; die 'unknown subcommand' ;;

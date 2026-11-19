@@ -21,13 +21,13 @@ from urllib.parse import urlsplit, parse_qs
 LIMIT = 8 * 1024 * 1024
 HISTORY = 'brewpage-history.md'
 RECOVERY = 'brewpage-recovery.json'
-PENDING_ROW = re.compile(rb'<!-- brewpage-owner-pending:([a-f0-9]{24}) -->\n?')
+PENDING = 'brewpage-pending-create.json'
+RESOLUTION = 'brewpage-reconciliation.json'
 OWNER_TOKEN = re.compile(r'[A-Za-z0-9]{32}')
 OWNER_ORIGIN = 'https://brewpage.app'
 OWNER_PATH = re.compile(r'/api/(html|json|kv|files|sites)/([a-z0-9-]{1,32})/([A-Za-z0-9_-]{1,128})')
 READER_PATH = re.compile(r'/([a-z0-9-]{1,32})/([A-Za-z0-9_-]{1,128})')
 ROW_KIND = {'html': 'html', 'json': 'json', 'kv': 'kv', 'file': 'files', 'files': 'files', 'site': 'sites', 'sites': 'sites'}
-REQUEST_ROW = re.compile(rb'<!-- brewpage-request:(.*) -->\n?')
 
 
 def regular(directory, name):
@@ -178,8 +178,7 @@ def rows(data):
                 continue
             kind, ns, item = match.groups()
             cells = json.loads(parts[6].strip('`')) if parts[6].strip('`') else {}
-            if not isinstance(cells, dict) or cells.get('id') not in (None, item) or cells.get('namespace') not in (None, ns):
-                raise ValueError('history has a conflicting publication identity')
+            validate_identity(cells, match)
         else:
             path = READER_PATH.fullmatch(parsed.path) if parsed.netloc == 'brewpage.app' and not parsed.query else None
             if path is not None and kind:
@@ -286,8 +285,61 @@ def request_binding(value):
     return value
 
 
-def pending_entries(data):
-    return [match[1].decode() for line in data.splitlines(keepends=True) if (match := PENDING_ROW.fullmatch(line))]
+def request_digest(request):
+    return hashlib.sha256(json.dumps(request, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def pending_record(data):
+    value = json.loads(data)
+    if not isinstance(value, dict) or not re.fullmatch(r'[a-f0-9]{24}', value.get('operationId', '')):
+        raise ValueError('invalid pending create')
+    request_binding(value.get('request'))
+    proof = value.get('ownerProofSha256')
+    if proof is not None and not re.fullmatch(r'[a-f0-9]{64}', proof):
+        raise ValueError('invalid pending authority')
+    return value
+
+
+def check_create(pending, operation, target, token):
+    if not pending or pending['operationId'] != operation or target is None:
+        raise ValueError('receipt does not match a pending create')
+    request = pending['request']
+    if target[2] != request['namespace'] or target[1] != request['kind'] and (request['kind'], target[1]) != ('files', 'html'):
+        raise ValueError('receipt does not match requested publication type')
+    authority = pending.get('ownerProofSha256')
+    if authority and hashlib.sha256(token.encode()).hexdigest() != authority:
+        raise ValueError('receipt conflicts with pending authority')
+
+
+def bound_receipt(data, pending):
+    receipt, target, row = receipt_row(data)
+    check_create(pending, receipt.get('operationId'), target, receipt['ownerToken'])
+    return row
+
+
+def reconcile_input(data, pending):
+    if not pending or not data or len(data) > 1024 * 1024:
+        raise ValueError('verified reconciliation requires a pending create')
+    value = json.loads(data)
+    if not isinstance(value, dict) or value.get('schema') != 'brewpage-safe-reconciliation-v1':
+        raise ValueError('invalid reconciliation')
+    if value.get('operationId') != pending['operationId'] or value.get('requestSha256') != request_digest(pending['request']):
+        raise ValueError('reconciliation does not match the pending request')
+    evidence = value.get('evidence')
+    if (not isinstance(evidence, dict) or evidence.get('source') != 'owner-verified-first-party' or
+        evidence.get('verifiedByOperator') is not True or not isinstance(evidence.get('reference'), str) or not 1 <= len(evidence['reference'].strip()) <= 1000):
+        raise ValueError('first-party outcome must be externally verified')
+    outcome = value.get('outcome')
+    if outcome == 'no-write' and value.get('receipt') is None:
+        row = b''
+    elif outcome == 'publication-owned':
+        receipt = json.dumps(value.get('receipt'), separators=(',', ':')).encode()
+        row = bound_receipt(receipt, pending)
+    else:
+        raise ValueError('invalid reconciliation outcome')
+    audit = {'operationId': pending['operationId'], 'requestSha256': value['requestSha256'], 'outcome': outcome,
+             'verification': 'owner-verified-first-party', 'resolutionSha256': hashlib.sha256(data).hexdigest()}
+    return b'<!-- brewpage-reconciliation:' + json.dumps(audit, separators=(',', ':')).encode() + b' -->\n' + row
 
 
 def write_checked(directory, root, name, data):
@@ -312,17 +364,41 @@ def main():
             return
 
         recovery = read(directory, RECOVERY, private=True) or b''
+        pending_bytes = read(directory, PENDING, private=True)
+        pending = pending_record(pending_bytes) if pending_bytes is not None else None
+        operation = os.environ.get('BREWPAGE_OPERATION_ID', '')
+        if mode == 'pending-list':
+            state = []
+            if pending:
+                if recovery:
+                    bound_receipt(recovery, pending)
+                state.append({'operationId': pending['operationId'], 'requestSha256': request_digest(pending['request']), 'receiptAvailable': bool(recovery)})
+            print(json.dumps({'workspaceSlot': os.path.basename(root), 'pending': state}, separators=(',', ':')))
+            return
         if mode == 'receipt-ready':
             if recovery:
                 raise ValueError('recovery must precede more writes')
             write_checked(directory, root, RECOVERY, b'')
             return
+        if mode == 'pending':
+            if pending:
+                raise ValueError('resolve the previous create before creating again')
+            incoming = sys.stdin.buffer.read(1024 * 1024 + 1)
+            if len(incoming) > 1024 * 1024 or pending_record(incoming)['operationId'] != operation:
+                raise ValueError('invalid pending request')
+            write_checked(directory, root, PENDING, incoming)
+            return
         if mode == 'receipt':
             if recovery:
-                raise ValueError('recovery already contains protected proof')
+                raise ValueError('recovery already contains proof')
             incoming = sys.stdin.buffer.read(1024 * 1024 + 1)
-            receipt_row(incoming)
+            bound_receipt(incoming, pending)
             write_checked(directory, root, RECOVERY, incoming)
+            return
+        if mode == 'clear':
+            if not pending or pending['operationId'] != operation:
+                raise ValueError('refusal does not match the pending create')
+            os.unlink(PENDING, dir_fd=directory)
             return
 
         data = read(directory, HISTORY, private=True) or b''
@@ -330,11 +406,6 @@ def main():
             raise ValueError('owner history exceeds local limit')
         if data and not data.endswith(b'\n'):
             data += b'\n'
-        pending = pending_entries(data)
-        if mode == 'pending-list':
-            operation = json.loads(recovery).get('operationId') if recovery else None
-            print(json.dumps({'pending': [{'operationId': ref, 'receiptAvailable': operation == ref} for ref in pending]}, separators=(',', ':')))
-            return
         if mode == 'select':
             intent, target, _ = args
             if pending and intent != 'update':
@@ -345,42 +416,35 @@ def main():
             write_checked(directory, root, HISTORY, data or sys.stdin.buffer.read(65536))
             return
 
-        operation = os.environ.get('BREWPAGE_OPERATION_ID', '')
         if mode == 'recover':
-            receipt, api, incoming = receipt_row(recovery)
-            operation = receipt.get('operationId', '')
-            request = next((record['request'] for line in data.splitlines(keepends=True) if (match := REQUEST_ROW.fullmatch(line))
-                            and (record := json.loads(match[1]))['operationId'] == operation), None)
-            if request and (api[2] != request['namespace'] or api[1] != request['kind'] and (request['kind'], api[1]) != ('files', 'html')):
-                raise ValueError('recovery receipt does not match pending create')
-        if not re.fullmatch(r'[a-f0-9]{24}', operation):
-            raise ValueError('invalid operation reference')
-        marker = f'<!-- brewpage-owner-pending:{operation} -->\n'.encode()
-        if mode == 'pending':
-            if pending:
-                raise ValueError('resolve the previous create before creating again')
-            record = json.loads(sys.stdin.buffer.read(1024 * 1024))
-            if record.get('operationId') != operation:
-                raise ValueError('invalid request fingerprint')
-            request_binding(record.get('request'))
-            data += b'<!-- brewpage-request:' + json.dumps(record, separators=(',', ':')).encode() + b' -->\n' + marker
-        elif mode in ('append', 'recover', 'clear'):
-            data = b''.join(line for line in data.splitlines(keepends=True) if line != marker)
-            if mode == 'append':
-                incoming = sys.stdin.buffer.read(1024 * 1024 + 1)
-                retained = list(rows(incoming))
-                if len(incoming) > 1024 * 1024 or len(retained) != 1 or not OWNER_TOKEN.fullmatch(retained[0][2]):
-                    raise ValueError('publication does not carry valid proof')
-            if mode != 'clear':
-                data += incoming
+            incoming = bound_receipt(recovery, pending)
+        elif mode == 'reconcile':
+            if recovery:
+                raise ValueError('use the existing local receipt')
+            incoming = reconcile_input(read(directory, RESOLUTION, private=True), pending)
+        elif mode == 'append':
+            incoming = sys.stdin.buffer.read(1024 * 1024 + 1)
+            retained = list(rows(incoming))
+            if len(incoming) > 1024 * 1024 or len(retained) != 1 or not OWNER_TOKEN.fullmatch(retained[0][2]):
+                raise ValueError('publication does not carry valid proof')
+            if args == ['POST']:
+                _, api, token = retained[0]
+                check_create(pending, operation, owner_api(api), token)
+            elif args != ['PUT']:
+                raise ValueError('invalid history write method')
         else:
             raise ValueError('invalid owner storage operation')
 
-        if len(data) > LIMIT:
-            raise ValueError('owner history exceeds local limit')
-        write_checked(directory, root, HISTORY, data)
+        if incoming:
+            if len(data) + len(incoming) > LIMIT:
+                raise ValueError('owner history exceeds local limit')
+            write_checked(directory, root, HISTORY, data + incoming)
         if mode == 'recover':
             os.unlink(RECOVERY, dir_fd=directory)
+        if mode in ('recover', 'reconcile') or args == ['POST']:
+            os.unlink(PENDING, dir_fd=directory)
+        if mode == 'reconcile':
+            os.unlink(RESOLUTION, dir_fd=directory)
     finally:
         os.close(directory)
 

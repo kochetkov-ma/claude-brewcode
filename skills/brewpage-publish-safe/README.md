@@ -22,9 +22,21 @@ An archive review that needs approval returns `CONFIRM` and the digest of the re
 
 Safe stores owner records under `~/Library/Application Support/brewpage-publish-safe` on macOS or `$XDG_STATE_HOME/brewpage-publish-safe` on Linux. The Linux default is `~/.local/state/brewpage-publish-safe`. It selects a separate `0700` directory for each resolved workspace and uses `0600` owner records. The chosen storage location must be outside Git. An unsafe or unavailable store stops publishing before the request.
 
-Use the same OS account and workspace to update the exact saved publication in a new session. When the runner reports `OWNER RECOVERY SAVED`, use its local recovery command from that workspace. `owner-pending` reports whether an uncertain create has a protected recovery receipt. With an uncertain result and no saved proof, leave the attempt pending and verify the outcome before any new create.
+Use the same OS account and workspace to update the exact saved publication in a new session. When the runner reports `OWNER RECOVERY SAVED`, use `owner-recover` from that workspace.
 
 ```bash
 bash {runner} owner-recover
 bash {runner} owner-pending
+```
+
+## Resolve an uncertain create
+
+`owner-pending` reports the workspace slot, pending operation ID, request digest, and whether a protected fallback receipt is available. The ID and digest identify the local attempt. Use the exact request recorded in that slot's private `brewpage-pending-create.json` when verifying the outcome through first-party evidence. If proof is already available locally, run `owner-recover`.
+
+If the outcome was independently verified, place `brewpage-reconciliation.json` in the same private application-state slot with mode `0600`. Set `schema` to `brewpage-safe-reconciliation-v1`, copy `operationId` and `requestSha256` from `owner-pending`, and record `evidence` with `source` equal to `owner-verified-first-party`, `verifiedByOperator` set to `true`, and `reference` pointing to the actual finding. The runner checks the local binding and records your verification. When verification is unavailable, leave the operation pending.
+
+Use `outcome: "no-write"` for a verified absent write. For `outcome: "publication-owned"`, supply the protected `receipt` with the actual `origin`, `ownerApi`, `readerUrl`, `ownerToken`, `operationId`, and `identity` containing the publication ID and namespace. Include the actual private `manageUrl` when available. The runner checks the request and any originally selected authority. It consumes the reconciliation file after the local result is saved.
+
+```bash
+bash {runner} owner-reconcile
 ```
