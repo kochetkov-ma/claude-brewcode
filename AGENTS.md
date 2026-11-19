@@ -29,7 +29,7 @@ Before work, read each rule whose condition matches (`paths` metadata does not e
 | [.codex/rules/avoid.md](.codex/rules/avoid.md) | Any implementation or validation change | Prevent version drift, destructive edits, and shell failure traps |
 | [.codex/rules/best-practice.md](.codex/rules/best-practice.md) | Any implementation; Claude product skills/agents; requested releases | Claude product authoring, setup lifecycle, releases, and native execution |
 | [.codex/rules/docs-workflow.md](.codex/rules/docs-workflow.md) | Public docs or public behavior changes; requested releases | Mandatory native documentation workflow and exemptions |
-| [.claude/rules/brewpage-skill-distribution.md](.claude/rules/brewpage-skill-distribution.md) | BrewPage publishing skill packages, releases, or catalog submissions | Host-to-folder mapping, version identity, and package checks |
+| [.claude/rules/brewpage-skill-distribution.md](.claude/rules/brewpage-skill-distribution.md) | BrewPage publishing skill packages, releases, or catalog submissions | Host-to-folder mapping, Skillstore Safe release isolation, and package checks |
 | [.codex/rules/semble-first.md](.codex/rules/semble-first.md) | Code discovery or search-engine changes | Semantic search when available; exact and exhaustive search boundaries |
 | [.codex/rules/astro-avoid.md](.codex/rules/astro-avoid.md) | Astro, MDX, or docs-site changes | Astro and Starlight failure patterns |
 | [.codex/rules/astro-best-practice.md](.codex/rules/astro-best-practice.md) | Astro, MDX, or docs-site changes | Proven Astro and Starlight patterns |
