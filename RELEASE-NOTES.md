@@ -9,6 +9,7 @@
 **What changed for you**
 
 - Publishing a site now uses the same checked archive settings even when your system has its own ZIP defaults.
+- A relative archive path now resolves from the folder where you run the archive helper.
 
 ---
 
