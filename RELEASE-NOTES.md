@@ -2,6 +2,17 @@
 
 ---
 
+## v6.13.2 (2026-11-20)
+
+> Docs: [Publish with BrewPage](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+**What changed for you**
+
+- The OpenClaw skill now says up front that it keeps the private owner key of an anonymous page so you can edit or delete it later, which local files it writes, and that its runner talks only to brewpage.app.
+- The publish helper passes only the Git settings it needs when it protects your owner records in a Git workspace.
+
+---
+
 ## v6.13.1 (2026-11-19)
 
 > Docs: [Publish with BrewPage](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
