@@ -2,6 +2,16 @@
 
 ---
 
+## v6.13.3 (2026-11-20)
+
+> Docs: [Publish with BrewPage](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+**What changed for you**
+
+- The OpenClaw skill keeps the commands of its bundled REST runner in their own short reference, next to the publishing guide, so each part is easier to read and review.
+
+---
+
 ## v6.13.2 (2026-11-20)
 
 > Docs: [Publish with BrewPage](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
