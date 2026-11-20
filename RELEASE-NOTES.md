@@ -2,6 +2,16 @@
 
 ---
 
+## v6.13.4 (2026-11-20)
+
+> Docs: [Publish with BrewPage](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+**What changed for you**
+
+- The publish skill now says that its runner adds its private receipt file names to your workspace `.gitignore`, so those receipts stay out of Git.
+
+---
+
 ## v6.13.3 (2026-11-20)
 
 > Docs: [Publish with BrewPage](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
