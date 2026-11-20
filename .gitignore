@@ -98,3 +98,6 @@ brewmod-*/.state/
 
 # Demo GIFs copied from assets/demos at build time
 /web/docs/public/demos/
+.claude/brewpage-history.md
+.claude/brewpage-recovery.json
+brewpage-reconciliation.json
