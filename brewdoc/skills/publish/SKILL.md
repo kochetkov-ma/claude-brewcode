@@ -60,6 +60,8 @@ ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh
 
 The runner uses `ClaudeCode/6.13.3 (+https://brewpage.app)` for direct REST requests.
 
+To keep private receipts out of Git, the runner adds its history, recovery and reconciliation file names to the workspace `.gitignore` when the workspace is a Git repository or already has one.
+
 ## Return the actual result
 
 Before a first anonymous create, arrange authorized private storage or owner-only delivery of its key. Refer to [ownership and receipts](references/ownership.md) for owner selection, storage and recovery. Report the exact returned reader link, effective access and any consequential notice. Deliver the private management link and owner instructions only through a protected channel. An account-owned result goes to the account’s publications. For anonymous ownership, say “saved” only after private readback. A shared destination receives reader-facing details only. Report a live publication or update only from a confirmed receipt.

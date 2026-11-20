@@ -70,6 +70,8 @@ function wrapper(text, openclaw, openclawUA) {
   text = replaceOne(text, 'use the packaged local checks in [publishing](references/publishing.md).',
     'use the packaged local checks in [publishing](references/publishing.md) and the [REST runner](references/rest-runner.md).');
   text = replaceOne(text, '`{runner}` in the publishing reference.', '`{runner}` in the REST runner reference.');
+  // The runner paragraph below already names the .gitignore entries.
+  text = replaceOne(text, '\nTo keep private receipts out of Git, the runner adds its history, recovery and reconciliation file names to the workspace `.gitignore` when the workspace is a Git repository or already has one.\n', '');
   text = replaceOne(text, '${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh', '{baseDir}/scripts/brewpage-run.sh');
   return text.replace(/ClaudeCode\/\d+\.\d+\.\d+ \(\+https:\/\/brewpage\.app\)/g, openclawUA);
 }
