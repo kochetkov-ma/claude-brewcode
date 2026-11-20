@@ -9,6 +9,7 @@
 **What changed for you**
 
 - The publish skill now says that its runner adds its private receipt file names to your workspace `.gitignore`, so those receipts stay out of Git.
+- Nothing else changes: publishing, updates and owner records work as before.
 
 ---
 
@@ -19,6 +20,7 @@
 **What changed for you**
 
 - The OpenClaw skill keeps the commands of its bundled REST runner in their own short reference, next to the publishing guide, so each part is easier to read and review.
+- The skill entry and its guides link the new reference wherever they mention runner commands.
 
 ---
 
