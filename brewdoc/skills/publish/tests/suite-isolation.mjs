@@ -32,7 +32,8 @@ writeFileSync(mock, [
   'fs.writeFileSync(process.env.CURL_HEADERS + ".modes", JSON.stringify(headers.map(value => fs.statSync(value.slice(1)).mode & 0o777)));',
   'const data = args[args.indexOf("-d") + 1];',
   'fs.writeFileSync(process.env.CURL_ARGS + ".payload", args.includes("-d") ? (data.startsWith("@") ? fs.readFileSync(data.slice(1)) : data) : "");',
-  'process.stdout.write(process.env.CURL_RESPONSE);',
+  'const body = JSON.parse(process.env.CURL_RESPONSE);',
+  'process.stdout.write(process.env.CURL_RESPONSE + (args.includes("-w") ? "\\nBP_HTTP_STATUS:" + (body.status || "201") : ""));',
 ].join('\n'));
 chmodSync(mock, 0o755);
 // `script`: lib code, or a shipped() fill { code, env }; skill dir and path slots arrive as env refs, never in the command text.
@@ -42,7 +43,7 @@ function run(script, suffix, extraEnv = {}) {
     cwd: root, encoding: 'utf8', timeout: 10000,
     env: { ...process.env, LIB: lib, CLAUDE_SKILL_DIR: join(here, '..'), SUBST_SKILL_DIR: join(here, '..'), CLAUDE_PROJECT_DIR: root, TMPDIR: tmp,
       PATH: bin + ':' + process.env.PATH, CURL_ARGS: join(base, 'args-' + suffix), CURL_HEADERS: join(base, 'headers-' + suffix),
-      CURL_RESPONSE: JSON.stringify({ link: fixtureLink, ownerToken: fixtureOwner }), ...env, ...extraEnv },
+      CURL_RESPONSE: JSON.stringify({ link: fixtureLink, ownerToken: fixtureOwner, ownerLink: 'https://brewpage.app/api/html/my/Fixture123', id: 'Fixture123', namespace: 'my' }), ...env, ...extraEnv },
   });
 }
 function prepare() {
@@ -274,7 +275,7 @@ try {
     type: 'site-dir', ns: 'public', days: '15', entry: '', delivery_mode: '', password_file: '', path: siteSource,
   });
   const siteOutcome = run(siteCode, 'encoded-entry', { CURL_RESPONSE: JSON.stringify({
-    link: 'https://fixture-site.brewpage.app/', ownerLink: 'https://brewpage.app/api/sites/public/FixtureSite123',
+    link: 'https://fixture-site.brewpage.app/', ownerLink: 'https://brewpage.app/api/sites/public/FixtureSite123', id: 'FixtureSite123', namespace: 'public',
     ownerToken: fixtureOwner, fileCount: 1,
   }) });
   assert.equal(siteOutcome.status, 0, 'THEN nested site archive verifies and reaches upload: ' + siteOutcome.stdout + siteOutcome.stderr);
@@ -291,8 +292,8 @@ try {
     { link: 'https://fixture123.brewpage.app/', ownerToken: 'B'.repeat(32), manageUrl: manage, ownerLink: 'https://brewpage.app/api/html/public/Fixture123',
       id: 'Fixture123', namespace: 'public', routingCohort: 'new-v1', deliveryMode: 'subdomain', modeLocked: false, hostingVersion: 1,
       createdAt: '2026-10-01T12:00:00Z', expiresAt: '2026-10-16T12:00:00Z' },
-    { link: 'https://brewpage.app/public/Legacy1234', ownerToken: 'C'.repeat(32) },
-    { link: 'https://brewpage.app/public/LegacyNull', ownerToken: 'D'.repeat(32), routingCohort: 'old', deliveryMode: null, hostingVersion: null },
+    { link: 'https://brewpage.app/public/Legacy1234', ownerLink: 'https://brewpage.app/api/html/public/Legacy1234', id: 'Legacy1234', namespace: 'public', ownerToken: 'C'.repeat(32) },
+    { link: 'https://brewpage.app/public/LegacyNull', ownerLink: 'https://brewpage.app/api/html/public/LegacyNull', id: 'LegacyNull', namespace: 'public', ownerToken: 'D'.repeat(32), routingCohort: 'old', deliveryMode: null, hostingVersion: null },
   ];
   {
     const uploadBlocks = blocks.filter(block => block.includes(' publish '));
@@ -347,7 +348,7 @@ try {
         1, 'FAILED: publish rejected (HTTP 400: Sites allow at most 200 files. Remove some.)\n'],
       [{ status: 408, error: 'Request Timeout', message: 'Upload was interrupted before it finished; please retry.' },
         1, 'FAILED: outcome unknown; reconcile this write before trying again\n'],
-      [{ link: 'https://brewpage.app/public/Notice123', ownerToken: 'E'.repeat(32),
+      [{ link: 'https://brewpage.app/public/Notice123', ownerLink: 'https://brewpage.app/api/html/public/Notice123', id: 'Notice123', namespace: 'public', ownerToken: 'E'.repeat(32),
         visibilityNotice: 'Anyone with the link can open it.', notices: [{ code: 'a', message: 'Tags were cut.' }, { code: 'b', message: 'Second.' }] },
         0, 'OK https://brewpage.app/public/Notice123\nOWNER TOKEN SAVED\n'
           + 'VISIBILITY: Anyone with the link can open it.\nNOTICE: Tags were cut.\nNOTICE: Second.\n'],

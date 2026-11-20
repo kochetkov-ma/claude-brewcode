@@ -63,7 +63,7 @@ When you have selected an owner, the skill keeps that identity and reuses its au
 
 Before a first anonymous publication, choose authorized private storage or a protected delivery destination for the new owner key. The bundled REST runner can save proof in the workspace's `.claude/brewpage-history.md` with mode `0600`. Saving is confirmed by private readback. If publication succeeds and saving fails, the skill returns the reader link and uses protected key recovery or private delivery for that same publication. An account-owned result goes to the account's publications.
 
-Ordinary REST runner output is reader-facing. The runner keeps owner credentials, management links and private storage paths protected. Use `--private-output` only in a verified owner-only channel. It can show the private management link, receipt or recovery path. If you decline saving a new key, the runner requires `--no-save --private-output` for delivery in that channel.
+The REST runner keeps owner tokens and management links in protected files. If you decline workspace history, select a protected receipt directory with `--no-save --receipt-dir`. See [private receipts and recovery](references/ownership.md).
 
 For an update, identify the exact live item and its owner from a private receipt or authorized inventory. Use `update_publication` with the target and proof supported by the tool. The runner's `update` command accepts the exact saved reader URL or verified owner API URL. A content-only edit in the current format keeps the reader address and visitor entries. After a format or hosting change, share the effective reader link returned by BrewPage. A missing target or rejected edit leaves the request pending.
 

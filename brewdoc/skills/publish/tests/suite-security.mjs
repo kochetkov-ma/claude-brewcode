@@ -51,7 +51,7 @@ const id = method === 'PUT' ? url.pathname.split('/').at(-1) : 'Fixture' + Strin
 const result = { link: 'https://brewpage.app/fixture/' + id, ownerLink: 'https://brewpage.app/api/html/fixture/' + id, id, namespace: 'fixture' };
 if (!proof.length) result.ownerToken = token;
 if (args.some(arg => arg.startsWith('@') && fs.readFileSync(arg.slice(1), 'utf8').includes('simulate-save-failure'))) fs.chmodSync(process.env.HISTORY, 0o644);
-process.stdout.write(JSON.stringify(result));`;
+process.stdout.write(JSON.stringify(result) + '\\nBP_HTTP_STATUS:' + (method === 'PUT' ? '200' : '201'));`;
 
 test('archive commands preserve checked arguments despite host ZIP defaults', () => {
   // GIVEN compressible publishable HTML and a host preference for stored ZIP entries.
@@ -106,9 +106,9 @@ test('a failed first save leaves one create and exact protected recovery', () =>
   // THEN the private fallback keeps the exact proof and a new process cannot replay the create.
   assert.match(recovery ?? '', /\/brewpage-recovery\.json$/, 'the failed save retains protected recovery without exposing its location');
   const token = 'A'.repeat(32);
-  assert.deepEqual([first.status, again.status, (first.stdout + first.stderr).includes(token), statSync(recovery).mode & 0o777,
-    [recovered.status, JSON.parse(recovered.stdout).ownerToken], readFileSync(fixture.traffic, 'utf8').trim().split('\n').map(line => JSON.parse(line)[0])],
-  [1, 1, false, 0o600, [0, token], ['POST']], 'a new private recovery process locates exact proof without a scan, disclosure or repeated create');
+  assert.deepEqual([first.status, again.status, (first.stdout + first.stderr + recovered.stdout + recovered.stderr).includes(token), statSync(recovery).mode & 0o777,
+    [recovered.status, JSON.parse(recovered.stdout), JSON.parse(readFileSync(recovery, 'utf8')).ownerToken], readFileSync(fixture.traffic, 'utf8').trim().split('\n').map(line => JSON.parse(line)[0])],
+  [1, 1, false, 0o600, [0, { ownerApi: 'https://brewpage.app/api/html/fixture/Fixture001', readerUrl: 'https://brewpage.app/fixture/Fixture001' }, token], ['POST']], 'a new private recovery process locates exact proof without a scan, disclosure or repeated create');
   const imported = fixture.run('owner-store', '--target', 'https://brewpage.app/api/html/fixture/Fixture001', '--reader', 'https://brewpage.app/fixture/Fixture001', '--owner-token-file', recovery);
   assert.deepEqual([imported.status, existsSync(recovery)], [0, false], 'verified import consumes only the exact recovered receipt');
   const next = fixture.run('publish', 'html', '--ns', 'fixture', '--password-file', '', '--text', 'new publication');
@@ -279,7 +279,7 @@ for (const type of ['site-dir', 'site-zip']) test(`${type} confirmation binds ex
   const temp = join(project, 'tmp'); mkdirSync(temp);
   const localBin = join(project, 'bin'); mkdirSync(localBin);
   const captured = join(project, 'captured.zip');
-  writeFileSync(join(localBin, 'curl'), '#!/usr/bin/env node\nconst fs=require("node:fs"),path=require("node:path"); const arg=process.argv.find(a=>a.startsWith("archive=@")); const file=JSON.parse(arg.slice(9)); fs.writeFileSync(process.env.SOURCE_FILE,"source replaced at upload"); fs.copyFileSync(file,process.env.CAPTURED); fs.writeFileSync(process.env.CAPTURED+".json",JSON.stringify([fs.statSync(file).mode&511,fs.statSync(path.dirname(file)).mode&511])); process.stdout.write(\'{"link":"https://brewpage.app/fixture/Fixture001","ownerLink":"https://brewpage.app/api/sites/fixture/Fixture001","ownerToken":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","fileCount":3}\');\n', { mode: 0o700 });
+  writeFileSync(join(localBin, 'curl'), '#!/usr/bin/env node\nconst fs=require("node:fs"),path=require("node:path"); const arg=process.argv.find(a=>a.startsWith("archive=@")); const file=JSON.parse(arg.slice(9)); fs.writeFileSync(process.env.SOURCE_FILE,"source replaced at upload"); fs.copyFileSync(file,process.env.CAPTURED); fs.writeFileSync(process.env.CAPTURED+".json",JSON.stringify([fs.statSync(file).mode&511,fs.statSync(path.dirname(file)).mode&511])); process.stdout.write(\'{"link":"https://brewpage.app/fixture/Fixture001","ownerLink":"https://brewpage.app/api/sites/fixture/Fixture001","id":"Fixture001","namespace":"fixture","ownerToken":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","fileCount":3}\\nBP_HTTP_STATUS:201\');\n', { mode: 0o700 });
   writeFileSync(join(site, 'index.html'), '<h1>fixture</h1>');
   writeFileSync(join(site, 'secret-config.json'), '{"fixture":"reviewed"}');
   const zip = join(project, 'source.zip');
@@ -323,7 +323,7 @@ const urls = args.filter(a => /^https?:/.test(a));
 if (urls.length !== 1) process.exit(97);
 const url = new URL(urls[0]);
 if (url.origin !== 'https://brewpage.app' || !['/api/files', '/api/sites'].includes(url.pathname)) process.exit(97);
-args[args.indexOf(urls[0])] = process.env.LOOPBACK_URL;
+args[args.indexOf(urls[0])] = process.env.LOOPBACK_URL + url.pathname;
 const result = spawnSync(process.env.REAL_CURL, ['--disable', '--proxy', '', ...args], { encoding: 'utf8' });
 process.stdout.write(result.stdout || ''); process.stderr.write(result.stderr || '');
 process.exit(result.status ?? 98);
@@ -334,7 +334,8 @@ process.exit(result.status ?? 98);
     req.on('data', chunk => chunks.push(chunk));
     req.on('end', () => {
       received.push({ headers: req.headers, body: Buffer.concat(chunks) });
-      res.end(JSON.stringify({ link: 'https://example.invalid/fixture', fileCount: 1 }));
+      res.writeHead(201, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ link: 'https://example.invalid/fixture', ownerLink: `https://brewpage.app${req.url}/fixture/Receipt001`, id: 'Receipt001', namespace: 'fixture', fileCount: 1 }));
     });
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -361,7 +362,7 @@ process.exit(result.status ?? 98);
       // WHEN the actual runner uses real curl THEN its wire contains one intended file only.
       const run = await new Promise(resolve => {
         const child = spawn('bash', [join(scripts, 'brewpage-run.sh'), 'publish', type, '--ns', 'fixture', '--password-file', '', '--path', path], {
-          cwd: project, timeout: 10000, env: { ...process.env, CLAUDE_PROJECT_DIR: project, TMPDIR: temp, PATH: guardedBin + ':' + process.env.PATH, REAL_CURL: realCurl, LOOPBACK_URL: `http://127.0.0.1:${server.address().port}/fixture` },
+          cwd: project, timeout: 10000, env: { ...process.env, CLAUDE_PROJECT_DIR: project, TMPDIR: temp, PATH: guardedBin + ':' + process.env.PATH, REAL_CURL: realCurl, LOOPBACK_URL: `http://127.0.0.1:${server.address().port}` },
         });
         let output = ''; child.stdout.on('data', chunk => { output += chunk; }); child.stderr.on('data', chunk => { output += chunk; });
         child.on('close', status => resolve({ status, output }));
@@ -422,10 +423,25 @@ test('expanded ZIP limits are checked before integrity decompression', () => {
   assert.deepEqual([result.status, result.stdout.trim(), existsSync(marker)], [1, 'FAILED: archive exceeds local inspection limits\nRESULT: fail', false], 'archive expansion cannot reach the integrity checker');
 });
 
+test('ZIP review shows exact member paths and refuses ambiguous names', () => {
+  // GIVEN ordinary ZIPs with exact, padded, multiline or duplicate member names.
+  const names = ['assets/white space.txt', 'assets/ padded.txt', 'assets/two\nlines.txt', 'index.html'];
+  const rows = names.map((name, index) => {
+    const zip = join(base, `manifest-${index}.zip`);
+    const fixture = spawnSync('python3', ['-c', 'import sys,zipfile\nwith zipfile.ZipFile(sys.argv[1], "w") as z:\n z.writestr("index.html", "<h1>Fixture</h1>")\n z.writestr(sys.argv[2], "Fixture text")', zip, name]);
+    assert.equal(fixture.status, 0, 'fixture ZIP builds');
+    // WHEN the site archive is inspected THEN paths are reproduced verbatim or rejected before review.
+    const result = spawnSync('node', [join(scripts, 'publish.mjs'), 'inspect', '--zip', zip], { encoding: 'utf8' });
+    return [result.status, result.stdout.split('\n').filter(line => /^(  |FAILED:)/.test(line))];
+  });
+  assert.deepEqual(rows, [[0, ['  assets/white space.txt', '  index.html']], ...Array(3).fill([1, ['FAILED: archive member paths are ambiguous']])],
+    'a reviewed manifest cannot hide whitespace, split a member or combine duplicate names');
+});
+
 test('history failure retains reader facts without disclosing private proof in ordinary output', () => {
   // GIVEN a successful response and a failed secure write WHEN finishing THEN safe reader facts remain visible.
-  const result = spawnSync('bash', ['-c', '. "$LIB"; bp_history_append() { return 1; }; bp_finish \'{"link":"https://example.invalid/fixture","ownerToken":"fixture-secret","manageUrl":"https://example.invalid/manage#k=fixture-key"}\' 15 html'], { encoding: 'utf8', env: { ...process.env, LIB: join(scripts, 'brewpage-lib.sh') } });
-  assert.deepEqual([result.status, result.stdout], [1, 'NOTICE: publication confirmed; owner history could not be saved securely\nOK https://example.invalid/fixture\n'], 'a confirmed reader result cannot expose management capability or owner proof');
+  const result = spawnSync('bash', ['-c', '. "$LIB"; NS=fixture; bp_response_status() { echo 201; }; bp_history_append() { return 1; }; bp_finish \'{"link":"https://example.invalid/fixture","ownerLink":"https://brewpage.app/api/html/fixture/Receipt","namespace":"fixture","id":"Receipt","ownerToken":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","manageUrl":"https://example.invalid/manage#k=fixture-key"}\' 15 html POST https://brewpage.app/api/html'], { encoding: 'utf8', env: { ...process.env, LIB: join(scripts, 'brewpage-lib.sh') } });
+  assert.deepEqual([result.status, result.stdout], [1, 'NOTICE: publication confirmed; owner history could not be saved securely\nNOTICE: protected recovery could not be verified; reconcile this receipt before another write\nOK https://example.invalid/fixture\n'], 'a confirmed reader result cannot expose management capability or owner proof');
 });
 
 test('privacy and recovery instructions fail closed in every distribution', () => {
@@ -505,11 +521,12 @@ for (const type of ['html', 'site']) for (const [name, outcome, saved] of [
 ]) test(`${type} ${name} preserves history and saves only supported capabilities`, () => {
   // GIVEN existing valid ownership WHEN a repeated wire response arrives THEN explicit nonownership is never saved as a capability.
   const project = mkdtempSync(join(base, 'merged-'));
-  const response = { link: 'https://example.invalid/existing', ownerLink: 'https://example.invalid/api/html/fixture/existing', ownerToken: 'fixture-second', fileCount: 2, result: outcome };
-  const first = { ...response, ownerToken: 'fixture-owner', result: { code: 'ok', action: 'created' } };
-  const run = spawnSync('bash', ['-c', '. "$LIB"; bp_history_init && bp_finish "$FIRST" 15 html && bp_finish "$SECOND" 15 "$TYPE"'], { cwd: project, encoding: 'utf8', env: { ...process.env, PATH: bin + ':' + process.env.PATH, LIB: join(scripts, 'brewpage-lib.sh'), CLAUDE_PROJECT_DIR: project, FIRST: JSON.stringify(first), SECOND: JSON.stringify(response), TYPE: type } });
-  const tokens = [...readFileSync(join(project, '.claude/brewpage-history.md'), 'utf8').matchAll(/`(fixture-owner|fixture-second)`/g)].map(match => match[1]);
+  const owner = 'A'.repeat(32), replacement = 'B'.repeat(32), kind = type === 'site' ? 'sites' : type;
+  const response = { link: 'https://example.invalid/existing', ownerLink: `https://brewpage.app/api/${kind}/fixture/existing`, id: 'existing', namespace: 'fixture', ownerToken: replacement, fileCount: 2, result: outcome };
+  const first = { ...response, ownerLink: 'https://brewpage.app/api/html/fixture/existing', ownerToken: owner, result: { code: 'ok', action: 'created' } };
+  const run = spawnSync('bash', ['-c', '. "$LIB"; NS=fixture; bp_response_status() { echo "$STATUS"; }; bp_history_init && STATUS=201 bp_finish "$FIRST" 15 html POST https://brewpage.app/api/html && STATUS="$SECOND_STATUS" bp_finish "$SECOND" 15 "$TYPE" POST "https://brewpage.app/api/$KIND"'], { cwd: project, encoding: 'utf8', env: { ...process.env, PATH: bin + ':' + process.env.PATH, LIB: join(scripts, 'brewpage-lib.sh'), CLAUDE_PROJECT_DIR: project, FIRST: JSON.stringify(first), SECOND: JSON.stringify(response), SECOND_STATUS: outcome?.action === 'merged' ? '200' : '201', TYPE: type, KIND: kind } });
+  const tokens = [...readFileSync(join(project, '.claude/brewpage-history.md'), 'utf8').matchAll(/`([AB]{32})`/g)].map(match => match[1]);
   const success = `OK ${response.link}\nOK ${response.link}${type === 'site' ? ' | Files: 2' : ''}\n`;
-  const expected = saved ? [0, success, ['fixture-owner', 'fixture-second']] : [0, success + 'NOTICE: existing publication returned without ownership; no owner capability saved\n', ['fixture-owner']];
+  const expected = saved ? [0, success, [owner, replacement]] : [0, success + 'NOTICE: existing publication returned without ownership; no owner capability saved\n', [owner]];
   assert.deepEqual([run.status, run.stdout, tokens], expected, 'reader success survives while previous ownership and truthful capability rows are preserved');
 });

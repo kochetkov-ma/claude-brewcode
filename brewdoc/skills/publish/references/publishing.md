@@ -83,7 +83,7 @@ Use `file`, `site-dir` or `site-zip` for `{local_type}`. Append `--entry '{entry
 
 ### Choose proof or update a target
 
-An ordinary create reuses the selected saved owner when exactly one can be resolved. With several owners, append `--owner-target '{saved_publication_url}'` after the owner chooses an exact saved reader or API link. Append `--owner-token-file '{owner_token_file}'` for owner-supplied proof from an absolute owner-only file. Use `--anonymous` for an explicitly fresh unsigned create. Use `--no-save --private-output` only after the owner declines saving and the host verifies an owner-only output channel. Ordinary shared output must omit `--private-output`. Keep the token itself out of the command.
+An ordinary create reuses the selected saved owner when exactly one can be resolved. With several owners, append `--owner-target '{saved_publication_url}'` after the owner chooses an exact saved reader or API link. Append `--owner-token-file '{owner_token_file}'` for owner-supplied proof from an absolute owner-only file. Use `--anonymous` for an explicitly fresh unsigned create. If the owner declines workspace history, use `--no-save --receipt-dir '{receipt_directory}'` after agreeing on the [protected file destination](ownership.md#prepare-for-a-new-anonymous-owner). Keep the token itself out of the command.
 
 ```bash
 bash {runner} update {update_type} --target '{target}' --password-file '' --path '{path}'

@@ -121,8 +121,8 @@ check('skill.discovery.obsolete', (SKILL + PUBLISHING).includes('Dedicated subdo
   check('history.init.idempotent', readLines(gi),
     ['.claude/brewpage-history.md', '.claude/brewpage-recovery.json', 'brewpage-reconciliation.json'], 're-running adds no duplicate ignore lines');
 
-  check('history.header.token', readLines(hist).join('\n').includes('X-Owner-Token: TOKEN'), true,
-    'the header carries the delete recipe');
+  check('history.header.token', readLines(hist).join('\n').includes('X-Owner-Token: TOKEN'), false,
+    'the header never recommends passing credentials on a command line');
 
   sh('bp_history_init && bp_history_append "https://brewpage.app/public/abc" "tok-123" 15 html',
     { cwd: proj, env: { CLAUDE_PROJECT_DIR: proj } });

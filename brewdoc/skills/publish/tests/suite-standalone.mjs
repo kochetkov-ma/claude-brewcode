@@ -56,7 +56,10 @@ writeFileSync(join(bin, 'curl'), [
   'fs.writeFileSync(process.env.CURL_ARGS + ".payload", args.includes("-d") ? fs.readFileSync(data.slice(1)) : "");',
   'const file = args.find(arg => arg.startsWith("file=@"));',
   'if (file) fs.writeFileSync(process.env.CURL_ARGS + ".file", fs.readFileSync(JSON.parse(file.slice(6))));',
-  'process.stdout.write(process.env.CURL_RESPONSE + (args.includes("-w") ? "\\nBP_HTTP_STATUS:" + (process.env.CURL_HTTP_STATUS || "200") : ""));',
+  'const body = JSON.parse(process.env.CURL_RESPONSE);',
+  'const url = new URL(args.find(arg => arg.startsWith("https://")));',
+  'if (body.link && !body.ownerLink) { body.id = "Fixture123"; body.namespace = url.searchParams.get("ns"); body.ownerLink = url.origin + url.pathname + "/" + body.namespace + "/" + body.id; }',
+  'process.stdout.write(JSON.stringify(body) + (args.includes("-w") ? "\\nBP_HTTP_STATUS:" + (process.env.CURL_HTTP_STATUS || "201") : ""));',
 ].join('\n'), { mode: 0o755 });
 const leakyBin = join(base, 'leaky-bin');
 mkdirSync(leakyBin);
@@ -306,8 +309,8 @@ for (const copy of COPIES) {
       { link: 'https://fixture123.brewpage.app/', ownerToken: 'C'.repeat(32), manageUrl: manage, ownerLink: 'https://brewpage.app/api/html/public/Fixture123',
         id: 'Fixture123', namespace: 'public', routingCohort: 'new-v1', deliveryMode: 'subdomain', modeLocked: false, hostingVersion: 1,
         createdAt: '2026-10-01T12:00:00Z', expiresAt: '2026-10-16T12:00:00Z' },
-      { link: 'https://brewpage.app/public/Legacy1234', ownerToken: 'D'.repeat(32) },
-      { link: 'https://brewpage.app/public/LegacyNull', ownerToken: 'E'.repeat(32), routingCohort: 'old', deliveryMode: null, hostingVersion: null },
+      { link: 'https://brewpage.app/public/Legacy1234', ownerLink: 'https://brewpage.app/api/html/public/Legacy1234', id: 'Legacy1234', namespace: 'public', ownerToken: 'D'.repeat(32) },
+      { link: 'https://brewpage.app/public/LegacyNull', ownerLink: 'https://brewpage.app/api/html/public/LegacyNull', id: 'LegacyNull', namespace: 'public', ownerToken: 'E'.repeat(32), routingCohort: 'old', deliveryMode: null, hostingVersion: null },
     ];
     const fields = ['id', 'namespace', 'type', 'routingCohort', 'deliveryMode', 'modeLocked', 'hostingVersion', 'managementLink', 'manageUrl', 'entryFile', 'createdAt', 'expiresAt'];
     const nulls = Object.fromEntries(fields.map(key => [key, null]));

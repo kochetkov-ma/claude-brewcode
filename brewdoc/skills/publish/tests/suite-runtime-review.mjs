@@ -35,9 +35,11 @@ if(method==='PUT'&&new URL(url).pathname.startsWith('/api/html/')){
  const payload=JSON.parse(fs.readFileSync(args[args.indexOf('-d')+1].slice(1),'utf8'));
  fs.writeFileSync(process.env.EFFECT,JSON.stringify({format:new URL(url).searchParams.get('format')||'markdown',content:payload.content}));
 }
-const status=process.env.HTTP_STATUS||(method==='GET'?'200':'201');
-const data=Number(status)>=400?{status:Number(status),message:'Synthetic unavailable'}:method==='GET'?(url.endsWith('/api/limits')?{reach:process.env.PROFILE_REACH||'profile',customDomains:{enabled:true,limit:1}}:{entryFile:process.env.SITE_ENTRY||'landing.html'}):JSON.parse(process.env.RECEIPT);
-process.stdout.write(JSON.stringify(data)+'\\nBP_HTTP_STATUS:'+status);
+const status=process.env.HTTP_STATUS||(method==='POST'?'201':'200');
+const receipt=JSON.parse(process.env.RECEIPT);
+const data=Number(status)>=400&&!process.env.RETURN_RECEIPT_ON_ERROR?{status:Number(status),message:'Synthetic unavailable'}:method==='GET'?(url.endsWith('/api/limits')?{reach:process.env.PROFILE_REACH||'profile',customDomains:{enabled:true,limit:1}}:{entryFile:process.env.SITE_ENTRY||'landing.html'}):receipt;
+if(method==='PUT'&&url.includes('/api/sites/'))data.ownerLink='https://brewpage.app/api/sites/fixture/Receipt001';
+process.stdout.write(JSON.stringify(data)+(process.env.MISSING_HTTP_STATUS?'':'\\nBP_HTTP_STATUS:'+status));
 `, { mode: 0o700 });
   const run = (...args) => spawnSync('bash', [join(scripts, 'brewpage-run.sh'), ...args], { cwd: root, env, encoding: 'utf8', timeout: 15000 });
   const wire = () => readFileSync(traffic, 'utf8').trim().split('\n').map(JSON.parse);
@@ -65,9 +67,9 @@ test('safe receipts retain exact private proof and legacy first-party ownership'
       return [result.status, f.wire().at(-1).proof, readFileSync(f.history, 'utf8').startsWith(row)];
     });
     // THEN ordinary output stays reader-safe, the distinct capability is retained and every old row reuses its owner.
-    assert.deepEqual({ saved: [saved.status, saved.stdout], private: [privateResult.status, privateResult.stdout.includes('MANAGE: ' + manageUrl)],
-      refused: [noSave.status, /requires --private-output/.test(noSave.stdout)], proof: [data.includes('`' + token + '`'), data.includes(manageUrl)], selected },
-    { saved: [0, `OK ${reader}\nOWNER TOKEN SAVED\nVISIBILITY: Unlisted fixture.\nNOTICE: Keep this visible.\n`], private: [0, true], refused: [1, true], proof: [true, true],
+    assert.deepEqual({ saved: [saved.status, saved.stdout], private: [privateResult.status, privateResult.stdout.includes(manageUrl), privateResult.stdout.includes(token)],
+      refused: [noSave.status, /requires an absolute --receipt-dir/.test(noSave.stdout)], proof: [data.includes('`' + token + '`'), data.includes(manageUrl)], selected },
+    { saved: [0, `OK ${reader}\nOWNER TOKEN SAVED\nVISIBILITY: Unlisted fixture.\nNOTICE: Keep this visible.\n`], private: [0, false, false], refused: [1, true], proof: [true, true],
       selected: shapes.map(() => [0, ['X-Owner-Token: ' + token + '\n'], true]) }, 'private capabilities survive while ordinary transcripts and old owner identity remain safe');
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
@@ -179,15 +181,20 @@ test('unresolved or mismatched findings cannot clear a marker and legacy closure
 
 test('uncertain creates retain their own pending state after an unrelated authorized success', () => {
   // GIVEN isolated first creates receiving actual definitive or uncertain HTTP statuses.
-  const rows = [400, 503].map(status => {
+  const rows = [400, 503, 201, 0].map(status => {
     const f = fixture();
     try {
       const args = ['publish', 'html', '--ns', 'fixture', '--password-file', '', '--text', 'fixture'];
-      f.env.HTTP_STATUS = String(status);
+      f.env.HTTP_STATUS = String(status || 201);
+      f.env.RETURN_RECEIPT_ON_ERROR = '1';
+      f.env.RECEIPT = JSON.stringify(status === 201 ? { ...receipt, namespace: 'different' } : receipt);
+      f.env.MISSING_HTTP_STATUS = status === 0 ? '1' : '';
       // WHEN an independently authorized later publication succeeds, then an unqualified new create is attempted.
       const first = f.run(...args);
       const proof = join(f.root, 'selected-owner.txt'); writeFileSync(proof, token + '\n', { mode: 0o600 });
       f.env.HTTP_STATUS = '201';
+      f.env.RECEIPT = JSON.stringify(receipt);
+      f.env.MISSING_HTTP_STATUS = '';
       const unrelated = f.run(...args, '--owner-token-file', proof);
       const next = f.run(...args);
       return { status, first: [first.status, /outcome unknown/.test(first.stdout)], unrelated: unrelated.status,
@@ -198,40 +205,43 @@ test('uncertain creates retain their own pending state after an unrelated author
   assert.deepEqual(rows, [
     { status: 400, first: [1, false], unrelated: 0, next: 0, pending: false, calls: 3 },
     { status: 503, first: [1, true], unrelated: 0, next: 1, pending: true, calls: 2 },
-  ], 'actual status and operation-specific bookkeeping prevent an ambiguous create from silently replaying');
+    { status: 201, first: [1, true], unrelated: 0, next: 1, pending: true, calls: 2 },
+    { status: 0, first: [1, true], unrelated: 0, next: 1, pending: true, calls: 2 },
+  ], 'a plausible link cannot override failure, mismatched identity or a missing transport status');
 });
 
 test('declined and failed saves retain identical reader facts and complete private recovery', () => {
   // GIVEN normal, explicitly private no-save and benign history-append failure fixtures.
   const rows = ['saved', 'no-save', 'append-failed'].map(mode => {
     const f = fixture();
+    const destination = mkdtempSync(join(tmpdir(), 'publish-private-receipt-'));
     try {
       writeFileSync(join(f.bin, 'python3'), `#!/usr/bin/env node
 const cp=require('node:child_process'),args=process.argv.slice(2);
 if(process.env.FAIL_APPEND==='1'&&args[1]==='append')process.exit(1);
 const stdio=['inherit','inherit','inherit'];
-if(process.env.BREWPAGE_HISTORY_LOCK_FD){for(let i=3;i<9;i++)stdio.push('ignore');stdio.push(9);}
+if(process.env.BREWPAGE_HISTORY_LOCK_FD){for(let i=3;i<8;i++)stdio.push('ignore');stdio.push(process.env.PASS_RECEIPT_FD==='1'&&args[1]?.startsWith('receipt')&&args[4]==='1'?8:'ignore',9);}
 const result=cp.spawnSync(${JSON.stringify(python)},args,{stdio});process.exit(result.status??99);
 `, { mode: 0o700 });
       f.env.FAIL_APPEND = mode === 'append-failed' ? '1' : '0';
-      const flags = mode === 'no-save' ? ['--no-save', '--private-output'] : [];
+      f.env.PASS_RECEIPT_FD = mode === 'no-save' ? '1' : '0';
+      const flags = mode === 'no-save' ? ['--no-save', '--receipt-dir', destination] : [];
       // WHEN one actual runner create receives the same typed receipt, regardless of the selected storage result.
       const result = f.run('publish', 'html', '--ns', 'fixture', '--password-file', '', '--text', 'fixture', ...flags);
       assert.equal(result.status, mode === 'append-failed' ? 1 : 0, 'benign dependency fixture reaches its intended save result: ' + result.stderr);
       const lookup = f.run('owner-recovery', '--private-output');
       assert.equal(lookup.status, mode === 'append-failed' ? 0 : 1, 'fresh private lookup reads only a pending workspace receipt');
-      const paths = lookup.status === 0 ? [join(dirname(f.history), 'brewpage-recovery.json')] : [];
-      const stored = paths.map(path => ({ mode: statSync(path).mode & 0o777, receipt: JSON.parse(lookup.stdout) }));
+      const paths = mode === 'saved' ? [] : [join(mode === 'no-save' ? destination : dirname(f.history), 'brewpage-recovery.json')];
+      const stored = paths.map(path => ({ mode: statSync(path).mode & 0o777, receipt: JSON.parse(readFileSync(path, 'utf8')) }));
       stored.forEach(row => assert.match(row.receipt.operationId, /^[a-f0-9]{24}$/, 'protected receipt identifies its exact pending operation'));
       const expectedRecovery = { origin: 'https://brewpage.app', ownerApi, readerUrl: reader, ownerToken: token,
         operationId: stored[0]?.receipt.operationId, identity: { id: 'Receipt001', namespace: 'fixture', type: null, routingCohort: null,
           deliveryMode: null, modeLocked: null, hostingVersion: null, managementLink: null, manageUrl, entryFile: null, createdAt: null, expiresAt: null }, manageUrl };
-      assert.deepEqual(stored, mode === 'append-failed' ? [{ mode: 0o600, receipt: expectedRecovery }] : [], 'protected fallback retains the full typed receipt with verified private storage');
-      const privateReceipt = /^PRIVATE OWNER RECEIPT: (.+)$/m.exec(result.stdout)?.[1];
+      assert.deepEqual(stored, mode === 'saved' ? [] : [{ mode: 0o600, receipt: expectedRecovery }], 'protected files retain the full typed receipt with verified private storage');
       const facts = result.stdout.split('\n').filter(line => /^(OK |VISIBILITY:|NOTICE: Keep)/.test(line));
       const calls = f.wire().length;
       f.env.FAIL_APPEND = '0';
-      const recovered = paths.map(path => {
+      const recovered = (mode === 'append-failed' ? paths : []).map(path => {
         const restored = f.run('owner-store', '--target', ownerApi, '--reader', reader, '--owner-token-file', path);
         const pending = readFileSync(f.history, 'utf8').includes('<!-- brewpage-owner-pending:');
         const next = f.run('publish', 'html', '--ns', 'fixture', '--password-file', '', '--text', 'another explicitly requested item');
@@ -240,17 +250,22 @@ const result=cp.spawnSync(${JSON.stringify(python)},args,{stdio});process.exit(r
       });
       assert.deepEqual(recovered, mode === 'append-failed' ? [[0, 'OWNER TOKEN SAVED\n', false, 0, 2, ['X-Owner-Token: ' + token + '\n'], true]] : [],
         'exact protected recovery resolves its own pending marker and reuses the owner in a new process');
+      const direct = (mode === 'no-save' ? paths : []).map(path => {
+        const update = f.run('update', 'html', '--target', ownerApi, '--password-file', '', '--text', 'requested change', '--owner-token-file', path);
+        return [update.status, f.wire().at(-1).method, f.wire().at(-1).proof];
+      });
+      assert.deepEqual(direct, mode === 'no-save' ? [[0, 'PUT', ['X-Owner-Token: ' + token + '\n']]] : [], 'a new process can use the exact receipt in an authorized in-place update');
+      const transcript = result.stdout + result.stderr + lookup.stdout + lookup.stderr;
       return { mode, status: result.status, facts, calls,
-        disclosed: result.stdout.includes(token) || result.stdout.includes(manageUrl) || result.stdout.includes(f.history) || paths.some(path => result.stdout.includes(path)),
-        privateToken: privateReceipt ? JSON.parse(privateReceipt).ownerToken : '' };
-    } finally { rmSync(f.root, { recursive: true, force: true }); }
+        disclosed: [token, manageUrl, f.history, ...paths].some(privateValue => transcript.includes(privateValue)) };
+    } finally { rmSync(f.root, { recursive: true, force: true }); rmSync(destination, { recursive: true, force: true }); }
   });
-  // THEN every confirmed result carries the same safe facts and only explicit private delivery carries its new proof.
+  // THEN every confirmed result carries the same safe facts while proof stays in protected files.
   const facts = [`OK ${reader}`, 'VISIBILITY: Unlisted fixture.', 'NOTICE: Keep this visible.'];
   assert.deepEqual(rows, [
-    { mode: 'saved', status: 0, facts, calls: 1, disclosed: false, privateToken: '' },
-    { mode: 'no-save', status: 0, facts, calls: 1, disclosed: true, privateToken: token },
-    { mode: 'append-failed', status: 1, facts, calls: 1, disclosed: false, privateToken: '' },
+    { mode: 'saved', status: 0, facts, calls: 1, disclosed: false },
+    { mode: 'no-save', status: 0, facts, calls: 1, disclosed: false },
+    { mode: 'append-failed', status: 1, facts, calls: 1, disclosed: false },
   ], 'storage outcomes cannot suppress consequential reader notices, expose ordinary proof or replay a create');
 });
 

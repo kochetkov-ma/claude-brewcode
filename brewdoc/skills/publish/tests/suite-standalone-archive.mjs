@@ -78,7 +78,7 @@ function binWith(stubs) {
   return bin;
 }
 const UPLOAD_STUB = 'printf "%s\\n" "$@" > "$TEST_BASE/curl-args"\nfor arg in "$@"; do\n  case "$arg" in archive=@*) file="${arg#archive=@}"; file="${file#\\\"}"; file="${file%\\\"}"; cp "$file" "$TEST_BASE/uploaded.zip" || exit 1 ;; esac\ndone\n'
-  + 'python3 -I -S -c \'import json,sys,zipfile; print(json.dumps({"link":"https://example.test/","ownerLink":"https://brewpage.app/api/sites/fixture/Archive001","ownerToken":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","fileCount":sum(not x.is_dir() for x in zipfile.ZipFile(sys.argv[1]).infolist())}))\' "$TEST_BASE/uploaded.zip"';
+  + 'python3 -I -S -c \'import json,sys,zipfile; print(json.dumps({"link":"https://example.test/","ownerLink":"https://brewpage.app/api/sites/fixture/Archive001","id":"Archive001","namespace":"fixture","ownerToken":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","fileCount":sum(not x.is_dir() for x in zipfile.ZipFile(sys.argv[1]).infolist())}))\' "$TEST_BASE/uploaded.zip"\nprintf "BP_HTTP_STATUS:201"';
 const REDIRECT_STUB = 'args=()\nfor a in "$@"; do args+=("${a/#https:\\/\\/brewpage.app/$BP_ENDPOINT}"); done\nexec "$REAL_CURL" --disable --proxy "" "${args[@]}"';
 
 function siteFence(copy, slots) {
@@ -146,8 +146,8 @@ for (const copy of COPIES) {
         request.on('data', chunk => chunks.push(chunk));
         request.on('end', () => {
           requests.push({ url: request.url, userAgent: request.headers['user-agent'], body: Buffer.concat(chunks) });
-          reply.writeHead(200, { 'Content-Type': 'application/json' });
-          reply.end(JSON.stringify({ link: 'https://example.test/', ownerLink: 'https://brewpage.app/api/sites/fixture/Archive001', ownerToken: 'A'.repeat(32), fileCount: 1 }));
+          reply.writeHead(201, { 'Content-Type': 'application/json' });
+          reply.end(JSON.stringify({ link: 'https://example.test/', ownerLink: 'https://brewpage.app/api/sites/fixture/Archive001', id: 'Archive001', namespace: 'fixture', ownerToken: 'A'.repeat(32), fileCount: 1 }));
         });
       });
       await new Promise(listening => server.listen(0, '127.0.0.1', listening));

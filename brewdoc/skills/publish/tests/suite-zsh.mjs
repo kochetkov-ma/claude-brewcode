@@ -25,7 +25,7 @@ writeFileSync(curl, [
   'const d = args.includes("-d") ? args[args.indexOf("-d") + 1].slice(1) : "";',
   'const payload = d && fs.existsSync(d) ? fs.readFileSync(d, "utf8") : null;',
   'fs.writeFileSync(process.env.CURL_LOG, JSON.stringify({ args, files, payload }));',
-  'process.stdout.write(process.env.CURL_RESPONSE);',
+  'process.stdout.write(process.env.CURL_RESPONSE + "\\nBP_HTTP_STATUS:201");',
 ].join('\n'));
 chmodSync(curl, 0o755);
 
@@ -46,9 +46,9 @@ const commands = {
   probe: shipped(' probe '),
 };
 const fixtureOwner = 'F'.repeat(32);
-const htmlResponse = { link: 'https://brewpage.app/public/Fixture123', ownerToken: fixtureOwner };
+const htmlResponse = { link: 'https://brewpage.app/public/Fixture123', ownerLink: 'https://brewpage.app/api/html/public/Fixture123', id: 'Fixture123', namespace: 'public', ownerToken: fixtureOwner };
 const siteResponse = { link: 'https://fixture.brewpage.app/', ownerToken: fixtureOwner, fileCount: 3,
-  ownerLink: 'https://brewpage.app/api/sites/public/FixtureSite123' };
+  ownerLink: 'https://brewpage.app/api/sites/public/FixtureSite123', id: 'FixtureSite123', namespace: 'public' };
 const escape = value => value.replaceAll("'", "'\\''");
 let seq = 0;
 

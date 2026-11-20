@@ -43,7 +43,7 @@ Claude prefers a suitable connected account when you have no other owner selecte
 
 Share the exact returned reader link and check its effective access. The ordinary REST runner result omits owner keys, management links and private receipt paths. If saving the key fails after publication, Claude reports both outcomes.
 
-The runner's `--private-output` can show a management link, private receipt or recovery path. Use it only in a verified owner-only channel. If you decline saving a new anonymous key, the runner requires `--no-save --private-output` in that channel. See [private receipts and recovery](references/ownership.md).
+The runner keeps owner tokens and management links in protected files. If you decline workspace history, select a protected receipt directory with `--no-save --receipt-dir`. See [private receipts and recovery](references/ownership.md).
 
 ## Documentation
 

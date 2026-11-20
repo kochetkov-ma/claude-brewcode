@@ -60,6 +60,7 @@ function wrapper(text, openclaw, openclawUA) {
     + 'and owner-key upkeep `owner-store`, `owner-recovery`, `owner-pending`, `owner-reconcile` ([ownership](references/ownership.md)). '
     + 'It sends HTTPS requests only to `https://brewpage.app/api/`, keeps working copies in a private `$TMPDIR/brewpage.*` run directory removed when the run ends or by `cleanup`, '
     + 'and writes only `brewpage-history.md`, `brewpage-recovery.json` (both mode 0600) and their `.gitignore` entries in the workspace. '
+    + 'If the owner declines workspace history, it writes only `brewpage-recovery.json` (mode 0600) in the owner-chosen `--receipt-dir` instead. '
     + 'It needs `bash`, `curl`, `jq` and `python3`; local file and site checks add `node`, `zip` and `unzip`. Inline MCP publishing needs none of them.\n\n'
     + 'The runner uses `ClaudeCode/');
   text = replaceOne(text, '`$ARGUMENTS` is one free-form RU/EN prompt.', 'Use the owner’s free-form RU/EN prompt.');
