@@ -27,7 +27,9 @@ const FRONTMATTER = {
   ],
   openclaw: [
     'name: brewpage-publish',
-    description,
+    description.replace(' Use for', ' Keeps the private owner key of an anonymous publication so its owner can edit or delete it later: '
+      + 'saves it to the workspace file brewpage-history.md, recovers it from a local receipt, and reconciles an interrupted create. '
+      + 'Its bundled runner talks only to brewpage.app. Use for'),
     'homepage: https://brewpage.app',
     'user-invocable: true',
     'license: MIT',

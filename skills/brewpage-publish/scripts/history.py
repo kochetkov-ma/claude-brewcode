@@ -72,8 +72,13 @@ def read(directory, name, private=False):
         return source.read(LIMIT + 1)
 
 
+GIT_ENV = ('PATH', 'HOME', 'XDG_CONFIG_HOME', 'GIT_DIR', 'GIT_WORK_TREE', 'GIT_CEILING_DIRECTORIES')
+
+
 def git(root, arguments, allowed=(0, 1)):
-    result = subprocess.run(['git', '-C', root] + arguments, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env={**os.environ, 'LC_ALL': 'C'})
+    # Named variables only: repo discovery, PATH and ignore files; nothing else reaches git.
+    env = {name: os.environ[name] for name in GIT_ENV if name in os.environ}
+    result = subprocess.run(['git', '-C', root] + arguments, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env={**env, 'LC_ALL': 'C'})
     if result.returncode not in allowed:
         raise ValueError('Git safety check failed; repair repository configuration before publishing')
     return result

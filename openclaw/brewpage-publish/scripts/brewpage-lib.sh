@@ -8,7 +8,7 @@ HISTORY_FILE="$BP_ROOT/brewpage-history.md"
 BP_TMPDIR="${TMPDIR:-/tmp}"
 BP_TMPDIR="${BP_TMPDIR%/}"
 # User-Agent on every brewpage.app request: <client>/<shipped version> (+https://brewpage.app).
-BP_UA="OpenClaw/1.1.0 (+https://brewpage.app)"
+BP_UA="OpenClaw/1.1.1 (+https://brewpage.app)"
 
 bp_history() {
   local operation="$1"
@@ -24,7 +24,7 @@ bp_history_init() {
 # brewpage.app — Published Pages
 
 > Owner tokens allow delete and in-place PUT (html/json/kv/files/sites). A 409 OLD_PUBLICATION_READ_ONLY needs an explicit replacement decision before a new create. This file and its manage URLs are private; disclose proof only through verified owner-only delivery.
-> Delete: `curl -s -A "OpenClaw/1.1.0 (+https://brewpage.app)" -X DELETE "<Owner API>" -H "X-Owner-Token: TOKEN"`; rows without one: `https://brewpage.app/api/<type>/<ns>/<id>`, type = html|json|files|kv|sites.
+> Delete: `curl -s -A "OpenClaw/1.1.1 (+https://brewpage.app)" -X DELETE "<Owner API>" -H "X-Owner-Token: TOKEN"`; rows without one: `https://brewpage.app/api/<type>/<ns>/<id>`, type = html|json|files|kv|sites.
 > Update a site (same URL; old publications answer 409, see above): `PUT /api/sites/<ns>/<id>` with the same `-A`, `X-Owner-Token: TOKEN` + the new bundle.
 
 | Date | URL | Owner Token | TTL | Type | Owner API | Identity |
@@ -150,8 +150,9 @@ bp_begin() {
     [ -f "$source_file" ] && [ ! -L "$source_file" ] || { echo "FAILED: password source path file missing or unsafe"; return 1; }
     IFS= read -r password_source < "$source_file" || true
     bp_password_check "$password_source" || return 1
-    local password_file="$BP_RUN_DIR/brewpage-password.txt"
-    [ ! -e "$password_file" ] && [ ! -L "$password_file" ] || { echo "FAILED: password transport file already exists"; return 1; }
+    # Page access password the owner chose for this publication (X-Password); no system or account credential.
+    local password_file="$BP_RUN_DIR/page-password-copy.txt"
+    [ ! -e "$password_file" ] && [ ! -L "$password_file" ] || { echo "FAILED: page password copy already exists"; return 1; }
     (umask 077; cat -- "$password_source" > "$password_file") || return 1
     BP_HEADER_FILE="$BP_RUN_DIR/password-header.txt"
     # Re-checks the copied bytes: the source may change after bp_password_check.

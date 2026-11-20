@@ -51,6 +51,17 @@ function wrapper(text, openclaw, openclawUA) {
   const frontmatter = header.split('\n').filter(line => /^(name|description|user-invocable|license):/.test(line));
   frontmatter.splice(2, 0, 'homepage: https://brewpage.app');
   text = replaceOne(text, header, frontmatter.join('\n') + '\n');
+  // ClawHub reads the description as the declared scope, so it names owner-key handling and the only host.
+  text = replaceOne(text, 'forms with saved visitor answers. Use for', 'forms with saved visitor answers. '
+    + 'Keeps the private owner key of an anonymous publication so its owner can edit or delete it later: '
+    + 'saves it to the workspace file brewpage-history.md, recovers it from a local receipt, and reconciles an interrupted create. '
+    + 'Its bundled runner talks only to brewpage.app. Use for');
+  text = replaceOne(text, 'The runner uses `ClaudeCode/', 'Runner commands: `probe`, `limits`, `stage`, `preflight`, `publish`, `update`, `cleanup`, '
+    + 'and owner-key upkeep `owner-store`, `owner-recovery`, `owner-pending`, `owner-reconcile` ([ownership](references/ownership.md)). '
+    + 'It sends HTTPS requests only to `https://brewpage.app/api/`, keeps working copies in a private `$TMPDIR/brewpage.*` run directory removed when the run ends or by `cleanup`, '
+    + 'and writes only `brewpage-history.md`, `brewpage-recovery.json` (both mode 0600) and their `.gitignore` entries in the workspace. '
+    + 'It needs `bash`, `curl`, `jq` and `python3`; local file and site checks add `node`, `zip` and `unzip`. Inline MCP publishing needs none of them.\n\n'
+    + 'The runner uses `ClaudeCode/');
   text = replaceOne(text, '`$ARGUMENTS` is one free-form RU/EN prompt.', 'Use the owner’s free-form RU/EN prompt.');
   text = replaceOne(text, 'use at most one `AskUserQuestion` (up to four questions)', 'ask once (up to four scope questions)');
   text = replaceOne(text, 'Invoke only its scoped Bash command shape.', 'Use the host shell tool only when permitted.');

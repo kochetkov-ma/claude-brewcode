@@ -182,8 +182,9 @@ bp_begin() {
     [ -f "$source_file" ] && [ ! -L "$source_file" ] || { echo "FAILED: password source path file missing or unsafe"; return 1; }
     IFS= read -r password_source < "$source_file" || true
     bp_password_check "$password_source" || return 1
-    local password_file="$BP_RUN_DIR/brewpage-password.txt"
-    [ ! -e "$password_file" ] && [ ! -L "$password_file" ] || { echo "FAILED: password transport file already exists"; return 1; }
+    # Page access password the owner chose for this publication (X-Password); no system or account credential.
+    local password_file="$BP_RUN_DIR/page-password-copy.txt"
+    [ ! -e "$password_file" ] && [ ! -L "$password_file" ] || { echo "FAILED: page password copy already exists"; return 1; }
     (umask 077; cat -- "$password_source" > "$password_file") || return 1
     BP_HEADER_FILE="$BP_RUN_DIR/password-header.txt"
     # Re-checks the copied bytes: the source may change after bp_password_check.

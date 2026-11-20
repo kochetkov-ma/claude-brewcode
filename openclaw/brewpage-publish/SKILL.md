@@ -1,6 +1,6 @@
 ---
 name: brewpage-publish
-description: "Prepare BrewPage drafts, publish supplied content or a new page, and update a specific BrewPage publication. Supports HTML, Markdown, JSON, files, built sites, and forms with saved visitor answers. Use for BrewPage, share this as a link, publish site, RSVP, poll, черновик BrewPage, опубликуй, обнови страницу."
+description: "Prepare BrewPage drafts, publish supplied content or a new page, and update a specific BrewPage publication. Supports HTML, Markdown, JSON, files, built sites, and forms with saved visitor answers. Keeps the private owner key of an anonymous publication so its owner can edit or delete it later: saves it to the workspace file brewpage-history.md, recovers it from a local receipt, and reconciles an interrupted create. Its bundled runner talks only to brewpage.app. Use for BrewPage, share this as a link, publish site, RSVP, poll, черновик BrewPage, опубликуй, обнови страницу."
 homepage: https://brewpage.app
 user-invocable: true
 license: MIT
@@ -55,7 +55,9 @@ For the bundled runner, substitute this installed path for `{runner}` in the pub
 {baseDir}/scripts/brewpage-run.sh
 ```
 
-The runner uses `OpenClaw/1.1.0 (+https://brewpage.app)` for direct REST requests.
+Runner commands: `probe`, `limits`, `stage`, `preflight`, `publish`, `update`, `cleanup`, and owner-key upkeep `owner-store`, `owner-recovery`, `owner-pending`, `owner-reconcile` ([ownership](references/ownership.md)). It sends HTTPS requests only to `https://brewpage.app/api/`, keeps working copies in a private `$TMPDIR/brewpage.*` run directory removed when the run ends or by `cleanup`, and writes only `brewpage-history.md`, `brewpage-recovery.json` (both mode 0600) and their `.gitignore` entries in the workspace. It needs `bash`, `curl`, `jq` and `python3`; local file and site checks add `node`, `zip` and `unzip`. Inline MCP publishing needs none of them.
+
+The runner uses `OpenClaw/1.1.1 (+https://brewpage.app)` for direct REST requests.
 
 ## Return the actual result
 
