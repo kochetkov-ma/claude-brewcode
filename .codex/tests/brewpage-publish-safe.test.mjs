@@ -138,18 +138,24 @@ test('Skillstore Safe refuses unsafe storage and inconsistent receipts without l
   } finally { for (const f of [blocked, error]) rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test('regular skills retain standard private receipt delivery', () => {
+test('regular skills deliver declined-history receipts only to a protected file', () => {
   // GIVEN three regular skill distributions and isolated synthetic anonymous creates.
   const deliveries = regular.map(variant => {
     const f = fixture();
     try {
-      // WHEN an explicit private receipt is requested on the regular runner.
-      const result = f.run(variant, [...publish, '--no-save', '--private-output']);
-      return [result.status, result.stdout.startsWith('NOTICE: owner receipt was not saved'), disclosure(result), f.traffic().length];
+      // WHEN history is declined without, then with, an owner-only receipt directory outside the workspace.
+      const refused = f.run(variant, [...publish, '--no-save', '--private-output']);
+      const receipts = join(f.root, 'receipts');
+      mkdirSync(receipts, { mode: 0o700 });
+      const result = f.run(variant, [...publish, '--no-save', '--receipt-dir', receipts, '--private-output']);
+      const file = join(receipts, 'brewpage-recovery.json');
+      return [refused.status, result.status, result.stdout.includes('OWNER RECOVERY SAVED\n'), [refused, result].map(disclosure), f.traffic().length,
+        statSync(file).mode & 0o777, JSON.parse(readFileSync(file, 'utf8')).ownerToken === syntheticToken];
     } finally { rmSync(f.root, { recursive: true, force: true }); }
   });
-  // THEN the normal opt-in channel can still deliver both owner capabilities.
-  assert.deepEqual(deliveries, Array(3).fill([0, true, [true, true], 1]), 'regular anonymous private receipts retain the released behavior');
+  // THEN only the protected receipt file holds owner capabilities; stdout never does.
+  assert.deepEqual(deliveries, Array(3).fill([1, 0, true, [[false, false], [false, false]], 1, 0o600, true]),
+    'regular declined-history receipts stay in an owner-only file');
 });
 
 test('uncertain creates stay bound to their exact request and selected authority', () => {
