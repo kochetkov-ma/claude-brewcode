@@ -83,7 +83,8 @@ const REDIRECT_STUB = 'args=()\nfor a in "$@"; do args+=("${a/#https:\\/\\/brewp
 
 function siteFence(copy, slots) {
   const entry = readFileSync(join(copy.dir, 'SKILL.md'), 'utf8');
-  const source = readFileSync(join(copy.dir, 'references/publishing.md'), 'utf8');
+  const source = ['publishing.md', 'rest-runner.md'].map(file => join(copy.dir, 'references', file))
+    .filter(path => existsSync(path)).map(path => readFileSync(path, 'utf8')).join('\n');
   const runner = entry.match(/```text\n([^\n]+\/scripts\/brewpage-run\.sh)\n```/)?.[1];
   assert.equal(runner, copy.token + '/scripts/brewpage-run.sh', 'GIVEN the installed runner binding');
   const found = [...source.matchAll(/```bash\n([\s\S]*?)```/g)].map(m => m[1].trimEnd())

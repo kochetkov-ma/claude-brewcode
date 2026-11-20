@@ -432,7 +432,7 @@ test('privacy and recovery instructions fail closed in every distribution', () =
   // GIVEN all distributed instructions WHEN read THEN explicit access, private management and replay prevention are required.
   const repo = join(root, '../../../..');
   for (const relative of ['brewdoc/skills/publish', 'skills/brewpage-publish', 'openclaw/brewpage-publish']) {
-    const text = ['SKILL.md', 'references/publishing.md', 'references/ownership.md'].map(path => join(repo, relative, path))
+    const text = ['SKILL.md', 'references/publishing.md', 'references/rest-runner.md', 'references/ownership.md'].map(path => join(repo, relative, path))
       .filter(path => existsSync(path)).map(path => readFileSync(path, 'utf8')).join('\n');
     assert.deepEqual([
       /Never infer publication consent from silence|Ask for any unresolved access choice that changes the audience/.test(text),

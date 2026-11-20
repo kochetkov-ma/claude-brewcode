@@ -18,7 +18,7 @@ For example, in an owner-only interaction: “Save the new brewpage.app owner ke
 
 If saving is declined, use a private receipt destination agreed for the exact new key. If the host offers neither protected storage nor owner-only delivery, obtain one before the create. Keep credential paths, raw token values, password values, and management URLs out of shared tool transcripts, content and logs. Use only a host-supported protected field or private file for supplied proof.
 
-For an MCP receipt, use the authorized host vault or import the new owner key into the runner's workspace store. Import only when the host can put the actual key in an owner-only `0600` file without exposing it to shared output or shell arguments. Use the installed `{runner}` and single-quoted slots from [publishing](publishing.md). Pass the exact reader link and the official owner endpoint from the verified receipt identity.
+For an MCP receipt, use the authorized host vault or import the new owner key into the runner's workspace store. Import only when the host can put the actual key in an owner-only `0600` file without exposing it to shared output or shell arguments. Use the installed `{runner}` and single-quoted slots from the [REST runner](rest-runner.md). Pass the exact reader link and the official owner endpoint from the verified receipt identity.
 
 ```bash
 bash {runner} owner-store --target '{owner_api_url}' --reader '{reader_url}' --owner-token-file '{owner_token_file}'

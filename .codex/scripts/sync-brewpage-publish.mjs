@@ -65,6 +65,11 @@ function wrapper(text, openclaw, openclawUA) {
   text = replaceOne(text, '`$ARGUMENTS` is one free-form RU/EN prompt.', 'Use the owner’s free-form RU/EN prompt.');
   text = replaceOne(text, 'use at most one `AskUserQuestion` (up to four questions)', 'ask once (up to four scope questions)');
   text = replaceOne(text, 'Invoke only its scoped Bash command shape.', 'Use the host shell tool only when permitted.');
+  text = replaceOne(text, 'Use [publishing](references/publishing.md) for local input, other access choices or REST.',
+    'Use [publishing](references/publishing.md) for local input or other access choices and the [REST runner](references/rest-runner.md) for REST.');
+  text = replaceOne(text, 'use the packaged local checks in [publishing](references/publishing.md).',
+    'use the packaged local checks in [publishing](references/publishing.md) and the [REST runner](references/rest-runner.md).');
+  text = replaceOne(text, '`{runner}` in the publishing reference.', '`{runner}` in the REST runner reference.');
   text = replaceOne(text, '${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh', '{baseDir}/scripts/brewpage-run.sh');
   return text.replace(/ClaudeCode\/\d+\.\d+\.\d+ \(\+https:\/\/brewpage\.app\)/g, openclawUA);
 }
@@ -80,6 +85,21 @@ function openclawLibrary(text, ua) {
   return text.replace(/ClaudeCode\/\d+\.\d+\.\d+ \(\+https:\/\/brewpage\.app\)/g, ua);
 }
 
+// ClawHub scans each reference on its own; OpenClaw ships the runner commands in a separate recipe.
+function openclawRecipes(publishing, ownership) {
+  const split = '## Use direct REST through the bundled runner\n';
+  const at = publishing.indexOf(split);
+  if (at < 0 || publishing.lastIndexOf(split) !== at) throw new Error('Missing or repeated REST section anchor');
+  const head = replaceOne(publishing.slice(0, at).replace(/\n+$/, '\n'), 'Use a verified local preflight for selected files',
+    'Use a verified local preflight ([REST runner](rest-runner.md#check-inputs-for-mcp)) for selected files');
+  return {
+    'references/publishing.md': head,
+    'references/rest-runner.md': '# REST runner\n\n' + publishing.slice(at),
+    'references/ownership.md': replaceOne(ownership, 'single-quoted slots from [publishing](publishing.md)',
+      'single-quoted slots from the [REST runner](rest-runner.md)'),
+  };
+}
+
 for (const path of [source, join(source, 'scripts'), join(source, 'references')]) directory(path);
 const canonical = new Map(files.map(file => [file, read(join(source, file))]));
 const changes = [];
@@ -87,10 +107,18 @@ for (const host of ['skills', 'openclaw']) {
   const destination = join(root, host, 'brewpage-publish');
   directory(destination);
   const openclaw = host === 'openclaw';
+  const members = new Map(canonical);
+  if (openclaw) {
+    const recipes = openclawRecipes(canonical.get('references/publishing.md').bytes.toString(),
+      canonical.get('references/ownership.md').bytes.toString());
+    for (const [file, text] of Object.entries(recipes)) {
+      members.set(file, { bytes: Buffer.from(text), mode: canonical.get('references/publishing.md').mode });
+    }
+  }
   for (const subdir of ['scripts', 'references']) {
     const target = join(destination, subdir);
     if (!directory(target, true)) continue;
-    const allowed = new Set(files.filter(file => dirname(file) === subdir).map(file => file.slice(subdir.length + 1)));
+    const allowed = new Set([...members.keys()].filter(file => dirname(file) === subdir).map(file => file.slice(subdir.length + 1)));
     for (const name of readdirSync(target)) {
       if (!allowed.has(name)) throw new Error(`Unexpected package member: ${join(target, name)}`);
     }
@@ -98,7 +126,7 @@ for (const host of ['skills', 'openclaw']) {
   const ua = openclaw && read(join(destination, 'scripts/brewpage-lib.sh')).bytes.toString()
     .match(/^BP_UA="(OpenClaw\/\d+\.\d+\.\d+ \(\+https:\/\/brewpage\.app\))"$/m)?.[1];
   if (openclaw && !ua) throw new Error('Missing the OpenClaw distribution version');
-  for (const [file, canonicalFile] of canonical) {
+  for (const [file, canonicalFile] of members) {
     const { bytes, mode } = canonicalFile;
     let expected = bytes;
     if (file === 'SKILL.md') expected = Buffer.from(wrapper(bytes.toString(), openclaw, ua));

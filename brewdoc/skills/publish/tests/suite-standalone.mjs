@@ -69,7 +69,9 @@ writeFileSync(join(base, 'short-password.txt'), 'abc\n');
 const skillText = copy => readFileSync(join(copy.dir, 'SKILL.md'), 'utf8');
 const frontmatter = copy => { const lines = skillText(copy).split('\n'); return lines.slice(1, lines.indexOf('---', 1)); };
 const reference = (copy, file) => readFileSync(join(copy.dir, 'references', file), 'utf8');
-const instructions = copy => [skillText(copy), reference(copy, 'publishing.md'), reference(copy, 'ownership.md')].join('\n');
+const recipes = copy => copy.name === 'openclaw' ? [...REFERENCE_FILES, 'rest-runner.md'].sort() : REFERENCE_FILES;
+const instructions = copy => [skillText(copy), ...['publishing.md', 'rest-runner.md', 'ownership.md']
+  .filter(file => recipes(copy).includes(file)).map(file => reference(copy, file))].join('\n');
 const fences = copy => [...instructions(copy).matchAll(/```bash\n([\s\S]*?)```/g)]
   .map(m => m[1].trimEnd().replace('{runner}', copy.token + '/scripts/brewpage-run.sh'));
 const prefix = copy => 'bash ' + copy.token + '/scripts/brewpage-run.sh';
@@ -180,10 +182,14 @@ for (const copy of COPIES) {
 
   test(`${copy.name}: package contains the shared recipes and unchanged safety modules`, () => {
     // GIVEN the shipped package WHEN inspecting the common files THEN exact members and source bytes match.
-    assert.deepEqual(readdirSync(join(copy.dir, 'references')).sort(), REFERENCE_FILES, 'only four expected recipes are packaged');
-    const shared = [...REFERENCE_FILES.map(file => 'references/' + file), 'scripts/publish.mjs', 'scripts/history.py'];
+    assert.deepEqual(readdirSync(join(copy.dir, 'references')).sort(), recipes(copy), 'only the expected recipes are packaged');
+    const split = copy.name === 'openclaw' ? ['publishing.md', 'ownership.md'] : [];
+    const shared = [...REFERENCE_FILES.filter(file => !split.includes(file)).map(file => 'references/' + file), 'scripts/publish.mjs', 'scripts/history.py'];
     assert.deepEqual(shared.map(path => readFileSync(join(copy.dir, path))), shared.map(path => readFileSync(join(CANONICAL, path))),
       'all shared recipe and safety files match canonical bytes');
+    const commands = text => [...text.matchAll(/```bash\n([\s\S]*?)```/g)].map(m => m[1]);
+    assert.deepEqual(commands(['publishing.md', 'rest-runner.md'].filter(file => recipes(copy).includes(file)).map(file => reference(copy, file)).join('\n')),
+      commands(readFileSync(join(CANONICAL, 'references/publishing.md'), 'utf8')), 'the shipped recipes carry every canonical runner command in order');
   });
 
   test(`${copy.name}: ${TOOL_RULE[copy.name][0]}`, () => {
