@@ -2,6 +2,17 @@
 
 ---
 
+## v6.13.5 (2026-11-20)
+
+> Docs: [Publish with BrewPage](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+**What changed for you**
+
+- The publish runner keeps owner keys and management links in protected files and never prints them. If you decline workspace history, `--no-save --receipt-dir` writes the private receipt to a folder you choose.
+- A publish counts as done only when the server answer and the saved receipt agree, and site ZIP checks use the exact paths inside the archive.
+
+---
+
 ## v6.13.4 (2026-11-20)
 
 > Docs: [Publish with BrewPage](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
