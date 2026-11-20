@@ -76,7 +76,7 @@ Choose direct REST before a write when MCP is absent or lacks the required capab
 | Other files, including non-UTF-8 HTML and Markdown files | `POST /api/files` with the original bytes |
 | Built directory or site ZIP | `POST /api/sites` with a checked archive |
 
-REST requests default to 15 days. BrewPage allows up to 30 days anonymously or up to 90 with a profile. Use the effective expiry from the receipt. An ordinary update keeps the original expiry.
+REST requests default to 15 days. BrewPage keeps a publication up to 30 days without an account, up to 90 with a free profile. Use the effective expiry from the receipt. An ordinary update keeps the original expiry.
 
 Use `--delivery-mode path` to request a Promotion address with stricter script, cookie and embed limits, or `--delivery-mode subdomain` to request a dedicated origin. If omitted, the server chooses. Sites and non-public HTML-format pages require a dedicated origin. Page data can also require one. Keep the response's effective mode and link, including the trailing slash. A reused publication retains its own identity and expiry. Share password-protected reader links exactly as returned, without appending a password query.
 
