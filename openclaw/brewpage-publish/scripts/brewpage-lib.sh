@@ -8,7 +8,7 @@ HISTORY_FILE="$BP_ROOT/brewpage-history.md"
 BP_TMPDIR="${TMPDIR:-/tmp}"
 BP_TMPDIR="${BP_TMPDIR%/}"
 # User-Agent on every brewpage.app request: <client>/<shipped version> (+https://brewpage.app).
-BP_UA="OpenClaw/1.1.2 (+https://brewpage.app)"
+BP_UA="OpenClaw/1.1.3 (+https://brewpage.app)"
 
 bp_history() {
   local operation="$1"

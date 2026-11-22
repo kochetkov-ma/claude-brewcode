@@ -57,7 +57,7 @@ For the bundled runner, substitute this installed path for `{runner}` in the RES
 
 Runner commands: `probe`, `limits`, `stage`, `preflight`, `publish`, `update`, `cleanup`, and owner-key upkeep `owner-store`, `owner-recovery`, `owner-pending`, `owner-reconcile` ([ownership](references/ownership.md)). It sends HTTPS requests only to `https://brewpage.app/api/`, keeps working copies in a private `$TMPDIR/brewpage.*` run directory removed when the run ends or by `cleanup`, and writes only `brewpage-history.md`, `brewpage-recovery.json` (both mode 0600) and their `.gitignore` entries in the workspace. If the owner declines workspace history, it writes only `brewpage-recovery.json` (mode 0600) in the owner-chosen `--receipt-dir` instead. It needs `bash`, `curl`, `jq` and `python3`; local file and site checks add `node`, `zip` and `unzip`. Inline MCP publishing needs none of them.
 
-The runner uses `OpenClaw/1.1.2 (+https://brewpage.app)` for direct REST requests.
+The runner uses `OpenClaw/1.1.3 (+https://brewpage.app)` for direct REST requests.
 
 ## Return the actual result
 

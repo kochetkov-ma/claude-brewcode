@@ -2,6 +2,17 @@
 
 ---
 
+## v6.13.7 (2026-11-22)
+
+> Docs: [Publish with BrewPage](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+**What changed for you**
+
+- The OpenClaw skill is prepared as ClawHub version 1.1.3: it carries the Page data visitor-name tip and the private owner receipts from the last two releases, and its runner identifies itself as `OpenClaw/1.1.3`.
+- Nothing else changes: publishing, updates and owner records work as before.
+
+---
+
 ## v6.13.6 (2026-11-22)
 
 > Docs: [Publish with BrewPage](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
