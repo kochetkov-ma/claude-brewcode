@@ -40,7 +40,7 @@ HISTORY_FILE="$BP_ROOT/.claude/brewpage-history.md"
 BP_TMPDIR="${TMPDIR:-/tmp}"
 BP_TMPDIR="${BP_TMPDIR%/}"
 # User-Agent on every brewpage.app request: <client>/<shipped version> (+https://brewpage.app).
-BP_UA="ClaudeCode/6.13.5 (+https://brewpage.app)"
+BP_UA="ClaudeCode/6.13.6 (+https://brewpage.app)"
 
 bp_history() {
   local operation="$1"

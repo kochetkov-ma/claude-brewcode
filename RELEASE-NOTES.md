@@ -2,6 +2,17 @@
 
 ---
 
+## v6.13.6 (2026-11-22)
+
+> Docs: [Publish with BrewPage](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+**What changed for you**
+
+- The Page data recipe now says that an entry's visitor label is not unique: to know who saved what, the page asks a name once, keeps it and saves it with every entry. The name is what the visitor typed.
+- Nothing else changes: publishing, updates and owner records work as before.
+
+---
+
 ## v6.13.5 (2026-11-20)
 
 > Docs: [Publish with BrewPage](https://doc-claude.brewcode.app/brewdoc/skills/publish/)

@@ -138,7 +138,7 @@ For other flagged ZIP entries, `CONFIRM` presents the manifest and `REVIEW_SHA25
 Read current server limits before a large upload. The runner exposes the same read-only request with `limits`.
 
 ```bash
-curl -fsS -A "ClaudeCode/6.13.5 (+https://brewpage.app)" https://brewpage.app/api/limits
+curl -fsS -A "ClaudeCode/6.13.6 (+https://brewpage.app)" https://brewpage.app/api/limits
 ```
 
 </Spoiler>
@@ -151,7 +151,7 @@ For an RSVP, load the classic `https://brewpage.app/js/state.js` before calling 
 {"collections":{"rsvps":{"mode":"private","maxDocsPerVisitor":1}}}
 ```
 
-A draft returns the HTML and declaration together. A localhost preview can store answers in the browser. After publishing an owned test page, submit a reply, reload and verify it in the private Data tab. For a shared guestbook, use a shared collection only when requested and display entries as text. For newly authored pages, reserve image space, load the initial view eagerly, and apply `loading="lazy"` to images and iframes below the fold. See the [offline RSVP recipe](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewdoc/skills/publish/references/page-data.md).
+A draft returns the HTML and declaration together. A localhost preview can store answers in the browser. After publishing an owned test page, submit a reply, reload and verify it in the private Data tab. An entry's `visitor` label is not unique; to know who saved what, the page asks a name once and puts it in every value (self-declared). For a shared guestbook, use a shared collection only when requested and display entries as text. For newly authored pages, reserve image space, load the initial view eagerly, and apply `loading="lazy"` to images and iframes below the fold. See the [offline RSVP recipe](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewdoc/skills/publish/references/page-data.md).
 
 ## Custom domains
 
