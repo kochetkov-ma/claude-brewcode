@@ -217,10 +217,10 @@ test('declined and failed saves retain identical reader facts and complete priva
     const destination = mkdtempSync(join(tmpdir(), 'publish-private-receipt-'));
     try {
       writeFileSync(join(f.bin, 'python3'), `#!/usr/bin/env node
-const cp=require('node:child_process'),args=process.argv.slice(2);
-if(process.env.FAIL_APPEND==='1'&&args[1]==='append')process.exit(1);
+const cp=require('node:child_process'),args=process.argv.slice(2),op=args.slice(args.findIndex(a=>a.endsWith('/history.py')));
+if(process.env.FAIL_APPEND==='1'&&op[1]==='append')process.exit(1);
 const stdio=['inherit','inherit','inherit'];
-if(process.env.BREWPAGE_HISTORY_LOCK_FD){for(let i=3;i<8;i++)stdio.push('ignore');stdio.push(process.env.PASS_RECEIPT_FD==='1'&&args[1]?.startsWith('receipt')&&args[4]==='1'?8:'ignore',9);}
+if(process.env.BREWPAGE_HISTORY_LOCK_FD){for(let i=3;i<8;i++)stdio.push('ignore');stdio.push(process.env.PASS_RECEIPT_FD==='1'&&op[1]?.startsWith('receipt')&&op[4]==='1'?8:'ignore',9);}
 const result=cp.spawnSync(${JSON.stringify(python)},args,{stdio});process.exit(result.status??99);
 `, { mode: 0o700 });
       f.env.FAIL_APPEND = mode === 'append-failed' ? '1' : '0';

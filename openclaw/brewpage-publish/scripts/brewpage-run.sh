@@ -166,7 +166,7 @@ cmd_owner_store() {
 
 cmd_owner_recovery() {
   [ "$#" = 1 ] && [ "$1" = --private-output ] || die "owner-recovery requires --private-output through a verified owner-only channel"
-  python3 "$HERE/history.py" receipt-read "${HISTORY_FILE%/*}" brewpage-recovery.json
+  python3 -I -S "$HERE/history.py" receipt-read "${HISTORY_FILE%/*}" brewpage-recovery.json
 }
 
 cmd_owner_pending() {

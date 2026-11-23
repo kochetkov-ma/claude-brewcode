@@ -43,7 +43,7 @@ Use `/brewpage-publish ./dist --entry index.html` for a new built site. If you o
 Use `--ttl N` to request a lifetime in days. The REST runner requests 15 days by default. Use `--delivery-mode path|subdomain` to request an address type for a new publication. Sites and HTML pages outside the `public` namespace use a dedicated subdomain. Check current upload limits with the runner's `limits` command or this read-only request.
 
 ```bash
-curl -q -fsS -A "OpenClaw/1.1.3 (+https://brewpage.app)" https://brewpage.app/api/limits
+curl -q -fsS -A "OpenClaw/1.1.4 (+https://brewpage.app)" https://brewpage.app/api/limits
 ```
 
 ## Ownership and updates

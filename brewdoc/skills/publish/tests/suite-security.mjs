@@ -416,7 +416,7 @@ test('expanded ZIP limits are checked before integrity decompression', () => {
   const zip = join(base, 'bomb.zip');
   const marker = join(base, 'unzip-called');
   writeFileSync(join(bin, 'unzip'), '#!/bin/sh\nprintf called > "$UNZIP_MARKER"\n', { mode: 0o755 });
-  const fixture = spawnSync('python3', ['-c', 'import zipfile,sys\nwith zipfile.ZipFile(sys.argv[1], "w", zipfile.ZIP_DEFLATED) as z: z.writestr("index.html", b"x" * (41 * 1024 * 1024))', zip]);
+  const fixture = spawnSync('python3', ['-I', '-S', '-c','import zipfile,sys\nwith zipfile.ZipFile(sys.argv[1], "w", zipfile.ZIP_DEFLATED) as z: z.writestr("index.html", b"x" * (41 * 1024 * 1024))', zip]);
   assert.equal(fixture.status, 0, 'ZIP fixture builds');
   // WHEN inspected THEN bounded metadata rejects it before decompression.
   const result = spawnSync('node', [join(scripts, 'publish.mjs'), 'inspect', '--zip', zip], { encoding: 'utf8', timeout: 5000, env: { ...process.env, PATH: bin + ':' + process.env.PATH, UNZIP_MARKER: marker } });
@@ -428,7 +428,7 @@ test('ZIP review shows exact member paths and refuses ambiguous names', () => {
   const names = ['assets/white space.txt', 'assets/ padded.txt', 'assets/two\nlines.txt', 'index.html'];
   const rows = names.map((name, index) => {
     const zip = join(base, `manifest-${index}.zip`);
-    const fixture = spawnSync('python3', ['-c', 'import sys,zipfile\nwith zipfile.ZipFile(sys.argv[1], "w") as z:\n z.writestr("index.html", "<h1>Fixture</h1>")\n z.writestr(sys.argv[2], "Fixture text")', zip, name]);
+    const fixture = spawnSync('python3', ['-I', '-S', '-c','import sys,zipfile\nwith zipfile.ZipFile(sys.argv[1], "w") as z:\n z.writestr("index.html", "<h1>Fixture</h1>")\n z.writestr(sys.argv[2], "Fixture text")', zip, name]);
     assert.equal(fixture.status, 0, 'fixture ZIP builds');
     // WHEN the site archive is inspected THEN paths are reproduced verbatim or rejected before review.
     const result = spawnSync('node', [join(scripts, 'publish.mjs'), 'inspect', '--zip', zip], { encoding: 'utf8' });
@@ -459,6 +459,33 @@ test('privacy and recovery instructions fail closed in every distribution', () =
   }
 });
 
+for (const relative of ['brewdoc/skills/publish', 'skills/brewpage-publish', 'openclaw/brewpage-publish', 'skills/brewpage-publish-safe']) test(`${relative}: every runner Python call is isolated`, () => {
+  // GIVEN shipped runner scripts WHEN scanned THEN each python3 call carries -I -S, so workspace modules never load.
+  const dir = join(root, '../../../..', relative, 'scripts');
+  const calls = readdirSync(dir).filter(name => /\.(sh|mjs)$/.test(name)).flatMap(name => {
+    const text = readFileSync(join(dir, name), 'utf8');
+    const line = at => `${name}:${text.slice(0, at).split('\n').length}`;
+    return [...[...text.matchAll(/(?<![\w./-])python3\s+(?=[-"'$])/g)].map(m => [line(m.index), text.startsWith('-I -S ', m.index + m[0].length)]),
+      ...[...text.matchAll(/'python3',\s*\[/g)].map(m => [line(m.index), text.startsWith("'-I', '-S'", m.index + m[0].length)])];
+  });
+  assert.deepEqual([calls.filter(([, isolated]) => !isolated).map(([where]) => where), calls.length > 0], [[], true], `${relative}: no Python call puts the workspace on sys.path`);
+});
+
+test('runner Python helpers never import modules planted in the workspace', () => {
+  // GIVEN a workspace whose re, hashlib and zipfile modules would record any import.
+  const project = mkdtempSync(join(base, 'planted-'));
+  const marker = join(project, 'imported');
+  for (const name of ['re', 'hashlib', 'zipfile']) writeFileSync(join(project, `${name}.py`), `open(${JSON.stringify(marker)}, "a").write("${name}\\n")\n`);
+  writeFileSync(join(project, 'page.html'), '<!doctype html><p>fixture</p>');
+  writeFileSync(join(project, 'site.zip'), 'fixture archive bytes');
+  // WHEN the HTML, UTF-8 and archive-review helpers run from that workspace.
+  const result = spawnSync('bash', ['-c', '. "$LIB"; bp_is_html_document page.html; a=$?; bp_is_utf8 page.html; b=$?; bp_archive_gate 2 "" "$PWD/site.zip"; printf "rc %s %s %s\\n" "$a" "$b" "$?"'],
+    { cwd: project, encoding: 'utf8', env: { ...process.env, LIB: join(scripts, 'brewpage-lib.sh'), CLAUDE_PROJECT_DIR: project, BREWPAGE_CONFIRMED: '', BREWPAGE_REVIEW_SHA256: '' } });
+  // THEN every helper answers from the standard library and no planted module ran.
+  const digest = createHash('sha256').update('fixture archive bytes').digest('hex');
+  assert.deepEqual([result.stdout.split('\n')[0], result.stdout.split('\n').at(-2), existsSync(marker)], [`REVIEW_SHA256: ${digest}`, 'rc 0 0 2', false], 'workspace modules cannot run inside the review gate: ' + result.stderr);
+});
+
 test('missing secure-history runtime fails before any publish preparation', () => {
   // GIVEN PATH without python3 WHEN publishing THEN no unsafe fallback runs.
   const minimal = join(base, 'minimal'); mkdirSync(minimal);
@@ -475,7 +502,7 @@ for (const relative of ['brewpage-history.md', '.claude/brewpage-history.md']) t
   assert.equal(spawnSync('git', ['init', '-q', project]).status, 0, 'fixture repository initializes');
   assert.equal(spawnSync('git', ['-C', project, 'config', 'core.excludesFile', '/dev/null']).status, 0, 'global ignore rules are disabled for this fixture');
   writeFileSync(join(project, '.gitignore'), `${relative}\n!${relative}\n`);
-  const result = spawnSync('python3', [join(scripts, 'history.py'), 'init', project, relative], { input: 'fixture history\n', encoding: 'utf8' });
+  const result = spawnSync('python3', ['-I', '-S', join(scripts, 'history.py'),'init', project, relative], { input: 'fixture history\n', encoding: 'utf8' });
   const ignored = spawnSync('git', ['-C', project, '-c', 'core.excludesFile=/dev/null', 'check-ignore', '--no-index', '--quiet', '--', relative]);
   assert.deepEqual([result.status, ignored.status, statSync(join(project, relative)).mode & 0o777], [0, 0, 0o600], 'successful history initialization proves effective exclusion');
 });
@@ -487,13 +514,13 @@ test('nested ignore negation fails closed without writing history', () => {
   assert.equal(spawnSync('git', ['-C', project, 'config', 'core.excludesFile', '/dev/null']).status, 0, 'global ignore rules are disabled for this fixture');
   mkdirSync(join(project, '.claude'));
   writeFileSync(join(project, '.claude/.gitignore'), '!brewpage-history.md\n');
-  const result = spawnSync('python3', [join(scripts, 'history.py'), 'init', project, '.claude/brewpage-history.md'], { input: 'fixture secret\n', encoding: 'utf8' });
+  const result = spawnSync('python3', ['-I', '-S', join(scripts, 'history.py'),'init', project, '.claude/brewpage-history.md'], { input: 'fixture secret\n', encoding: 'utf8' });
   assert.deepEqual([result.status, existsSync(join(project, '.claude/brewpage-history.md'))], [1, false], 'deeper negation cannot leave committable history');
 });
 
 test('unsupported native Windows runtime fails with a clear requirement', () => {
   // GIVEN native Windows capability markers WHEN helper starts THEN it refuses before opening history.
-  const result = spawnSync('python3', ['-c', 'import os,runpy,sys; os.name="nt"; runpy.run_path(sys.argv[1], run_name="__main__")', join(scripts, 'history.py')], { encoding: 'utf8' });
+  const result = spawnSync('python3', ['-I', '-S', '-c','import os,runpy,sys; os.name="nt"; runpy.run_path(sys.argv[1], run_name="__main__")', join(scripts, 'history.py')], { encoding: 'utf8' });
   assert.deepEqual([result.status, result.stdout, result.stderr.trim()], [1, '', 'FAILED: secure history requires POSIX Python 3 (macOS/Linux or WSL); native Windows is unsupported'], 'unsupported OS is an explicit closed gate');
 });
 
@@ -508,7 +535,7 @@ for (const [file, bytes] of [['config', '[invalid\n'], ['index', 'invalid index'
   const project = mkdtempSync(join(base, 'broken-git-'));
   assert.equal(spawnSync('git', ['init', '-q', project]).status, 0, 'fixture repository initializes');
   writeFileSync(join(project, '.git', file), bytes);
-  const result = spawnSync('python3', [join(scripts, 'history.py'), 'init', project, 'brewpage-history.md'], { input: 'fixture secret\n', encoding: 'utf8' });
+  const result = spawnSync('python3', ['-I', '-S', join(scripts, 'history.py'),'init', project, 'brewpage-history.md'], { input: 'fixture secret\n', encoding: 'utf8' });
   assert.deepEqual([result.status, existsSync(join(project, 'brewpage-history.md'))], [1, false], 'Git operational errors fail before history write');
 });
 

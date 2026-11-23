@@ -8,12 +8,12 @@ HISTORY_FILE="$BP_ROOT/brewpage-history.md"
 BP_TMPDIR="${TMPDIR:-/tmp}"
 BP_TMPDIR="${BP_TMPDIR%/}"
 # User-Agent on every brewpage.app request: <client>/<shipped version> (+https://brewpage.app).
-BP_UA="OpenClaw/1.1.3 (+https://brewpage.app)"
+BP_UA="OpenClaw/1.1.4 (+https://brewpage.app)"
 
 bp_history() {
   local operation="$1"
   shift
-  python3 "$(dirname "${BASH_SOURCE[0]}")/history.py" "$operation" "$BP_ROOT" "${HISTORY_FILE#"$BP_ROOT/"}" "$@"
+  python3 -I -S "$(dirname "${BASH_SOURCE[0]}")/history.py" "$operation" "$BP_ROOT" "${HISTORY_FILE#"$BP_ROOT/"}" "$@"
 }
 
 # Creates the history file if absent, keeps it mode 600, and makes sure git
@@ -74,12 +74,12 @@ bp_is_markdown_path() {
 
 # rc 0: file holds a whole HTML document: doctype or <html> first, after an optional BOM and whitespace.
 bp_is_html_document() {
-  python3 -c 'import re,sys; sys.exit(0 if re.match(rb"(?:\xef\xbb\xbf)?\s*<(?:!doctype\s+html|html)(?=[\s>])", open(sys.argv[1],"rb").read(), re.I) else 1)' "$1"
+  python3 -I -S -c 'import re,sys; sys.exit(0 if re.match(rb"(?:\xef\xbb\xbf)?\s*<(?:!doctype\s+html|html)(?=[\s>])", open(sys.argv[1],"rb").read(), re.I) else 1)' "$1"
 }
 
 # rc 0: file decodes as UTF-8; jq --rawfile would silently replace any other bytes.
 bp_is_utf8() {
-  python3 -c 'import sys; open(sys.argv[1],"rb").read().decode("utf-8")' "$1" 2>/dev/null
+  python3 -I -S -c 'import sys; open(sys.argv[1],"rb").read().decode("utf-8")' "$1" 2>/dev/null
 }
 
 # Allocate before writing inputs; only the generated ASCII basename is substituted into blocks.
@@ -219,7 +219,7 @@ bp_prepare_recovery() {
 }
 
 bp_recovery() {
-  python3 "$(dirname "${BASH_SOURCE[0]}")/history.py" "$1" "$BP_RECOVERY_DIR" brewpage-recovery.json "${BP_NO_SAVE:-0}" "$BP_ROOT" "$BP_RUN_DIR"
+  python3 -I -S "$(dirname "${BASH_SOURCE[0]}")/history.py" "$1" "$BP_RECOVERY_DIR" brewpage-recovery.json "${BP_NO_SAVE:-0}" "$BP_ROOT" "$BP_RUN_DIR"
 }
 
 bp_operation_request() {
@@ -377,7 +377,7 @@ bp_archive_gate() {
   fi
   if [ "$rc" -eq 2 ] || [ "${BREWPAGE_CONFIRMED:-0}" = 1 ] || [ -n "${BREWPAGE_REVIEW_SHA256:-}" ]; then
     local digest
-    digest=$(python3 - "$zip" <<'PY'
+    digest=$(python3 -I -S - "$zip" <<'PY'
 import hashlib, os, stat, sys
 fd = os.open(sys.argv[1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
 with os.fdopen(fd, 'rb') as archive:

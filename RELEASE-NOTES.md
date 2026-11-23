@@ -2,6 +2,17 @@
 
 ---
 
+## v6.13.8 (2026-11-23)
+
+> Docs: [Publish with BrewPage](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+**What changed for you**
+
+- The publishing runner runs its Python checks isolated from your project folder: a file there named like a Python module, such as `hashlib.py`, can no longer run during an archive review, an HTML check or an owner-record update.
+- The OpenClaw skill is prepared as ClawHub version 1.1.4 with this fix, and its runner identifies itself as `OpenClaw/1.1.4`.
+
+---
+
 ## v6.13.7 (2026-11-22)
 
 > Docs: [Publish with BrewPage](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
