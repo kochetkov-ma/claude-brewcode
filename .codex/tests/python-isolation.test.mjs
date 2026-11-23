@@ -9,7 +9,8 @@ import { test } from 'node:test';
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 // Keeps user site-packages (pip --user) that -I hides, and drops only the cwd entry '' of -c / stdin.
 const SAFE = 'import sys; sys.path[:] = [p for p in sys.path if p]';
-const SKIP = [/^\.codex\/reports\//, /^web\/docs\/package-lock\.json$/];
+// Historical reports, the lockfile, and this file's own detector rows (bad shapes on purpose).
+const SKIP = [/^\.codex\/reports\//, /^web\/docs\/package-lock\.json$/, /^\.codex\/tests\/python-isolation\.test\.mjs$/];
 // Test data, never executed: an indexed fixture file and a telemetry reject-list command string.
 const DATA = new Set([
   'brewcode/skills/semble-setup/tests/fixtures/repo-b/run.sh\0exec python3 -c "print(\'entry point main function\')"',
