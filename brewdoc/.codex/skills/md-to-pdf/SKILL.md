@@ -11,7 +11,7 @@ Convert a local Markdown file with `scripts/md_to_pdf.py`. Check dependencies wi
 
 Follow every phase below. When a phase delegates work, use Codex collaboration with only `task_name` and `message`; treat each "Codex delegation brief" block as role and message content, not executable syntax. Required approval: main presents a concrete, reviewable proposal in chat and waits for an actual user reply before dependent action. Existing authorization for the same scope remains valid; do not ask again. Optional clarification: use `request_user_input_async` only if exposed, or `request_user_input` only if available in the current runtime/mode, for optional choices and never approval. Otherwise ask in main chat. Delegated agents return unresolved questions to main. Silence, elapsed time and tool errors are not approval. Resolve `<skill-directory>`, `<plugin-root>`, `<project-root>`, and `<arguments>` before running commands.
 
-<!-- brewcode-meta: version=6.13.8 content_version=6.5.3 generated_by=brewdoc:md-to-pdf -->
+<!-- brewcode-meta: version=6.13.9 content_version=6.13.9 generated_by=brewdoc:md-to-pdf -->
 
 # MD to PDF
 
@@ -98,7 +98,7 @@ cat > "$NEW" <<'BREWDOC_CFG_EOF'
 NEW_JSON
 BREWDOC_CFG_EOF
 mkdir -p "$ROOT/.claude"
-CFG="$ROOT/.codex/md-to-pdf.config.json" NEW="$NEW" PJ="<skill-directory>/../../.codex-plugin/plugin.json" SKILL_MD="<skill-directory>/SKILL.md" TODAY="$(date +%F)" python3 - <<'PY'
+CFG="$ROOT/.codex/md-to-pdf.config.json" NEW="$NEW" PJ="<skill-directory>/../../.codex-plugin/plugin.json" SKILL_MD="<skill-directory>/SKILL.md" TODAY="$(date +%F)" python3 -I -S - <<'PY'
 import json, os, re
 cfg_p = os.environ["CFG"]
 pv = json.load(open(os.environ["PJ"])).get("version")

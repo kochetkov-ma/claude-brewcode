@@ -25,7 +25,7 @@ const values = {
 };
 const expand = (str) => str.replace(/(?<!\$)\{\{([A-Z_]+)\}\}/g, (_, key) => values[key]);
 const parse = (str) => {
-  const result = spawnSync('python3', ['-c', 'import sys,yaml,json; print(json.dumps(yaml.safe_load(sys.stdin.read())))'], { input: str, encoding: 'utf8' });
+  const result = spawnSync('python3', ['-c', 'import sys; sys.path[:] = [p for p in sys.path if p]; import yaml,json; print(json.dumps(yaml.safe_load(sys.stdin.read())))'], { input: str, encoding: 'utf8' });
   assert.equal(result.status, 0, 'GIVEN a shipped workflow WHEN parsed THEN YAML is valid');
   return JSON.parse(result.stdout);
 };

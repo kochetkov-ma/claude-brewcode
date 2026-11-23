@@ -82,7 +82,7 @@ umask 077
 CYR_DIR="$(mktemp -d "${TMPDIR:-/tmp}/cyr.XXXXXX")" && chmod 700 "$CYR_DIR" || exit 1
 trap 'case "${CYR_DIR##*/}" in cyr.??????) rm -rf -- "$CYR_DIR" ;; esac' EXIT
 printf 'сожми контекст на 40%%, глобальный тоже\nужми правила ещё сильнее\n' > "$CYR_DIR/cyr.txt"
-python3 -c "import re,sys;print(len(re.findall(r'[А-Яа-яЁё]+',open(sys.argv[1],encoding='utf-8').read())))" "$CYR_DIR/cyr.txt"  # 9
+python3 -I -S -c "import re,sys;print(len(re.findall(r'[А-Яа-яЁё]+',open(sys.argv[1],encoding='utf-8').read())))" "$CYR_DIR/cyr.txt"  # 9
 for L in C en_US.UTF-8; do LC_ALL=$L /usr/bin/grep -oE '[А-Яа-яЁё]+' "$CYR_DIR/cyr.txt" | wc -l; done
 ```
 

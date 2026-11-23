@@ -2,6 +2,17 @@
 
 ---
 
+## v6.13.9 (2026-11-23)
+
+> Docs: [MD to PDF](https://doc-claude.brewcode.app/brewdoc/skills/md-to-pdf/) · [Context Slim](https://doc-claude.brewcode.app/brewtools/skills/context-slim/) · [Provider Switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) · [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/)
+
+**What changed for you**
+
+- Every Python check the plugins run is now isolated from your project folder, the same fix the publish runner got in v6.13.8: a file there named like a Python module, such as `json.py`, can no longer run during a context-slim backup, a provider check, a Markdown-to-PDF setup or a search-index hash.
+- Markdown to PDF still finds packages you installed with `pip install --user`, and installs them from outside your project folder.
+
+---
+
 ## v6.13.8 (2026-11-23)
 
 > Docs: [Publish with BrewPage](https://doc-claude.brewcode.app/brewdoc/skills/publish/)

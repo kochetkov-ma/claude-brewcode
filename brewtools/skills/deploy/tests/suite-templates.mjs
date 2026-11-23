@@ -294,7 +294,7 @@ check('f09.no-pr-target', blocks.flatMap((b) => b.split('\n').filter((l) => l.in
     return f;
   });
   const py = spawnSync('python3', ['-c',
-    'import sys,yaml\nfor f in sys.argv[1:]:\n    yaml.safe_load(open(f))\nprint("OK", len(sys.argv)-1)',
+    'import sys; sys.path[:] = [p for p in sys.path if p]; import yaml\nfor f in sys.argv[1:]:\n    yaml.safe_load(open(f))\nprint("OK", len(sys.argv)-1)',
     ...files], { encoding: 'utf8' });
   check('yaml.parses', (py.stdout || '').trim(), 'OK 4',
     `all four templates parse as YAML (${(py.stderr || '').trim().split('\n').slice(-1)[0]})`);

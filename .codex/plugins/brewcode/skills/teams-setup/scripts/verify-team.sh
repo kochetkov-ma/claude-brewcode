@@ -150,7 +150,7 @@ PY
 # same description ceiling so enable cannot restore an invalid profile.
 check_agent_description() {
   _f="$1"
-  python3 - "$_f" <<'PY'
+  python3 -I -S - "$_f" <<'PY'
 import pathlib
 import sys
 import tomllib

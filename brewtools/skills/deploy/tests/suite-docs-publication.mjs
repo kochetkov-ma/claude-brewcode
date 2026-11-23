@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const YAML = { parse(input) {
-  const parsed = spawnSync('python3', ['-c', 'import sys,yaml,json; print(json.dumps(yaml.safe_load(sys.stdin.read())))'], { input, encoding: 'utf8' });
+  const parsed = spawnSync('python3', ['-c', 'import sys; sys.path[:] = [p for p in sys.path if p]; import yaml,json; print(json.dumps(yaml.safe_load(sys.stdin.read())))'], { input, encoding: 'utf8' });
   assert.equal(parsed.status, 0, 'GIVEN current workflow YAML WHEN parsed THEN it is valid');
   return JSON.parse(parsed.stdout);
 } };

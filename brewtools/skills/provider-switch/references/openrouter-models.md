@@ -40,7 +40,7 @@ Verify EVERY selected id (menu/default/custom) with the public GET; send NO key.
 set -euo pipefail
 curl --fail --silent --show-error --max-time 30 "https://openrouter.ai/api/v1/models" \
   -o .claude/provider-switch/catalog.json
-python3 - <<'PY'
+python3 -I -S - <<'PY'
 import json
 import re
 from pathlib import Path

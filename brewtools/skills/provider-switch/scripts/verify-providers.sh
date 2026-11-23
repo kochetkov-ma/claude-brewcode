@@ -178,7 +178,7 @@ run_openrouter() {
   local alias_file="${XDG_CONFIG_HOME:-$HOME/.config}/claude/provider-aliases.json"
   if [[ -f "$alias_file" ]]; then
     local alias_model
-    alias_model="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("openrouter",{}).get("model",""))' "$alias_file" 2>/dev/null || true)"
+    alias_model="$(python3 -I -S -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("openrouter",{}).get("model",""))' "$alias_file" 2>/dev/null || true)"
     [[ -n "$alias_model" ]] && model="$alias_model"
   fi
   verify_provider "openrouter" \

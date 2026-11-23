@@ -44,7 +44,7 @@ function runConcurrent(root) {
 }
 
 function parse(path) {
-  const result = spawnSync('python3', ['-c', 'import json,pathlib,sys,tomllib; print(json.dumps(tomllib.loads(pathlib.Path(sys.argv[1]).read_text()), sort_keys=True))', path], { encoding: 'utf8' });
+  const result = spawnSync('python3', ['-I', '-S', '-c', 'import json,pathlib,sys,tomllib; print(json.dumps(tomllib.loads(pathlib.Path(sys.argv[1]).read_text()), sort_keys=True))', path], { encoding: 'utf8' });
   return { status: result.status, data: result.status === 0 ? JSON.parse(result.stdout) : null };
 }
 

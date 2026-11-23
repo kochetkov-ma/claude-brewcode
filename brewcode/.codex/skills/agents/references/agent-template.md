@@ -29,7 +29,7 @@ Description policy is in agent-frontmatter-fields.md. Role instructions cover mi
 Teams-setup domain agents use exactly that workflow's six ordered headings, shared team reference and budgets. The shared superreview pipeline alone owns intent-guard. Generic authoring must not overwrite either profile.
 
 ```bash
-python3 - <<'PY' ".codex/agents/{name}.toml"
+python3 -I -S - <<'PY' ".codex/agents/{name}.toml"
 import pathlib, sys, tomllib
 file = pathlib.Path(sys.argv[1])
 data = tomllib.loads(file.read_text())

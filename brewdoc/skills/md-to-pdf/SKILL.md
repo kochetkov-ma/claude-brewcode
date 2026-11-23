@@ -8,7 +8,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion]
 model: sonnet
 license: MIT
 ---
-<!-- brewcode-meta: version=6.13.8 content_version=6.5.3 generated_by=brewdoc:md-to-pdf -->
+<!-- brewcode-meta: version=6.13.9 content_version=6.13.9 generated_by=brewdoc:md-to-pdf -->
 
 # MD to PDF
 
@@ -95,7 +95,7 @@ cat > "$NEW" <<'BREWDOC_CFG_EOF'
 NEW_JSON
 BREWDOC_CFG_EOF
 mkdir -p "$ROOT/.claude"
-CFG="$ROOT/.claude/md-to-pdf.config.json" NEW="$NEW" PJ="${CLAUDE_SKILL_DIR}/../../.claude-plugin/plugin.json" SKILL_MD="${CLAUDE_SKILL_DIR}/SKILL.md" TODAY="$(date +%F)" python3 - <<'PY'
+CFG="$ROOT/.claude/md-to-pdf.config.json" NEW="$NEW" PJ="${CLAUDE_SKILL_DIR}/../../.claude-plugin/plugin.json" SKILL_MD="${CLAUDE_SKILL_DIR}/SKILL.md" TODAY="$(date +%F)" python3 -I -S - <<'PY'
 import json, os, re
 cfg_p = os.environ["CFG"]
 pv = json.load(open(os.environ["PJ"])).get("version")

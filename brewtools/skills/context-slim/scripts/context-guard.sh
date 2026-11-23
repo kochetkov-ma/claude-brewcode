@@ -70,7 +70,7 @@ mf() {
       files) jq -r '.files[] | "\(.sha256) \(.path)"' "$file" ;;
     esac
   else
-    python3 -c 'import json,sys
+    python3 -I -S -c 'import json,sys
 d=json.load(open(sys.argv[1]))
 print(d["root"] if sys.argv[2]=="root" else "\n".join("%s %s"%(x["sha256"],x["path"]) for x in d["files"]))' "$file" "$field"
   fi
@@ -185,7 +185,7 @@ validate_json() {
   if command -v jq >/dev/null 2>&1; then
     jq empty "$1" || die "❌ manifest is not valid JSON: $1"
   elif command -v python3 >/dev/null 2>&1; then
-    python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$1" || die "❌ manifest is not valid JSON: $1"
+    python3 -I -S -c 'import json,sys; json.load(open(sys.argv[1]))' "$1" || die "❌ manifest is not valid JSON: $1"
   else
     printf '⚠️ neither jq nor python3: manifest %s written UNVALIDATED\n' "$1" >&2
   fi
@@ -520,7 +520,7 @@ cmd_state() {
   [ -f "${after:-}" ] || die "❌ state needs --after <context-scan JSON>"
   [ -z "$ledger" ] || [ -f "$ledger" ] || die "❌ no such ledger file: $ledger"
   command -v python3 >/dev/null 2>&1 || die "❌ state needs python3 (JSON assembly)"
-  python3 - "$before" "$after" "$mode" "$flags" "$ledger" "$out" <<'PY'
+  python3 -I -S - "$before" "$after" "$mode" "$flags" "$ledger" "$out" <<'PY'
 import json, sys, datetime, os
 before, after, mode, flags, ledger, out = sys.argv[1:7]
 

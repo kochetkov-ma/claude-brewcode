@@ -6,8 +6,8 @@ maxTurns: 80
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch
 doc_type: llm
-version: "6.13.8"
-content_version: "6.12.2"
+version: "6.13.9"
+content_version: "6.13.9"
 generated_by: "brewcode"
 last_updated: "2026-11-23"
 ---
@@ -97,7 +97,7 @@ Fallback chain when `jq` may be absent — every link takes the file as argv, la
 if command -v jq >/dev/null; then
   jq -r '.key' file.json
 elif command -v python3 >/dev/null; then
-  python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["key"])' file.json
+  python3 -I -S -c 'import json,sys;print(json.load(open(sys.argv[1]))["key"])' file.json
 else
   echo "need jq or python3" >&2; exit 1
 fi

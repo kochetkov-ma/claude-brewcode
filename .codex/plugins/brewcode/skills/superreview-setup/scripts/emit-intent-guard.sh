@@ -8,7 +8,7 @@ agents="$root/.codex/agents"
 target="$agents/intent-guard.toml"
 
 validate() {
-  python3 - "$1" <<'PY'
+  python3 -I -S - "$1" <<'PY'
 import os, stat, sys, tomllib
 path = sys.argv[1]
 flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
@@ -61,7 +61,7 @@ tmp="$(mktemp "$agents/.intent-guard.XXXXXX")"
 trap 'rm -f "$tmp"' EXIT HUP INT TERM
 cp "$template" "$tmp"
 validate "$tmp"
-python3 - "$tmp" "$target" <<'PY'
+python3 -I -S - "$tmp" "$target" <<'PY'
 import os, sys
 source, target = sys.argv[1:]
 try:

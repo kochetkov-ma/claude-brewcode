@@ -341,7 +341,7 @@ for (const [plugin, [skillCount, agentCount]] of Object.entries(EXPECTED)) {
       'print("\\n".join(bad))',
       'raise SystemExit(bool(bad))'
     ].join('\n');
-    const result = spawnSync('python3', ['-c', command, ...agents.map(name => path.join(agentsRoot, name))], { encoding: 'utf8' });
+    const result = spawnSync('python3', ['-I', '-S', '-c', command,...agents.map(name => path.join(agentsRoot, name))], { encoding: 'utf8' });
     if (result.status !== 0) fail(`${plugin}: invalid agent TOML ${result.stdout || result.stderr}`);
   }
 

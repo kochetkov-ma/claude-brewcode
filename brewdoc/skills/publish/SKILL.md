@@ -58,7 +58,7 @@ For the bundled runner, substitute this installed path for `{runner}` in the pub
 ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh
 ```
 
-The runner uses `ClaudeCode/6.13.8 (+https://brewpage.app)` for direct REST requests.
+The runner uses `ClaudeCode/6.13.9 (+https://brewpage.app)` for direct REST requests.
 
 To keep private receipts out of Git, the runner adds its history, recovery and reconciliation file names to the workspace `.gitignore` when the workspace is a Git repository or already has one.
 

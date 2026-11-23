@@ -192,7 +192,7 @@ if cycle == 3 → AskUser with remaining issues
 
 Compile/syntax check (stack-dependent):
 - Java: `mvn compile -pl {module}` or `gradle compileTestJava`
-- Python: `python -m py_compile {file}`
+- Python: `python -I -S -m py_compile {file}`
 - JS/TS: `npx tsc --noEmit` or `npx playwright test --list`
 - C#: `dotnet build`
 

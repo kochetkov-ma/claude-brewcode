@@ -22,7 +22,7 @@ excluded). Recheck on a new corpus with the command below.
 Short table-heavy files drift most; long prose files sit near the aggregate. Reproduce:
 
 ```bash
-python3 -c "import tiktoken,sys; enc=tiktoken.get_encoding('cl100k_base'); t=open(sys.argv[1]).read(); print(len(t), len(enc.encode(t)))" "<file>"
+python3 -c "import sys; sys.path[:] = [p for p in sys.path if p]; import tiktoken; enc=tiktoken.get_encoding('cl100k_base'); t=open(sys.argv[1]).read(); print(len(t), len(enc.encode(t)))" "<file>"
 ```
 
 Treat any single reading within +/-7% as proxy noise; a file >20% off deserves a

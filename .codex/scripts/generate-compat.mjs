@@ -603,7 +603,7 @@ Description policy is in agent-frontmatter-fields.md. Role instructions cover mi
 Teams-setup domain agents use exactly that workflow's six ordered headings, shared team reference and budgets. The shared superreview pipeline alone owns intent-guard. Generic authoring must not overwrite either profile.
 
 \`\`\`bash
-python3 - <<'PY' ".codex/agents/{name}.toml"
+python3 -I -S - <<'PY' ".codex/agents/{name}.toml"
 import pathlib, sys, tomllib
 file = pathlib.Path(sys.argv[1])
 data = tomllib.loads(file.read_text())
@@ -961,7 +961,7 @@ PY
 # same description ceiling so enable cannot restore an invalid profile.
 check_agent_description() {
   _f="$1"
-  python3 - "$_f" <<'PY'
+  python3 -I -S - "$_f" <<'PY'
 import pathlib
 import sys
 import tomllib
@@ -1246,7 +1246,7 @@ function runConcurrent(root) {
 }
 
 function parse(path) {
-  const result = spawnSync('python3', ['-c', 'import json,pathlib,sys,tomllib; print(json.dumps(tomllib.loads(pathlib.Path(sys.argv[1]).read_text()), sort_keys=True))', path], { encoding: 'utf8' });
+  const result = spawnSync('python3', ['-I', '-S', '-c', 'import json,pathlib,sys,tomllib; print(json.dumps(tomllib.loads(pathlib.Path(sys.argv[1]).read_text()), sort_keys=True))', path], { encoding: 'utf8' });
   return { status: result.status, data: result.status === 0 ? JSON.parse(result.stdout) : null };
 }
 
@@ -1683,8 +1683,8 @@ PYGMENTS_VERSION=${pins.pygments}
 SYSTEM_FORMULAS="pango cairo gdk-pixbuf libffi"
 
 usage() { echo "usage: check_deps.sh <check|install|status> [reportlab|weasyprint]"; }
-python_version() { python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 8))'; }
-package_version() { python3 -c 'from importlib.metadata import version; print(version("'"$1"'"))' 2>/dev/null; }
+python_version() { python3 -I -S -c 'import sys; raise SystemExit(sys.version_info < (3, 8))'; }
+package_version() { python3 -c 'import sys; sys.path[:] = [p for p in sys.path if p]; from importlib.metadata import version; print(version("'"$1"'"))' 2>/dev/null; }
 check_package() { test "$(package_version "$1")" = "$2"; }
 check_formula() { brew list --versions "$1" >/dev/null 2>&1; }
 
@@ -1715,7 +1715,7 @@ install_engine() {
   command -v python3 >/dev/null || { echo "Python >=3.8 is required" >&2; return 1; }
   case "$engine" in
     reportlab)
-      python3 -m pip install "reportlab==$REPORTLAB_VERSION"
+      (cd / && python3 -m pip install "reportlab==$REPORTLAB_VERSION")
       ;;
     weasyprint)
       if test "$(uname -s)" = Darwin; then
@@ -1723,7 +1723,7 @@ install_engine() {
           check_formula "$formula" || { echo "Missing system dependency $formula: after approval, add the current Homebrew formulas ($SYSTEM_FORMULAS), then retry." >&2; return 1; }
         done
       fi
-      python3 -m pip install "weasyprint==$WEASYPRINT_VERSION" "markdown==$MARKDOWN_VERSION" "pygments==$PYGMENTS_VERSION"
+      (cd / && python3 -m pip install "weasyprint==$WEASYPRINT_VERSION" "markdown==$MARKDOWN_VERSION" "pygments==$PYGMENTS_VERSION")
       ;;
     *) usage >&2; return 2 ;;
   esac
@@ -1739,8 +1739,8 @@ case "$command" in
   *) usage >&2; exit 2 ;;
 esac
 `, 0o755);
-    const pinnedReportlab = `python3 -m pip install reportlab==${pins.reportlab}`;
-    const pinnedWeasyprint = `python3 -m pip install weasyprint==${pins.weasyprint} markdown==${pins.markdown} pygments==${pins.pygments}`;
+    const pinnedReportlab = `(cd / && python3 -m pip install reportlab==${pins.reportlab})`;
+    const pinnedWeasyprint = `(cd / && python3 -m pip install weasyprint==${pins.weasyprint} markdown==${pins.markdown} pygments==${pins.pygments})`;
     const replacements = new Map([
       ['pip install reportlab', pinnedReportlab],
       ['pip install weasyprint markdown pygments', pinnedWeasyprint],
@@ -1973,7 +1973,7 @@ New teams use one review-only \`intent-guard\` outside the domain count. Its sha
       'target="$agents/intent-guard.toml"',
       '',
       'validate() {',
-      '  python3 - "$1" <<\'PY\'',
+      '  python3 -I -S - "$1" <<\'PY\'',
       'import os, stat, sys, tomllib',
       'path = sys.argv[1]',
       'flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)',
@@ -2017,7 +2017,7 @@ New teams use one review-only \`intent-guard\` outside the domain count. Its sha
       'trap \'rm -f "$tmp"\' EXIT HUP INT TERM',
       'cp "$template" "$tmp"',
       'validate "$tmp"',
-      'python3 - "$tmp" "$target" <<\'PY\'',
+      'python3 -I -S - "$tmp" "$target" <<\'PY\'',
       'import os, sys',
       'source, target = sys.argv[1:]',
       'try:',

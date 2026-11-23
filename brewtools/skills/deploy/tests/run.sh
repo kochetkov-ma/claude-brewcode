@@ -16,7 +16,7 @@ if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
 fi
 
 command -v node >/dev/null 2>&1 || { printf '❌ node is required to run the deploy suites\n' >&2; exit 1; }
-python3 -c 'import yaml' >/dev/null 2>&1 || {
+python3 -c 'import sys; sys.path[:] = [p for p in sys.path if p]; import yaml' >/dev/null 2>&1 || {
   printf '❌ python3 with PyYAML is required: suite-templates.mjs parses every workflow template\n' >&2; exit 1; }
 
 SUITES=""

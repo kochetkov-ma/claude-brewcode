@@ -65,7 +65,7 @@ test('actual emitted main brief drives a TOML target and schema-valid materializ
       .replace('"{description}"', JSON.stringify(values.description));
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, document);
-    const python = spawnSync('python3', ['-c',
+    const python = spawnSync('python3', ['-I', '-S', '-c',
       'import json,pathlib,sys,tomllib; print(json.dumps(tomllib.loads(pathlib.Path(sys.argv[1]).read_text())))', target],
     { encoding: 'utf8' });
     // THEN: the consumer artifact is real parsed native TOML with preserved user strings.

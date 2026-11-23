@@ -47,7 +47,7 @@ check_python() {
     fi
 
     local ver
-    ver="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+    ver="$(python3 -I -S -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
     local major minor
     major="${ver%%.*}"
     minor="${ver##*.}"
@@ -85,7 +85,8 @@ install_pip_packages() {
         specs+=("$(pip_spec "$pkg")")
     done
     echo "Installing pip packages: ${specs[*]}" >&2
-    if ! python3 -m pip install "${specs[@]}"; then
+    # Run pip from / so a pip/ folder in the project cannot load; -I would drop pip's user-install fallback.
+    if ! (cd / && python3 -m pip install "${specs[@]}"); then
         echo "INSTALL_FAILED|pip refused; on an externally managed Python (PEP 668) activate a venv or set PIP_BREAK_SYSTEM_PACKAGES=1, then retry" >&2
         return 1
     fi
@@ -94,7 +95,7 @@ install_pip_packages() {
     still="$(check_pip_packages "$@")"
     if [[ -n "$still" ]]; then
         echo "INSTALL_INCOMPLETE|$still" >&2
-        echo "Installed into $(python3 -c 'import sys; print(sys.prefix)') but the import still fails." >&2
+        echo "Installed into $(python3 -I -S -c 'import sys; print(sys.prefix)') but the import still fails." >&2
         return 1
     fi
 }
@@ -104,7 +105,8 @@ install_pip_packages() {
 check_pip_packages() {
     local missing=()
     for pkg in "$@"; do
-        if ! python3 -c "import $pkg" &>/dev/null; then
+        # Drop the cwd entry, keep user site-packages (pip's --user target) that -I would hide.
+        if ! python3 -c "import sys; sys.path[:] = [p for p in sys.path if p]; import $pkg" &>/dev/null; then
             missing+=("$pkg")
         fi
     done

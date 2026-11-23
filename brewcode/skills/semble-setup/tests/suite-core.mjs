@@ -134,7 +134,7 @@ function tree(dir) {
 }
 
 function pyHash(p) {
-  const r = spawnSync('python3', ['-c',
+  const r = spawnSync('python3', ['-I', '-S', '-c',
     'import hashlib,sys,pathlib;print(hashlib.sha256(str(pathlib.Path(sys.argv[1]).expanduser().resolve()).encode()).hexdigest())',
     p], { encoding: 'utf8' });
   return (r.stdout || '').trim();

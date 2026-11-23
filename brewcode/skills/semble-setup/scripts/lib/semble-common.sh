@@ -130,7 +130,7 @@ sc_sha256() {
   elif command -v sha256sum >/dev/null 2>&1; then
     sha256sum | cut -d' ' -f1
   else
-    python3 -c 'import hashlib,sys;print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())'
+    python3 -I -S -c 'import hashlib,sys;print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())'
   fi
 }
 
